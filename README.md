@@ -35,10 +35,6 @@ pnpm cli "$URL" --url --timeout 15000              # 请求超时(ms，默认 30
 pnpm cli "$URL" --url --header "Accept-Encoding: gzip"  # 附加请求头(可重复)
 ```
 
-拉取远程订阅时的请求选项（CLI 或 Web `/api/convert` 的 `options` 均支持）：默认
-`user-agent` 为 `clash.meta/v1.19.23`（与上游 Sub-Store 一致）；可传
-`userAgent` / `headers`（对象，覆盖默认头）/ `timeout`（ms）。
-
 规则文件 `rules.txt`：每行 `TYPE,CONTENT[,outbound]`，或一个 JSON 数组（元素可为上述描述符，或已是 sing-box matcher，例如 `{"ip_is_private":true,"outbound":"direct"}`）。支持类型见下。
 
 ### Web 页面
