@@ -27,6 +27,10 @@ pnpm cli --file sub.txt --out outbounds > nodes.json
 
 # 规则 + tun 入口
 pnpm cli --file sub.txt --rule-file rules.txt --tun --inbound-port 7890 > config.json
+
+# 远程订阅：默认用 Clash 客户端 UA 拉取，面板会返回节点列表而非 sing-box 配置
+pnpm cli "https://example.com/api/v1/client/subscribe?token=xxx" --url > config.json
+pnpm cli "$URL" --url --user-agent "v2rayN/6.23"   # 需要时手动指定 UA
 ```
 
 规则文件 `rules.txt`：每行 `TYPE,CONTENT[,outbound]`，或一个 JSON 数组（元素可为上述描述符，或已是 sing-box matcher，例如 `{"ip_is_private":true,"outbound":"direct"}`）。支持类型见下。

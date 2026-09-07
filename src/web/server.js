@@ -94,6 +94,7 @@ function normalizeOptions(options, config) {
         tun: options.tun === true,
         final: options.final || undefined,
         proxyGroupTag: options.proxyGroupTag || undefined,
+        userAgent: options.userAgent || undefined,
         remoteDns: options.remoteDns || config.remoteDns,
         addAutoGroup: options.addAutoGroup,
         addDirect: options.addDirect,

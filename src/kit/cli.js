@@ -1,5 +1,5 @@
 import { readFileSync } from "fs";
-import { fromText, fromUrl } from "./convert";
+import { fromText, fromUrl, DEFAULT_USER_AGENT } from "./convert";
 import assemble from "./assemble";
 
 function readStdin() {
@@ -21,6 +21,7 @@ function parseArgs(argv) {
         else if (a === "--file") args.file = argv[++i];
         else if (a === "--out") args.out = argv[++i];
         else if (a === "--inbound-port") args.inboundPort = Number(argv[++i]);
+        else if (a === "--user-agent") args.userAgent = argv[++i];
         else if (a === "--dns") args.remoteDns = argv[++i];
         else if (a === "--final") args.final = argv[++i];
         else if (a === "--rule-file") args.ruleFile = argv[++i];
@@ -60,6 +61,9 @@ function usage() {
         "  --file <path>            read input from a local file",
         "  --out outbounds|config   output style (default: config)",
         "  --inbound-port <n>       mixed inbound listen port (default 1080)",
+        "  --user-agent <ua>        UA when fetching a URL subscription",
+        "                           (default a Clash client UA, so panels",
+        "                           return node lists instead of sing-box configs)",
         "  --tun                    add a tun inbound",
         "  --dns <url>              remote DoH URL for the dns section",
         "  --final <tag>            route.final tag (default proxy)",
@@ -83,7 +87,7 @@ async function main() {
         remoteDns: args.remoteDns,
         final: args.final,
         proxyGroupTag: args.proxyGroupTag,
-        userAgent: "singbox-kit/0.1",
+        userAgent: args.userAgent || DEFAULT_USER_AGENT,
     };
     if (args.ruleFile) options.rules = loadRuleFile(args.ruleFile);
 

@@ -1,6 +1,13 @@
 import { ProxyUtils } from "@/core/proxy-utils";
 import { safeLoad } from "@/utils/yaml";
 
+// UA used when downloading a remote subscription. Many subscribe panels
+// (e.g. V2Board) pick the response format by User-Agent: a UA containing
+// "singbox" yields a ready-made sing-box config (which this converter cannot
+// ingest), while a Clash client UA yields a Clash `proxies:` node list - the
+// format this tool parses. Override per request via options.userAgent.
+export const DEFAULT_USER_AGENT = "clash-verge/v2.2.3";
+
 // Whole-document YAML/JSON that carries nodes directly:
 //   - a JSON/YAML array of proxy objects
 //   - a mihomo-style document with a `proxies:` array
@@ -72,7 +79,7 @@ export async function fromUrl(url, opts) {
             "singbox-kit: fromUrl expects an http(s) URL; got: " + url,
         );
     }
-    const headers = { "user-agent": opts.userAgent || "singbox-kit/0.1" };
+    const headers = { "user-agent": opts.userAgent || DEFAULT_USER_AGENT };
     if (opts.token) headers.authorization = "Bearer " + opts.token;
     let resp;
     try {
@@ -93,4 +100,10 @@ export async function fromUrl(url, opts) {
     return fromText(text, opts);
 }
 
-export default { fromNodes, fromText, fromUrl, tryLoadNodeDocument };
+export default {
+    fromNodes,
+    fromText,
+    fromUrl,
+    tryLoadNodeDocument,
+    DEFAULT_USER_AGENT,
+};
