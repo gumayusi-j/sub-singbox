@@ -27,7 +27,10 @@ function parseArgs(argv) {
         else if (a === "--host") args.host = argv[++i];
         else if (a === "--config") args.config = argv[++i];
         else if (a === "--help" || a === "-h") args.help = true;
-        else if (a.startsWith("-")) throw new Error("unknown option: " + a);
+        else if (a === "--") {
+            // pnpm/npm may forward the trailing "--" separator verbatim; ignore it.
+            continue;
+        } else if (a.startsWith("-")) throw new Error("unknown option: " + a);
         else args._.push(a);
     }
     return args;
