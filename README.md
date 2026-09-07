@@ -73,57 +73,6 @@ pnpm start -- --port 9000     # 或用裸 node 直接跑：node dist/singbox-kit
 产物支持与源码模式相同的全部参数/优先级（`--port`/`--host`/`--config`、`PORT`/`HOST`
 环境变量）。任意拷贝到其他装了 Node 的机器即可运行。
 
-### 作为库
-
-```js
-import { fromText, fromNodes, fromUrl, assemble, toSingboxConfig } from "singbox-kit";
-
-const parsed = fromText(text);            // -> { outbounds, endpoints }
-const parsed2 = fromNodes(nodeObjects);   // 直接喂 mihomo 风格节点对象
-const parsed3 = await fromUrl("https://.../sub");
-
-const config = assemble(parsed, {
-  proxyGroupTag: "PROXY",
-  inboundPort: 1080,
-  tun: false,
-  rules: [{ type: "DOMAIN-SUFFIX", content: "doubleclick.net", outbound: "block" }],
-});
-console.log(JSON.stringify(config, null, 2));
-```
-
-`sources 是 URL / 文本 / 节点数组 时的捷径`：
-
-```js
-const config = await toSingboxConfig("https://example.com/sub", { url: true });
-```
-
-## 输入
-
-- HTTP(S) 订阅链接（`fromUrl`）
-- 订阅文本：各协议 URI（vmess:// vless:// ss:// trojan:// hysteria2:// tuic:// …）逐行；或整份 YAML/JSON（带 `proxies:` 的 mihomo 文档、或顶层节点对象数组）
-- 节点对象数组：mihomo(clash) schema，例如 `{ name, type: "ss", server, port, cipher, password }`
-
-## 输出
-
-`outbounds/endpoints` 与 sing-box 对齐：
-- wireguard / tailscale → `endpoints`
-- 其余代理 → `outbounds`；shadow-tls 链式节点会拆成主协议 outbound + `<name>_shadowtls` outbound，用 `detour` 串联
-
-`assemble()` 追加：`auto[urltest]`、`proxy[selector]`、`direct`、`block`、`dns-out`，并生成默认 `dns` / `inbounds(mixed)` / `route`（内置 `ip_is_private→direct` 默认规则，置于用户规则之后）。
-
-可用 `--dns/--final/--proxy-tag/--inbound-port` 及 `options.{dns,inbounds,route,log,extra}` 整体覆盖。
-
-## 规则类型映射（内部 -> sing-box）
-
-`DOMAIN→domain`、`DOMAIN-SUFFIX→domain_suffix`、`DOMAIN-KEYWORD→domain_keyword`、`DOMAIN-REGEX→domain_regex`、`IP-CIDR/IP-CIDR6→ip_cidr`、`GEOIP→geoip`、`GEOSITE→geosite`、`PROCESS-NAME→process_name`、`DEST-PORT→port`、`SRC-PORT→source_port`、`SRC-IP→source_ip_cidr`、`NETWORK→network`、`RULE-SET→rule_set`。其余类型抛错。
-
-## 已知边界
-
-- 默认配置假定 sing-box ≥ 1.9；规则/geoip 依赖你的 sing-box 环境提供（本工具不做 geo 数据下载）。
-- "YAML/JSON 节点文档"输入要求 mihomo 风格的完整对象（含 `cipher`/`password` 等）；未内置 Sub-Store 的 `lastParse` 全量归一化。
-- 官方版 sing-box 不支持的协议默认跳过并报 `Platform sing-box does not support ...`（`--include-unsupported-proxy` 可放行社区版字段，例如旧 Snell / SSR）。
-- 本工程不校验 sing-box 可加载性；生成后请用目标 sing-box 校验配置。
-
 ## License / Attribution
 
 AGPL-3.0。部分源码改编自 Sub-Store（上游 AGPL-3.0），见文件头与上方说明。
