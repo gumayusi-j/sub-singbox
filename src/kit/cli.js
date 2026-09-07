@@ -22,7 +22,18 @@ function parseArgs(argv) {
         else if (a === "--out") args.out = argv[++i];
         else if (a === "--inbound-port") args.inboundPort = Number(argv[++i]);
         else if (a === "--user-agent") args.userAgent = argv[++i];
-        else if (a === "--dns") args.remoteDns = argv[++i];
+        else if (a === "--timeout") args.timeout = Number(argv[++i]);
+        else if (a === "--header") {
+            const pair = argv[++i];
+            const idx = pair.indexOf(":");
+            if (idx <= 0) {
+                throw new Error(
+                    "invalid --header (expected name:value): " + pair,
+                );
+            }
+            args.headers = args.headers || {};
+            args.headers[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
+        } else if (a === "--dns") args.remoteDns = argv[++i];
         else if (a === "--final") args.final = argv[++i];
         else if (a === "--rule-file") args.ruleFile = argv[++i];
         else if (a === "--proxy-tag") args.proxyGroupTag = argv[++i];
@@ -64,6 +75,8 @@ function usage() {
         "  --user-agent <ua>        UA when fetching a URL subscription",
         "                           (default a Clash client UA, so panels",
         "                           return node lists instead of sing-box configs)",
+        "  --timeout <ms>           fetch timeout for URL subscriptions",
+        "  --header <name:value>    extra request header (repeatable)",
         "  --tun                    add a tun inbound",
         "  --dns <url>              remote DoH URL for the dns section",
         "  --final <tag>            route.final tag (default proxy)",
@@ -88,6 +101,8 @@ async function main() {
         final: args.final,
         proxyGroupTag: args.proxyGroupTag,
         userAgent: args.userAgent || DEFAULT_USER_AGENT,
+        timeout: args.timeout,
+        headers: args.headers,
     };
     if (args.ruleFile) options.rules = loadRuleFile(args.ruleFile);
 

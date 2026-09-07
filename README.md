@@ -30,8 +30,14 @@ pnpm cli --file sub.txt --rule-file rules.txt --tun --inbound-port 7890 > config
 
 # 远程订阅：默认用 Clash 客户端 UA 拉取，面板会返回节点列表而非 sing-box 配置
 pnpm cli "https://example.com/api/v1/client/subscribe?token=xxx" --url > config.json
-pnpm cli "$URL" --url --user-agent "v2rayN/6.23"   # 需要时手动指定 UA
+pnpm cli "$URL" --url --user-agent "v2rayN/6.23"   # 手动指定 UA
+pnpm cli "$URL" --url --timeout 15000              # 请求超时(ms，默认 30000)
+pnpm cli "$URL" --url --header "Accept-Encoding: gzip"  # 附加请求头(可重复)
 ```
+
+拉取远程订阅时的请求选项（CLI 或 Web `/api/convert` 的 `options` 均支持）：默认
+`user-agent` 为 `clash.meta/v1.19.23`（与上游 Sub-Store 一致）；可传
+`userAgent` / `headers`（对象，覆盖默认头）/ `timeout`（ms）。
 
 规则文件 `rules.txt`：每行 `TYPE,CONTENT[,outbound]`，或一个 JSON 数组（元素可为上述描述符，或已是 sing-box matcher，例如 `{"ip_is_private":true,"outbound":"direct"}`）。支持类型见下。
 

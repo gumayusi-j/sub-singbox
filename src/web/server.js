@@ -95,6 +95,13 @@ function normalizeOptions(options, config) {
         final: options.final || undefined,
         proxyGroupTag: options.proxyGroupTag || undefined,
         userAgent: options.userAgent || undefined,
+        timeout: asNumber(options.timeout, undefined),
+        headers:
+            options.headers &&
+            typeof options.headers === "object" &&
+            !Array.isArray(options.headers)
+                ? options.headers
+                : undefined,
         remoteDns: options.remoteDns || config.remoteDns,
         addAutoGroup: options.addAutoGroup,
         addDirect: options.addDirect,

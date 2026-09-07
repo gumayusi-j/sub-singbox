@@ -5,8 +5,11 @@ import { safeLoad } from "@/utils/yaml";
 // (e.g. V2Board) pick the response format by User-Agent: a UA containing
 // "singbox" yields a ready-made sing-box config (which this converter cannot
 // ingest), while a Clash client UA yields a Clash `proxies:` node list - the
-// format this tool parses. Override per request via options.userAgent.
-export const DEFAULT_USER_AGENT = "clash-verge/v2.2.3";
+// format this tool parses. Aligned with upstream Sub-Store's default
+// (backend/src/utils/download.js). Override via options.userAgent.
+export const DEFAULT_USER_AGENT = "clash.meta/v1.19.23";
+
+export const DEFAULT_TIMEOUT_MS = 30000;
 
 // Whole-document YAML/JSON that carries nodes directly:
 //   - a JSON/YAML array of proxy objects
@@ -70,8 +73,32 @@ export function fromText(text, opts) {
     return produceToObject(nodes, opts);
 }
 
+// Merge the download headers: defaults (UA, optional bearer token) plus any
+// caller-supplied opts.headers (name -> value; case-insensitive, overrides).
+function buildHeaders(opts) {
+    const headers = {};
+    const set = (name, value) => {
+        headers[name.toLowerCase()] = String(value);
+    };
+    set("user-agent", opts.userAgent || DEFAULT_USER_AGENT);
+    if (opts.token) set("authorization", "Bearer " + opts.token);
+    if (opts.headers && typeof opts.headers === "object" && !Array.isArray(opts.headers)) {
+        for (const name of Object.keys(opts.headers)) {
+            const value = opts.headers[name];
+            if (value != null) set(name, value);
+        }
+    }
+    return headers;
+}
+
 // url: remote http(s) subscription. Local file paths are not handled here; see
 // the CLI, which resolves a path to text first.
+//
+// options:
+//   userAgent ... request User-Agent (default DEFAULT_USER_AGENT)
+//   token ...... send `Authorization: Bearer <token>`
+//   headers .... extra request headers, { name: value } (overrides defaults)
+//   timeout .... fetch timeout in ms (default DEFAULT_TIMEOUT_MS)
 export async function fromUrl(url, opts) {
     opts = opts || {};
     if (!/^https?:\/\//i.test(url)) {
@@ -79,13 +106,26 @@ export async function fromUrl(url, opts) {
             "singbox-kit: fromUrl expects an http(s) URL; got: " + url,
         );
     }
-    const headers = { "user-agent": opts.userAgent || DEFAULT_USER_AGENT };
-    if (opts.token) headers.authorization = "Bearer " + opts.token;
+    const timeout = Number(opts.timeout) > 0 ? Number(opts.timeout) : DEFAULT_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
     let resp;
     try {
-        resp = await fetch(url, { redirect: "follow", headers: headers });
+        resp = await fetch(url, {
+            redirect: "follow",
+            headers: buildHeaders(opts),
+            signal: controller.signal,
+        });
     } catch (e) {
-        throw new Error("singbox-kit: subscription download failed: " + url);
+        const timedOut = controller.signal.aborted;
+        throw new Error(
+            "singbox-kit: subscription download failed" +
+                (timedOut ? " (timeout after " + timeout + "ms)" : "") +
+                ": " +
+                url,
+        );
+    } finally {
+        clearTimeout(timer);
     }
     if (!resp.ok) {
         throw new Error(
@@ -106,4 +146,5 @@ export default {
     fromUrl,
     tryLoadNodeDocument,
     DEFAULT_USER_AGENT,
+    DEFAULT_TIMEOUT_MS,
 };
