@@ -1,5 +1,6 @@
 import { defaultInbounds, defaultDns, defaultRoute } from "./defaults";
 import { toSingboxRule } from "./rules/singbox";
+import { migrateConfig, CompatError } from "./compat";
 
 function isPlainObject(value) {
     return value != null && typeof value === "object" && !Array.isArray(value);
@@ -140,5 +141,15 @@ export default function assemble(parsed, options) {
             config[key] = options.extra[key];
         }
     }
-    return config;
+
+    // Keep the emitted config aligned with sing-box 1.16: auto-migrate
+    // 1.14-deprecated fields and reject what cannot be migrated safely.
+    const result = migrateConfig(config);
+    if (result.errors.length > 0) {
+        throw new CompatError(result.errors, result.warnings);
+    }
+    if (typeof options.onWarning === "function" && result.warnings.length > 0) {
+        options.onWarning(result.warnings);
+    }
+    return result.config;
 }

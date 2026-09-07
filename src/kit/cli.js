@@ -103,6 +103,11 @@ async function main() {
         userAgent: args.userAgent || DEFAULT_USER_AGENT,
         timeout: args.timeout,
         headers: args.headers,
+        onWarning: (warnings) => {
+            for (const w of warnings) {
+                process.stderr.write("singbox-kit: " + w.message + " (" + w.path + ")\n");
+            }
+        },
     };
     if (args.ruleFile) options.rules = loadRuleFile(args.ruleFile);
 

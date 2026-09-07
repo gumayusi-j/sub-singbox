@@ -124,6 +124,11 @@ export async function convertRequest(body, config) {
         return { status: 400, payload: { ok: false, error: "input is empty" } };
     }
     const normalized = normalizeOptions(body.options, config);
+    // Surface sing-box 1.16 auto-migrations on the success payload.
+    const warnings = [];
+    normalized.onWarning = (ws) => {
+        for (const w of ws) warnings.push(w);
+    };
     const outMode =
         body.out === "outbounds" ? "outbounds" : config.defaultOut || "config";
 
@@ -162,8 +167,11 @@ export async function convertRequest(body, config) {
         try {
             configJson = assemble(parsed, normalized);
         } catch (e) {
+            // Startup-rejection findings surface as 4xx so the client can act
+            // on the migration hints, not as a server fault.
+            const compat = !!(e && e.name === "CompatError");
             return {
-                status: 500,
+                status: compat ? 422 : 500,
                 payload: {
                     ok: false,
                     error: e && e.message ? e.message : String(e),
@@ -172,6 +180,7 @@ export async function convertRequest(body, config) {
         }
         data.output = configJson;
     }
+    if (warnings.length > 0) data.warnings = warnings;
     data.mode = outMode;
     return { status: 200, payload: { ok: true, data } };
 }

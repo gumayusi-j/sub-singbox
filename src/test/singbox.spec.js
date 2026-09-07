@@ -3,6 +3,7 @@ import { ProxyUtils } from "@/core/proxy-utils";
 import { fromText, fromNodes } from "@/kit/convert";
 import assemble from "@/kit/assemble";
 import { toSingboxRule, toSingboxRules } from "@/kit/rules/singbox";
+import { CompatError } from "@/kit/compat";
 
 const UUID = "11111111-1111-4111-8111-111111111111";
 
@@ -168,6 +169,29 @@ describe("kit API", function () {
         expect(selector.outbounds).to.include("auto");
         expect(config.route.final).to.equal("proxy");
         expect(config.endpoints).to.equal(undefined);
+    });
+
+    it("emits a default config with no sing-box 1.16 compat keys", function () {
+        const parsed = fromNodes([
+            { name: "s1", type: "ss", server: "1.2.3.4", port: 8388, cipher: "aes-128-gcm", password: "x" },
+        ]);
+        const config = assemble(parsed);
+        expect(config.http_clients).to.equal(undefined);
+        expect(config.certificate_providers).to.equal(undefined);
+        expect(config.route.default_http_client).to.equal(undefined);
+    });
+
+    it("rejects legacy dns options that cannot be auto-migrated", function () {
+        const parsed = fromNodes([
+            { name: "s1", type: "ss", server: "1.2.3.4", port: 8388, cipher: "aes-128-gcm", password: "x" },
+        ]);
+        expect(() => assemble(parsed, {
+            dns: {
+                servers: [{ tag: "remote", address: "https://dns.example.com/dns-query", detour: "proxy" }],
+                rules: [{ domain_suffix: "cn", strategy: "ipv4_only", server: "remote" }],
+                final: "remote",
+            },
+        })).to.throw(CompatError);
     });
 
     it("merges provided route rules ahead of built-in defaults", function () {

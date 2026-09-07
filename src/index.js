@@ -7,6 +7,13 @@ export {
 } from "./kit/convert";
 export { default as assemble } from "./kit/assemble";
 export {
+    analyzeConfig,
+    migrateConfig,
+    assertCompatible,
+    CompatError,
+    formatErrors,
+} from "./kit/compat";
+export {
     toSingboxMatcher,
     toSingboxRule,
     toSingboxRules,
@@ -43,5 +50,9 @@ export default {
     fromUrl,
     assemble,
     toSingboxConfig,
+    analyzeConfig,
+    migrateConfig,
+    assertCompatible,
+    CompatError,
     ProxyUtils,
 };
