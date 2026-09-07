@@ -1,0 +1,17 @@
+proxies:
+  - name: ss-doc
+    type: ss
+    server: 5.6.7.8
+    port: 9000
+    cipher: chacha20-ietf-poly1305
+    password: docpass
+    udp: true
+  - name: wg-doc
+    type: wireguard
+    server: 203.0.113.1
+    port: 51820
+    ip: 10.0.0.2
+    private-key: k1
+    public-key: k2
+    mtu: 1420
+    udp: true

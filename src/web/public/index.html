@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>singbox-kit · 订阅转 sing-box</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.55 system-ui, "Segoe UI", sans-serif; background: #11161c; color: #d6dee6; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 20px; margin: 6px 0 4px; }
+  h1 small { color: #7c8a99; font-weight: normal; font-size: 12px; }
+  .card { background: #171f29; border: 1px solid #26313d; border-radius: 10px; padding: 14px; margin-top: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  label.inline { display: inline-flex; align-items: center; gap: 5px; margin-right: 10px; }
+  textarea, input[type="text"], input[type="number"] { width: 100%; background: #0d141b; color: inherit; border: 1px solid #2a3948; border-radius: 8px; padding: 8px 10px; font: inherit; }
+  textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, Consolas, monospace; }
+  input[type="text"], input[type="number"] { padding: 7px 9px; }
+  input[type="number"] { width: 110px; }
+  button { background: #2f7de1; border: 0; color: #fff; border-radius: 8px; padding: 9px 18px; cursor: pointer; font: inherit; }
+  button.secondary { background: #263542; }
+  button:disabled { opacity: .55; cursor: default; }
+  button.small { padding: 4px 10px; border-radius: 6px; font-size: 12px; }
+  details { margin-top: 10px; }
+  details > summary { cursor: pointer; color: #9fb3c5; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; margin-top: 8px; }
+  .fld { display: flex; flex-direction: column; gap: 4px; }
+  .fld label { color: #9fb3c5; font-size: 12px; }
+  #status { min-height: 20px; margin-top: 10px; font-size: 13px; }
+  #status.ok { color: #6fcf97; }
+  #status.err { color: #ef7d7d; white-space: pre-wrap; }
+  .tabs { display: flex; gap: 4px; margin-top: 14px; border-bottom: 1px solid #26313d; flex-wrap: wrap; }
+  .tabs button { background: none; color: #9fb3c5; border-radius: 8px 8px 0 0; padding: 8px 14px; }
+  .tabs button.active { background: #22303e; color: #fff; }
+  .panel { display: none; margin-top: 10px; }
+  .panel.active { display: block; }
+  pre { background: #0d141b; border: 1px solid #22303e; border-radius: 8px; padding: 12px; overflow: auto; max-height: 520px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { border-bottom: 1px solid #22303e; padding: 6px 8px; text-align: left; }
+  th { color: #9fb3c5; font-weight: 600; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; margin-right: 4px; }
+  .kind-outbound { background: #183a56; color: #7ec3ff; }
+  .kind-endpoint { background: #3b2f18; color: #ffd479; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>singbox-kit <small>订阅 → 转换 → 导出 sing-box 配置</small></h1>
+
+  <div class="card">
+    <div class="row">
+      <label class="inline"><input type="radio" name="mode" value="text" checked> 订阅文本</label>
+      <label class="inline"><input type="radio" name="mode" value="url"> 远程 URL</label>
+    </div>
+    <div id="textBox" style="margin-top:10px">
+      <textarea id="inputText" placeholder="粘贴订阅内容（vmess:// vless:// ss:// trojan:// hysteria2:// … 或 YAML/JSON 节点列表）"></textarea>
+    </div>
+    <div id="urlBox" style="margin-top:10px; display:none">
+      <input type="text" id="inputUrl" placeholder="https://example.com/sub?token=…">
+    </div>
+
+    <details>
+      <summary>常用配置（可展开）</summary>
+      <div class="grid2">
+        <div class="fld"><label>入站端口（mixed）</label><input type="number" id="optPort" value="1080" min="1" max="65535"></div>
+        <div class="fld"><label>final 出口标签</label><input type="text" id="optFinal" value="proxy"></div>
+        <div class="fld"><label>selector 组名</label><input type="text" id="optProxyTag" value="proxy"></div>
+        <div class="fld"><label>远程 DoH</label><input type="text" id="optDns" value="https://dns.alidns.com/dns-query"></div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label class="inline"><input type="checkbox" id="optTun"> 添加 tun 入口</label>
+        <label class="inline"><input type="checkbox" id="optUnsup"> 含官方版不支持的协议</label>
+      </div>
+      <div class="fld" style="margin-top:8px">
+        <label>附加规则（每行 <span class="mono">TYPE,CONTENT[,OUTBOUND]</span>，如 <span class="mono">DOMAIN-SUFFIX,doubleclick.net,block</span>）</label>
+        <textarea id="optRules" style="min-height:70px"></textarea>
+      </div>
+    </details>
+
+    <div class="row" style="margin-top:12px">
+      <button id="btnConvert">转换</button>
+      <button class="secondary small" id="btnCopy">复制当前视图</button>
+      <button class="secondary small" id="btnDownload">下载 .json</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="table" class="active">节点表格</button>
+    <button data-tab="outbounds">outbounds / endpoints JSON</button>
+    <button data-tab="config">完整配置 JSON</button>
+  </div>
+
+  <div class="panel active" id="panel-table"></div>
+  <div class="panel" id="panel-outbounds"><pre></pre></div>
+  <div class="panel" id="panel-config"><pre></pre></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var last = null; // { outbounds, endpoints, output, nodes }
+
+  function $(id) { return document.getElementById(id); }
+  var inputText = $("inputText"), inputUrl = $("inputUrl");
+  var status = $("status");
+  var panels = {
+    table: $("panel-table"),
+    outbounds: $("panel-outbounds").querySelector("pre"),
+    config: $("panel-config").querySelector("pre"),
+  };
+  var activeTab = "table";
+
+  function setStatus(msg, type) { status.textContent = msg; status.className = type || ""; }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function toggleMode() {
+    var url = document.querySelector('input[name="mode"]:checked').value === "url";
+    $("textBox").style.display = url ? "none" : "block";
+    $("urlBox").style.display = url ? "block" : "none";
+  }
+  [].forEach.call(document.querySelectorAll('input[name="mode"]'), function (r) {
+    r.addEventListener("change", toggleMode);
+  });
+  toggleMode();
+
+  function renderTable(nodes) {
+    var html = "<table><thead><tr><th>类型</th><th>标签</th><th>服务器</th><th>端口</th><th>类别</th></tr></thead><tbody>";
+    if (!nodes || nodes.length === 0) {
+      html += '<tr><td colspan="5">无节点</td></tr>';
+    } else {
+      nodes.forEach(function (n) {
+        html += "<tr><td class=\"mono\">" + esc(n.type) + "</td><td>" + esc(n.tag) + "</td>" +
+          "<td class=\"mono\">" + esc(n.server || "-") + "</td><td class=\"mono\">" + esc(n.port || "-") + "</td>" +
+          '<td><span class="tag kind-' + (n.kind === "endpoint" ? "endpoint" : "outbound") + '">' + esc(n.kind) + "</span></td></tr>";
+      });
+    }
+    html += "</tbody></table>";
+    return html;
+  }
+
+  function collectOptions() {
+    var options = {
+      inboundPort: parseInt($("optPort").value, 10) || 1080,
+      tun: $("optTun").checked,
+      includeUnsupportedProxy: $("optUnsup").checked,
+      final: $("optFinal").value.trim() || undefined,
+      proxyGroupTag: $("optProxyTag").value.trim() || undefined,
+      remoteDns: $("optDns").value.trim() || undefined,
+    };
+    var rulesText = $("optRules").value.trim();
+    if (rulesText) options.rules = rulesText;
+    return options;
+  }
+
+  function currentText() {
+    var mode = document.querySelector('input[name="mode"]:checked').value;
+    return mode === "url"
+      ? { input: inputUrl.value.trim(), url: true }
+      : { input: inputText.value };
+  }
+
+  async function convert() {
+    var src = currentText();
+    if (!src.input) { setStatus("请输入订阅文本或远程 URL。", "err"); return; }
+    setStatus("转换中…");
+    $("btnConvert").disabled = true;
+    try {
+      var resp = await fetch("/api/convert", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          input: src.input,
+          url: !!src.url,
+          out: "config",
+          options: collectOptions(),
+        }),
+      });
+      var json = await resp.json();
+      if (!resp.ok || !json.ok) throw new Error((json && json.error) || ("HTTP " + resp.status));
+      last = json.data;
+      renderTabs();
+      setStatus("完成：" + (last.nodes || []).length + " 个节点（outbound " +
+        (last.outbounds || []).length + " / endpoint " + (last.endpoints || []).length + "）。");
+    } catch (e) {
+      setStatus("转换失败：" + (e && e.message ? e.message : e), "err");
+    } finally {
+      $("btnConvert").disabled = false;
+    }
+  }
+
+  function renderTabs() {
+    if (!last) return;
+    panels.table.innerHTML = renderTable(last.nodes);
+    panels.outbounds.textContent = JSON.stringify(
+      { outbounds: last.outbounds, endpoints: last.endpoints }, null, 2);
+    panels.config.textContent = JSON.stringify(last.output, null, 2);
+  }
+
+  function activate(tab) {
+    activeTab = tab;
+    [].forEach.call($("tabs").querySelectorAll("button"), function (b) {
+      b.classList.toggle("active", b.getAttribute("data-tab") === tab);
+    });
+    ["table", "outbounds", "config"].forEach(function (t) {
+      $("panel-" + t).classList.toggle("active", t === tab);
+    });
+  }
+
+  function currentBlob() {
+    if (!last) return null;
+    if (activeTab === "config") {
+      return { name: "singbox-config.json", data: last.output };
+    }
+    return {
+      name: "singbox-outbounds.json",
+      data: { outbounds: last.outbounds, endpoints: last.endpoints },
+    };
+  }
+
+  async function copy() {
+    var blob = currentBlob();
+    if (!blob) { setStatus("还没有可复制的内容。", "err"); return; }
+    var text = typeof blob.data === "string" ? blob.data : JSON.stringify(blob.data, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus("已复制到剪贴板。", "ok");
+    } catch (e) {
+      setStatus("复制失败：" + (e && e.message ? e.message : e), "err");
+    }
+  }
+
+  function download() {
+    var blob = currentBlob();
+    if (!blob) { setStatus("还没有可下载的内容。", "err"); return; }
+    var text = typeof blob.data === "string" ? blob.data : JSON.stringify(blob.data, null, 2);
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    a.download = blob.name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 200);
+  }
+
+  $("btnConvert").addEventListener("click", convert);
+  $("btnCopy").addEventListener("click", copy);
+  $("btnDownload").addEventListener("click", download);
+  [].forEach.call($("tabs").querySelectorAll("button"), function (b) {
+    b.addEventListener("click", function () { activate(b.getAttribute("data-tab")); });
+  });
+  activate("table");
+})();
+</script>
+</body>
+</html>

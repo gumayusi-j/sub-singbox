@@ -1,0 +1,31 @@
+{
+  "name": "singbox-kit",
+  "version": "0.1.0",
+  "description": "Extract Sub-Store's proxy parsing/normalization kernel and export complete sing-box configs. Sources under src/core/proxy-utils are adapted from Sub-Store (AGPL-3.0).",
+  "main": "src/index.js",
+  "license": "AGPL-3.0",
+  "private": true,
+  "scripts": {
+    "test": "mocha src/test/**/*.spec.js --require @babel/register --require ./preload --recursive",
+    "cli": "node -r @babel/register -r ./preload src/kit/cli.js",
+    "web": "node -r @babel/register -r ./preload src/web/index.js"
+  },
+  "dependencies": {
+    "buffer": "^6.0.3",
+    "ip-address": "^10.3.1",
+    "js-base64": "^3.7.2",
+    "json5": "^2.2.3",
+    "jsrsasign": "^11.1.0",
+    "lodash": "^4.17.21",
+    "peggy": "^2.0.1",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.18.0",
+    "@babel/register": "^7.17.7",
+    "@babel/preset-env": "^7.18.0",
+    "babel-plugin-relative-path-import": "^2.0.1",
+    "chai": "^4.3.6",
+    "mocha": "^11.7.5"
+  }
+}

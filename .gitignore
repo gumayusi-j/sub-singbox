@@ -1,0 +1,6 @@
+node_modules/
+singbox-web.config.json
+*.log
+*.bak
+.DS_Store
+Thumbs.db

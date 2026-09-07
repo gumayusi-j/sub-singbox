@@ -1,0 +1,3 @@
+ss://YWVzLTEyOC1nY206cGFzc0AxLjIuMy40OjgzODg=#ss-one
+trojan://secret@b.example.com:443?sni=b.example.com&peer=b.example.com#trojan-node
+hysteria2://h2pass@h.example.com:8443/?sni=h.example.com#hy2-node
