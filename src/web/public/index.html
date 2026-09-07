@@ -225,15 +225,38 @@
     };
   }
 
+  // navigator.clipboard 仅在安全上下文(HTTPS/localhost)可用；否则回退到 execCommand。
+  function writeClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:0;left:-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        if (document.execCommand("copy")) resolve();
+        else reject(new Error("execCommand('copy') 未成功"));
+      } catch (e) {
+        reject(e);
+      } finally {
+        document.body.removeChild(ta);
+      }
+    });
+  }
+
   async function copy() {
     var blob = currentBlob();
     if (!blob) { setStatus("还没有可复制的内容。", "err"); return; }
     var text = typeof blob.data === "string" ? blob.data : JSON.stringify(blob.data, null, 2);
     try {
-      await navigator.clipboard.writeText(text);
+      await writeClipboard(text);
       setStatus("已复制到剪贴板。", "ok");
     } catch (e) {
-      setStatus("复制失败：" + (e && e.message ? e.message : e), "err");
+      setStatus("复制失败：" + (e && e.message ? e.message : e) + "（请改用「下载 .json」导出）", "err");
     }
   }
 
