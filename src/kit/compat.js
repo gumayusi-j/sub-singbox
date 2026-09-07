@@ -10,6 +10,8 @@
 // ones that need information a static pass cannot safely guess. analyzeConfig
 // is read-only; migrateConfig never mutates its argument.
 
+import { parseDnsAddress } from "./defaults";
+
 function isPlainObject(value) {
     return value != null && typeof value === "object" && !Array.isArray(value);
 }
@@ -215,6 +217,38 @@ function inspectStoreRdrc(config, out) {
         "Rename to store_dns."));
 }
 
+// R8 — legacy `address`-string DNS servers (removed in sing-box 1.14).
+function inspectLegacyDnsServer(config, out) {
+    const dns = config.dns;
+    if (!isPlainObject(dns) || !Array.isArray(dns.servers)) return;
+    dns.servers.forEach((server, i) => {
+        if (!isPlainObject(server) || server.address === undefined) return;
+        const path = "dns.servers[" + i + "].address";
+        if (server.type !== undefined) {
+            out.push(finding("dns_server_legacy_format", "warn", path,
+                "address on a DNS server that already declares type was removed in sing-box 1.14; dropping address.",
+                "Remove the address field."));
+            return;
+        }
+        if (typeof server.address !== "string") {
+            out.push(finding("dns_server_legacy_format", "error", path,
+                "DNS server uses a non-string legacy address.",
+                "Rewrite as { type, server, server_port }."));
+            return;
+        }
+        try {
+            parseDnsAddress(server.address);
+            out.push(finding("dns_server_legacy_format", "warn", path,
+                "Legacy DNS server `address` format was removed in sing-box 1.14; migrating to the type/server form.",
+                "Uses type/server/server_port parsed from the address string."));
+        } catch (e) {
+            out.push(finding("dns_server_legacy_format", "error", path,
+                "Cannot auto-migrate legacy DNS server address: " + (e && e.message ? e.message : String(e)),
+                "Rewrite as { type, server, server_port } manually."));
+        }
+    });
+}
+
 // R7 — legacy address filtering in DNS rules (no match_response).
 function inspectLegacyAddressFilter(config, out) {
     const dns = config.dns;
@@ -240,6 +274,7 @@ const INSPECTIONS = [
     inspectDnsRuleSetAcceptEmpty,
     inspectIndependentCache,
     inspectStoreRdrc,
+    inspectLegacyDnsServer,
     inspectLegacyAddressFilter,
 ];
 
@@ -361,6 +396,42 @@ function applyStoreRdrc(cfg) {
     if (value === true && cache.store_dns === undefined) cache.store_dns = true;
 }
 
+function applyLegacyDnsServer(cfg) {
+    const dns = cfg.dns;
+    if (!isPlainObject(dns) || !Array.isArray(dns.servers)) return;
+    const servers = [];
+    let changed = false;
+    for (const server of dns.servers) {
+        if (isPlainObject(server) && typeof server.address === "string") {
+            if (server.type !== undefined) {
+                const next = { ...server };
+                delete next.address;
+                servers.push(next);
+                changed = true;
+                continue;
+            }
+            try {
+                const parsed = parseDnsAddress(server.address);
+                const next = { type: parsed.type };
+                if (typeof server.tag === "string") next.tag = server.tag;
+                if (parsed.type !== "local") {
+                    next.server = parsed.server;
+                    next.server_port = parsed.server_port;
+                    if (parsed.path) next.path = parsed.path;
+                }
+                if (typeof server.detour === "string") next.detour = server.detour;
+                servers.push(next);
+                changed = true;
+                continue;
+            } catch (_e) {
+                // unparseable; leave as-is so it is reported as an error
+            }
+        }
+        servers.push(server);
+    }
+    if (changed) dns.servers = servers;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -382,6 +453,7 @@ export function migrateConfig(config) {
         return { config, findings: pre.findings, warnings: pre.warnings, errors: pre.errors };
     }
     const draft = deepClone(config);
+    applyLegacyDnsServer(draft);
     applyRuleSetHttpClients(draft);
     applyInlineAcme(draft);
     applyDnsRuleSetAcceptEmpty(draft);

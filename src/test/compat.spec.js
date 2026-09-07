@@ -27,7 +27,7 @@ function baseConfig(overrides) {
         log: { level: "info" },
         dns: {
             servers: [
-                { tag: "remote", address: "https://dns.example.com/dns-query", detour: "proxy" },
+                { type: "https", tag: "remote", server: "dns.example.com", server_port: 443, detour: "proxy" },
             ],
             rules: [],
             final: "remote",
@@ -233,7 +233,7 @@ describe("compat layer", function () {
     it("drops rule_set_ip_cidr_accept_empty and independent_cache (R4/R5)", function () {
         const cfg = baseConfig({
             dns: {
-                servers: [{ tag: "local", address: "local", detour: "direct" }],
+                servers: [{ type: "local", tag: "local" }],
                 independent_cache: true,
                 rules: [
                     { domain_suffix: "cn", rule_set_ip_cidr_accept_empty: true, server: "local" },
@@ -269,7 +269,7 @@ describe("compat layer", function () {
     it("errors on legacy address filtering in DNS rules and never mutates (R7)", function () {
         const cfg = baseConfig({
             dns: {
-                servers: [{ tag: "local", address: "local", detour: "direct" }],
+                servers: [{ type: "local", tag: "local" }],
                 rules: [{ ip_is_private: true, server: "local" }],
                 final: "remote",
             },
@@ -292,7 +292,7 @@ describe("compat layer", function () {
     it("accepts match_response address matching and route-level ip_is_private (R7 scope)", function () {
         const legal = baseConfig({
             dns: {
-                servers: [{ tag: "local", address: "local", detour: "direct" }],
+                servers: [{ type: "local", tag: "local" }],
                 rules: [{ ip_is_private: true, match_response: true, server: "local" }],
                 final: "remote",
             },
@@ -309,7 +309,7 @@ describe("compat layer", function () {
     it("errors on legacy strategy on DNS rules, recursing into logical rules (R3)", function () {
         const cfg = baseConfig({
             dns: {
-                servers: [{ tag: "remote", address: "https://dns.example.com/dns-query", detour: "proxy" }],
+                servers: [{ type: "https", tag: "remote", server: "dns.example.com", server_port: 443, detour: "proxy" }],
                 rules: [
                     { domain_suffix: "cn", strategy: "ipv4_only", server: "remote" },
                     {
@@ -375,5 +375,58 @@ describe("compat layer", function () {
         const a = migrateConfig(clone(input)).config;
         const b = migrateConfig(clone(input)).config;
         expect(a).to.deep.equal(b);
+    });
+
+    it("migrates legacy address-string DNS servers to the modern form (R8)", function () {
+        const cfg = baseConfig({
+            dns: {
+                servers: [
+                    { tag: "remote", address: "https://dns.example.com/dns-query", detour: "proxy" },
+                    { tag: "local", address: "local" },
+                ],
+                rules: [],
+                final: "remote",
+            },
+        });
+        const { config, warnings } = migrateConfig(cfg);
+        expect(warnings.some((w) => w.code === "dns_server_legacy_format")).to.equal(true);
+        expect(config.dns.servers[0]).to.deep.equal({
+            type: "https",
+            tag: "remote",
+            server: "dns.example.com",
+            server_port: 443,
+            detour: "proxy",
+        });
+        expect(config.dns.servers[1]).to.deep.equal({ type: "local", tag: "local" });
+        expect(config.dns.servers[0].address).to.equal(undefined);
+    });
+
+    it("errors when a legacy DNS server address cannot be parsed (R8)", function () {
+        const cfg = baseConfig({
+            dns: {
+                servers: [{ tag: "bad", address: "foo://1.1.1.1" }],
+                rules: [],
+                final: "remote",
+            },
+        });
+        const { errors } = migrateConfig(cfg);
+        expect(errors.some((e) => e.code === "dns_server_legacy_format")).to.equal(true);
+    });
+
+    it("default assemble() emits modern DNS servers and a domain resolver", function () {
+        const config = assemble(fromNodes([SS_NODE]));
+        const remote = config.dns.servers.find((s) => s.tag === "remote");
+        const local = config.dns.servers.find((s) => s.tag === "local");
+        expect(remote).to.deep.equal({
+            type: "https",
+            tag: "remote",
+            server: "dns.alidns.com",
+            server_port: 443,
+            detour: "proxy",
+        });
+        expect(local).to.deep.equal({ type: "local", tag: "local" });
+        expect(config.dns.servers.some((s) => s.address !== undefined)).to.equal(false);
+        expect(config.dns.rules).to.deep.equal([]);
+        expect(config.route.default_domain_resolver).to.deep.equal({ server: "local" });
     });
 });

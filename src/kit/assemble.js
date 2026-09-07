@@ -6,6 +6,14 @@ function isPlainObject(value) {
     return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
+function dnsHasServer(dns, tag) {
+    return (
+        isPlainObject(dns) &&
+        Array.isArray(dns.servers) &&
+        dns.servers.some((s) => s && typeof s === "object" && s.tag === tag)
+    );
+}
+
 function collectTags(outbounds) {
     const tags = new Set();
     for (const o of outbounds || []) {
@@ -140,6 +148,23 @@ export default function assemble(parsed, options) {
         for (const key of Object.keys(options.extra)) {
             config[key] = options.extra[key];
         }
+    }
+
+    // sing-box 1.14 removed `outbound` DNS-rule items; resolution for
+    // outbound/dial domains now needs route.default_domain_resolver (or a
+    // per-outbound domain_resolver). When using the default route and a
+    // "local" DNS server exists, default to the local system resolver for
+    // bootstrapping, avoiding proxy self-recursion. Options can opt out with
+    // defaultDomainResolver: false or provide options.route wholesale.
+    if (
+        options.defaultDomainResolver !== false &&
+        !options.route &&
+        config.route === route &&
+        config.route &&
+        config.route.default_domain_resolver === undefined &&
+        dnsHasServer(config.dns, "local")
+    ) {
+        config.route.default_domain_resolver = { server: "local" };
     }
 
     // Keep the emitted config aligned with sing-box 1.16: auto-migrate
