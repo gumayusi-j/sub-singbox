@@ -1,7 +1,6 @@
 import http from "http";
-import { readFileSync, existsSync } from "fs";
-import { join, normalize, sep } from "path";
 import { loadConfig } from "./config";
+import { readStatic } from "./static";
 import { fromText, fromUrl } from "../kit/convert";
 import assemble from "../kit/assemble";
 
@@ -171,7 +170,6 @@ export async function convertRequest(body, config) {
 
 export function createServer(config) {
     config = config || loadConfig();
-    const publicRoot = join(__dirname, "public");
 
     return http.createServer(async (req, res) => {
         try {
@@ -197,19 +195,15 @@ export function createServer(config) {
                 return;
             }
 
-            // static assets from public/
+            // static assets: embedded into the single-file bundle, or read from
+            // public/ when running from source (see static.js / static.embedded.js)
             const rel = pathname === "/" ? "/index.html" : pathname;
-            const target = normalize(join(publicRoot, rel));
-            if (!target.startsWith(publicRoot + sep) && target !== publicRoot) {
-                send(res, 403, "forbidden");
-                return;
-            }
-            if (!existsSync(target)) {
+            const body = readStatic(rel);
+            if (body == null) {
                 send(res, 404, "not found");
                 return;
             }
-            const ext = target.slice(target.lastIndexOf(".")).toLowerCase();
-            const body = readFileSync(target);
+            const ext = rel.slice(rel.lastIndexOf(".")).toLowerCase();
             send(res, 200, body, MIME[ext] || "application/octet-stream");
         } catch (e) {
             send(res, 500, {

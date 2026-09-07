@@ -36,8 +36,14 @@ pnpm cli --file sub.txt --rule-file rules.txt --tun --inbound-port 7890 > config
 本地浏览器界面（无需额外依赖）：
 
 ```bash
-pnpm web            # 启动后打开 http://127.0.0.1:8788/
+pnpm web                          # 启动后打开 http://127.0.0.1:8788/
+pnpm web -- --port 9000           # 指定监听端口
+pnpm web -- --host 0.0.0.0 --port 8080
+pnpm web -- --config my-config.json
+pnpm web -- --help
 ```
+
+`npm/pnpm run` 需用 `--` 把参数透传给 node；直接 `node -r @babel/register -r ./preload src/web/index.js --port 9000` 同理。
 
 - 支持订阅文本 / 远程 URL 输入，可展开常用配置（入站端口、tun、final、规则等）。
 - 结果三视图：节点表格 / outbounds·endpoints JSON / 完整 sing-box 配置 JSON，可复制或下载 `.json`。
@@ -50,7 +56,22 @@ pnpm web            # 启动后打开 http://127.0.0.1:8788/
 { "listen": { "host": "127.0.0.1", "port": 8788 }, "maxBodyBytes": 1048576 }
 ```
 
-环境变量优先：`HOST` / `PORT` / `SINGBOX_WEB_CONFIG`（自定义配置文件路径）。
+优先级从高到低：**CLI 参数（`--port`/`--host`/`--config`） > 环境变量（`HOST` / `PORT` /
+`SINGBOX_WEB_CONFIG` 自定义配置文件路径） > 配置文件 > 默认值**。
+
+### 打包为单文件（Web）
+
+把源码 + 依赖 + 页面 `public/index.html` 全部打进一个 **自包含的 `.js`**，
+产物只需 `node` 运行（不再需要 `@babel/register`、`preload.js`、`node_modules`、
+`public/` 目录）：
+
+```bash
+pnpm build            # esbuild 输出 dist/singbox-kit-web.js（约 2MB）
+pnpm start -- --port 9000     # 或用裸 node 直接跑：node dist/singbox-kit-web.js --port 9000
+```
+
+产物支持与源码模式相同的全部参数/优先级（`--port`/`--host`/`--config`、`PORT`/`HOST`
+环境变量）。任意拷贝到其他装了 Node 的机器即可运行。
 
 ### 作为库
 

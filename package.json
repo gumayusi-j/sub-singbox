@@ -8,7 +8,10 @@
   "scripts": {
     "test": "mocha src/test/**/*.spec.js --require @babel/register --require ./preload --recursive",
     "cli": "node -r @babel/register -r ./preload src/kit/cli.js",
-    "web": "node -r @babel/register -r ./preload src/web/index.js"
+    "web": "node -r @babel/register -r ./preload src/web/index.js",
+    "build": "pnpm build:web",
+    "build:web": "node scripts/build-web.mjs",
+    "start": "node dist/singbox-kit-web.js"
   },
   "dependencies": {
     "buffer": "^6.0.3",
@@ -22,10 +25,11 @@
   },
   "devDependencies": {
     "@babel/core": "^7.18.0",
-    "@babel/register": "^7.17.7",
     "@babel/preset-env": "^7.18.0",
+    "@babel/register": "^7.17.7",
     "babel-plugin-relative-path-import": "^2.0.1",
     "chai": "^4.3.6",
+    "esbuild": "^0.28.2",
     "mocha": "^11.7.5"
   }
 }

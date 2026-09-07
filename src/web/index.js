@@ -1,9 +1,60 @@
 // Launcher: starts the web UI server. Config via singbox-web.config.json
-// (optional) or HOST/PORT env. See singbox-web.config.example.json.
+// (optional), HOST/PORT env, or CLI flags (highest precedence):
+//   --port/-p <n>   listen port
+//   --host <addr>   listen host
+//   --config <path> alternative config file path
+//   --help          show usage
+// See singbox-web.config.example.json.
 import { start, loadConfig } from "./server";
 
+function usage() {
+    return [
+        "Usage: node -r @babel/register -r ./preload src/web/index.js [options]",
+        "",
+        "Options:",
+        "  --port <n>, -p <n>   listen port (default 8788, or PORT env / config file)",
+        "  --host <addr>        listen host (default 127.0.0.1)",
+        "  --config <path>      config JSON path (same as SINGBOX_WEB_CONFIG env)",
+        "  --help               show this help",
+    ].join("\n");
+}
+
+function parseArgs(argv) {
+    const args = { _: [] };
+    for (let i = 0; i < argv.length; i++) {
+        const a = argv[i];
+        if (a === "--port" || a === "-p") args.port = Number(argv[++i]);
+        else if (a === "--host") args.host = argv[++i];
+        else if (a === "--config") args.config = argv[++i];
+        else if (a === "--help" || a === "-h") args.help = true;
+        else if (a.startsWith("-")) throw new Error("unknown option: " + a);
+        else args._.push(a);
+    }
+    return args;
+}
+
+function isValidPort(port) {
+    return Number.isInteger(port) && port > 0 && port < 65536;
+}
+
 async function main() {
+    const args = parseArgs(process.argv.slice(2));
+    if (args.help) {
+        process.stderr.write(usage() + "\n");
+        process.exit(0);
+    }
+    if (args.config) process.env.SINGBOX_WEB_CONFIG = args.config;
+
     const config = loadConfig();
+    // CLI flags take precedence over env / config file / defaults.
+    if (args.host) config.listen.host = args.host;
+    if (args.port !== undefined) {
+        if (!isValidPort(args.port)) {
+            throw new Error("invalid --port value: " + args.port);
+        }
+        config.listen.port = args.port;
+    }
+
     const server = await start(config);
     const { host, port } = config.listen;
     process.stderr.write(

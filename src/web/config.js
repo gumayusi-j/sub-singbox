@@ -17,6 +17,11 @@ export const DEFAULT_CONFIG = {
 
 export function resolveConfigPath() {
     if (process.env.SINGBOX_WEB_CONFIG) return process.env.SINGBOX_WEB_CONFIG;
+    // When running the bundled dist/singbox-kit-web.js, __dirname points at
+    // dist/ so the legacy relative lookup misses the project-root config.
+    // Check the launch directory (project root for `npm start`) first.
+    const cwdPath = join(process.cwd(), "singbox-web.config.json");
+    if (existsSync(cwdPath)) return cwdPath;
     return join(__dirname, "..", "..", "singbox-web.config.json");
 }
 
