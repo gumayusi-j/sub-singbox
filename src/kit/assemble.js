@@ -57,6 +57,10 @@ function addProxyGroups(outbounds, options, existing) {
     return groups;
 }
 
+// System outbounds. The legacy special `dns` outbound ("dns-out") is NOT
+// emitted: it was deprecated in sing-box 1.11.0 and removed in sing-box
+// 1.13.0 (use the `hijack-dns` route-rule action instead), and nothing in
+// the assembled config routes `protocol: dns` to it anyway.
 function addSystemOutbounds(existing, options) {
     const outbounds = [];
     if (options.addDirect !== false) {
@@ -66,10 +70,6 @@ function addSystemOutbounds(existing, options) {
     if (options.addBlock !== false) {
         const tag = uniqueTag("block", existing);
         outbounds.push({ type: "block", tag: tag });
-    }
-    if (options.addDnsOut !== false) {
-        const tag = uniqueTag("dns-out", existing);
-        outbounds.push({ type: "dns", tag: tag, address: "local" });
     }
     return outbounds;
 }

@@ -428,5 +428,27 @@ describe("compat layer", function () {
         expect(config.dns.servers.some((s) => s.address !== undefined)).to.equal(false);
         expect(config.dns.rules).to.deep.equal([]);
         expect(config.route.default_domain_resolver).to.deep.equal({ server: "local" });
+        // The legacy special `dns` outbound was removed in sing-box 1.13.0, so
+        // a default assembly must not emit one.
+        expect(config.outbounds.some((o) => o.type === "dns")).to.equal(false);
+        expect(config.outbounds.map((o) => o.tag)).to.not.include("dns-out");
+    });
+
+    it("reports an error for a legacy special `dns` outbound (R9)", function () {
+        const cfg = baseConfig({
+            outbounds: [
+                { type: "direct", tag: "direct" },
+                { type: "selector", tag: "proxy", outbounds: ["direct"] },
+                { type: "dns", tag: "dns-out", address: "local" },
+            ],
+        });
+        const { errors } = migrateConfig(cfg);
+        expect(errors.some((e) => e.code === "dns_outbound_removed")).to.equal(true);
+        expect(() =>
+            assemble({
+                outbounds: [{ type: "dns", tag: "dns-out", address: "local" }],
+                endpoints: [],
+            }),
+        ).to.throw(CompatError);
     });
 });

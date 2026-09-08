@@ -249,6 +249,19 @@ function inspectLegacyDnsServer(config, out) {
     });
 }
 
+// R9 — the special `dns` outbound (removed in sing-box 1.13.0).
+function inspectDnsOutbound(config, out) {
+    const outbounds = config.outbounds;
+    if (!Array.isArray(outbounds)) return;
+    outbounds.forEach((o, i) => {
+        if (isPlainObject(o) && o.type === "dns") {
+            out.push(finding("dns_outbound_removed", "error", "outbounds[" + i + "].type",
+                "The legacy special `dns` outbound was removed in sing-box 1.13.0; use route-rule actions instead.",
+                "Remove the outbound; when TUN DNS interception is needed, add a route rule { \"protocol\": \"dns\", \"action\": \"hijack-dns\" } ahead of the other rules."));
+        }
+    });
+}
+
 // R7 — legacy address filtering in DNS rules (no match_response).
 function inspectLegacyAddressFilter(config, out) {
     const dns = config.dns;
@@ -276,6 +289,7 @@ const INSPECTIONS = [
     inspectStoreRdrc,
     inspectLegacyDnsServer,
     inspectLegacyAddressFilter,
+    inspectDnsOutbound,
 ];
 
 // ---------------------------------------------------------------------------

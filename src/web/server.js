@@ -106,7 +106,6 @@ function normalizeOptions(options, config) {
         addAutoGroup: options.addAutoGroup,
         addDirect: options.addDirect,
         addBlock: options.addBlock,
-        addDnsOut: options.addDnsOut,
         rules: normalizeRules(options.rules),
     };
 }

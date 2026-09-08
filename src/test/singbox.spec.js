@@ -163,7 +163,8 @@ describe("kit API", function () {
         expect(tags).to.include("auto");
         expect(tags).to.include("direct");
         expect(tags).to.include("block");
-        expect(tags).to.include("dns-out");
+        // the legacy special `dns` outbound was removed in sing-box 1.13.0
+        expect(tags).to.not.include("dns-out");
         const selector = config.outbounds.find((o) => o.type === "selector");
         expect(selector.outbounds).to.include("s1");
         expect(selector.outbounds).to.include("auto");
