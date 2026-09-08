@@ -151,13 +151,23 @@ describe("kit API", function () {
         expect(parsed.endpoints.length).to.equal(1);
     });
 
-    it("assembles a complete sing-box config around produced outbounds", function () {
+    it("assembles a complete client skeleton around produced outbounds (default)", function () {
         const parsed = fromNodes([
             { name: "s1", type: "ss", server: "1.2.3.4", port: 8388, cipher: "aes-128-gcm", password: "x" },
         ]);
         const config = assemble(parsed);
-        expect(config.log.level).to.equal("info");
-        expect(config.inbounds[0].type).to.equal("mixed");
+        // client profile: tun + dashboard + CN-direct plumbing
+        expect(config.log).to.deep.equal({ level: "info", timestamp: true });
+        expect(config.inbounds.map((i) => i.type)).to.include("tun");
+        expect(config.http_clients).to.deep.equal([
+            { tag: "default-client", detour: "direct" },
+        ]);
+        expect(config.experimental.clash_api).to.deep.equal({
+            default_mode: "Enhanced",
+        });
+        expect(config.dns.final).to.equal("google");
+        expect(config.dns.servers.find((s) => s.tag === "google").server).to.equal("8.8.8.8");
+        expect(config.dns.servers.find((s) => s.tag === "local").server).to.equal("223.5.5.5");
         const tags = config.outbounds.map((o) => o.tag);
         expect(tags).to.include("proxy");
         expect(tags).to.include("auto");
@@ -167,19 +177,24 @@ describe("kit API", function () {
         expect(tags).to.not.include("dns-out");
         const selector = config.outbounds.find((o) => o.type === "selector");
         expect(selector.outbounds).to.include("s1");
-        expect(selector.outbounds).to.include("auto");
         expect(config.route.final).to.equal("proxy");
+        expect(config.route.default_http_client).to.equal("default-client");
+        expect(config.route.rule_set.length).to.equal(2);
+        expect(config.route.rules.some((r) => r.action === "hijack-dns")).to.equal(true);
         expect(config.endpoints).to.equal(undefined);
     });
 
-    it("emits a default config with no sing-box 1.16 compat keys", function () {
+    it("emits a minimal proxy profile when mode is 'proxy'", function () {
         const parsed = fromNodes([
             { name: "s1", type: "ss", server: "1.2.3.4", port: 8388, cipher: "aes-128-gcm", password: "x" },
         ]);
-        const config = assemble(parsed);
+        const config = assemble(parsed, { mode: "proxy" });
+        expect(config.inbounds[0].type).to.equal("mixed");
         expect(config.http_clients).to.equal(undefined);
-        expect(config.certificate_providers).to.equal(undefined);
+        expect(config.experimental).to.equal(undefined);
         expect(config.route.default_http_client).to.equal(undefined);
+        expect(config.route.rule_set).to.equal(undefined);
+        expect(config.dns.final).to.equal("remote");
     });
 
     it("rejects legacy dns options that cannot be auto-migrated", function () {
@@ -207,7 +222,14 @@ describe("kit API", function () {
         expect(config.route.rules[0]).to.deep.equal({
             domain_suffix: "doubleclick.net", outbound: "block",
         });
-        expect(config.route.rules[config.route.rules.length - 1].ip_is_private).to.equal(true);
+        // user rules are prepended ahead of the client skeleton's built-ins
+        const sniff = config.route.rules.findIndex((r) => r.action === "sniff");
+        expect(sniff).to.be.greaterThan(0);
+        expect(
+            config.route.rules.some(
+                (r) => r.ip_is_private === true && r.outbound === "direct",
+            ),
+        ).to.equal(true);
     });
 });
 

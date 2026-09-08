@@ -10,7 +10,7 @@ describe("singbox-kit web API", function () {
             listen: { host: "127.0.0.1", port: 0 },
             maxBodyBytes: 1048576,
             defaultOut: "config",
-            remoteDns: "https://dns.alidns.com/dns-query",
+            remoteDns: "",
         };
         server = createServer(config);
         server.listen(0, "127.0.0.1", function () {
@@ -68,15 +68,20 @@ describe("singbox-kit web API", function () {
         const selector = config.outbounds.find((o) => o.type === "selector");
         expect(selector.outbounds).to.include("ss-one");
         expect(config.route.final).to.equal("proxy");
+        // default output is the client skeleton
+        expect(config.inbounds.map((i) => i.type)).to.include("tun");
+        expect(config.experimental).to.have.property("clash_api");
+        expect(config.http_clients).to.have.length(1);
     });
 
-    it("applies options like tun and rules", async function () {
+    it("applies options like mode/proxy, tun and rules", async function () {
         const resp = await fetch(base + "/api/convert", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
                 input: sampleText,
                 options: {
+                    mode: "proxy",
                     tun: true,
                     inboundPort: 7890,
                     rules: ["DOMAIN-SUFFIX,doubleclick.net,block"],

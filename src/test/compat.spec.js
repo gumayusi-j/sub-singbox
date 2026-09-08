@@ -57,9 +57,13 @@ describe("compat layer", function () {
         const report = analyzeConfig(config);
         expect(report.errors).to.deep.equal([]);
         expect(report.warnings).to.deep.equal([]);
-        expect(config.http_clients).to.equal(undefined);
+        // the client profile ships explicit http_clients/default_http_client so
+        // the remote rule-sets do not need auto-migration
+        expect(config.http_clients).to.deep.equal([
+            { tag: "default-client", detour: "direct" },
+        ]);
         expect(config.certificate_providers).to.equal(undefined);
-        expect(config.route.default_http_client).to.equal(undefined);
+        expect(config.route.default_http_client).to.equal("default-client");
     });
 
     it("keeps the same reference when there is nothing to migrate", function () {
@@ -413,20 +417,23 @@ describe("compat layer", function () {
         expect(errors.some((e) => e.code === "dns_server_legacy_format")).to.equal(true);
     });
 
-    it("default assemble() emits modern DNS servers and a domain resolver", function () {
+    it("default assemble() emits a modern client DNS skeleton and resolver", function () {
         const config = assemble(fromNodes([SS_NODE]));
-        const remote = config.dns.servers.find((s) => s.tag === "remote");
+        const google = config.dns.servers.find((s) => s.tag === "google");
         const local = config.dns.servers.find((s) => s.tag === "local");
-        expect(remote).to.deep.equal({
-            type: "https",
-            tag: "remote",
-            server: "dns.alidns.com",
-            server_port: 443,
+        expect(google).to.deep.equal({
+            type: "tls",
+            tag: "google",
+            server: "8.8.8.8",
+            server_port: 853,
             detour: "proxy",
         });
-        expect(local).to.deep.equal({ type: "local", tag: "local" });
+        expect(local).to.deep.equal({
+            type: "udp",
+            tag: "local",
+            server: "223.5.5.5",
+        });
         expect(config.dns.servers.some((s) => s.address !== undefined)).to.equal(false);
-        expect(config.dns.rules).to.deep.equal([]);
         expect(config.route.default_domain_resolver).to.deep.equal({ server: "local" });
         // The legacy special `dns` outbound was removed in sing-box 1.13.0, so
         // a default assembly must not emit one.

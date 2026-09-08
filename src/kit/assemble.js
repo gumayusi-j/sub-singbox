@@ -1,4 +1,11 @@
-import { defaultInbounds, defaultDns, defaultRoute } from "./defaults";
+import {
+    defaultLog,
+    defaultInbounds,
+    defaultDns,
+    defaultRoute,
+    defaultHttpClients,
+    defaultExperimental,
+} from "./defaults";
 import { toSingboxRule } from "./rules/singbox";
 import { migrateConfig, CompatError } from "./compat";
 
@@ -104,6 +111,9 @@ function normalizeProvidedRules(rules, defaultOutbound) {
 // endpoints?, route }).
 export default function assemble(parsed, options) {
     options = options || {};
+    // "client" (default) emits the full tun + clash_api + CN-direct skeleton;
+    // "proxy" keeps the minimal local mixed-proxy config.
+    const proxyMode = options.mode === "proxy";
     let source;
     if (isPlainObject(parsed) && Array.isArray(parsed.outbounds)) {
         source = parsed;
@@ -134,7 +144,7 @@ export default function assemble(parsed, options) {
     }
 
     const config = {
-        log: options.log || { level: options.logLevel || "info" },
+        log: options.log || defaultLog(options),
         dns: options.dns || defaultDns(options),
         inbounds: options.inbounds || defaultInbounds(options),
         outbounds: configOutbounds,
@@ -143,6 +153,18 @@ export default function assemble(parsed, options) {
 
     const endpoints = (source.endpoints || []).concat(options.endpoints || []);
     if (endpoints.length > 0) config.endpoints = endpoints;
+
+    // Client profile ships the dashboard + HTTP client plumbing needed by the
+    // remote rule-sets and clash_api skeleton. options.extra can still
+    // override http_clients / experimental afterwards.
+    if (!proxyMode) {
+        if (config.http_clients === undefined) {
+            config.http_clients = defaultHttpClients();
+        }
+        if (config.experimental === undefined) {
+            config.experimental = defaultExperimental();
+        }
+    }
 
     if (options.extra) {
         for (const key of Object.keys(options.extra)) {

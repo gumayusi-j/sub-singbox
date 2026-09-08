@@ -89,9 +89,15 @@ function normalizeRules(raw) {
 function normalizeOptions(options, config) {
     options = options || {};
     return {
+        mode: options.mode === "client" || options.mode === "proxy"
+            ? options.mode
+            : undefined,
+        addMixed: options.addMixed === true,
         includeUnsupportedProxy: options.includeUnsupportedProxy === true,
         inboundPort: asNumber(options.inboundPort, undefined),
-        tun: options.tun === true,
+        // client profile turns TUN on by default; only forward an explicit
+        // true so the default is never disabled from here.
+        tun: options.tun === true ? true : undefined,
         final: options.final || undefined,
         proxyGroupTag: options.proxyGroupTag || undefined,
         userAgent: options.userAgent || undefined,
@@ -102,7 +108,7 @@ function normalizeOptions(options, config) {
             !Array.isArray(options.headers)
                 ? options.headers
                 : undefined,
-        remoteDns: options.remoteDns || config.remoteDns,
+        remoteDns: options.remoteDns || config.remoteDns || undefined,
         addAutoGroup: options.addAutoGroup,
         addDirect: options.addDirect,
         addBlock: options.addBlock,

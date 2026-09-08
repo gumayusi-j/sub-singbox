@@ -63,15 +63,22 @@
 
     <details>
       <summary>常用配置（可展开）</summary>
+      <div class="row" style="margin-bottom:6px">
+        <label class="inline">输出形态
+          <select id="optMode">
+            <option value="client" selected>client（TUN + clash_api + 国内直连）</option>
+            <option value="proxy">proxy（本地 1080 mixed 代理）</option>
+          </select>
+        </label>
+        <label class="inline"><input type="checkbox" id="optMixed"> 另加 mixed 回退(127.0.0.1:端口)</label>
+        <label class="inline"><input type="checkbox" id="optTun"> proxy 形态下另加 tun</label>
+        <label class="inline"><input type="checkbox" id="optUnsup"> 含官方版不支持的协议</label>
+      </div>
       <div class="grid2">
         <div class="fld"><label>入站端口（mixed）</label><input type="number" id="optPort" value="1080" min="1" max="65535"></div>
         <div class="fld"><label>final 出口标签</label><input type="text" id="optFinal" value="proxy"></div>
         <div class="fld"><label>selector 组名</label><input type="text" id="optProxyTag" value="proxy"></div>
-        <div class="fld"><label>远程 DoH</label><input type="text" id="optDns" value="https://dns.alidns.com/dns-query"></div>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <label class="inline"><input type="checkbox" id="optTun"> 添加 tun 入口</label>
-        <label class="inline"><input type="checkbox" id="optUnsup"> 含官方版不支持的协议</label>
+        <div class="fld"><label>远程 DNS（留空=google 8.8.8.8）</label><input type="text" id="optDns" placeholder="tls://8.8.8.8"></div>
       </div>
       <div class="fld" style="margin-top:8px">
         <label>附加规则（每行 <span class="mono">TYPE,CONTENT[,OUTBOUND]</span>，如 <span class="mono">DOMAIN-SUFFIX,doubleclick.net,block</span>）</label>
@@ -148,6 +155,8 @@
 
   function collectOptions() {
     var options = {
+      mode: $("optMode").value,
+      addMixed: $("optMixed").checked,
       inboundPort: parseInt($("optPort").value, 10) || 1080,
       tun: $("optTun").checked,
       includeUnsupportedProxy: $("optUnsup").checked,

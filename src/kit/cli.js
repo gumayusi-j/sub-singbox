@@ -38,6 +38,7 @@ function parseArgs(argv) {
         else if (a === "--rule-file") args.ruleFile = argv[++i];
         else if (a === "--proxy-tag") args.proxyGroupTag = argv[++i];
         else if (a === "--include-unsupported-proxy") args.includeUnsupportedProxy = true;
+        else if (a === "--mode") args.mode = argv[++i];
         else if (a === "--tun") args.tun = true;
         else if (a === "--outbounds") args.out = "outbounds";
         else if (a === "--help" || a === "-h") args.help = true;
@@ -77,7 +78,9 @@ function usage() {
         "                           return node lists instead of sing-box configs)",
         "  --timeout <ms>           fetch timeout for URL subscriptions",
         "  --header <name:value>    extra request header (repeatable)",
-        "  --tun                    add a tun inbound",
+        "  --mode client|proxy      output profile (default client: tun + clash_api",
+        "                           + CN-direct skeleton; proxy: minimal mixed on 1080)",
+        "  --tun                    (proxy mode) also add a tun inbound",
         "  --dns <url>              remote DoH URL for the dns section",
         "  --final <tag>            route.final tag (default proxy)",
         "  --proxy-tag <tag>        name of the selector group (default proxy)",
@@ -94,9 +97,12 @@ async function main() {
         process.exit(0);
     }
     const options = {
+        mode: args.mode,
         includeUnsupportedProxy: args.includeUnsupportedProxy,
         inboundPort: args.inboundPort,
-        tun: args.tun,
+        // client profile turns TUN on by default; only forward an explicit
+        // --tun so we never disable it unless the user opts into proxy mode.
+        tun: args.tun || undefined,
         remoteDns: args.remoteDns,
         final: args.final,
         proxyGroupTag: args.proxyGroupTag,

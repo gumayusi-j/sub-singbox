@@ -12,7 +12,9 @@ export const DEFAULT_CONFIG = {
     },
     maxBodyBytes: 1048576, // 1 MiB request body cap
     defaultOut: "config", // "config" | "outbounds"
-    remoteDns: "https://dns.alidns.com/dns-query",
+    // Leave empty so the client profile defaults to google (tls://8.8.8.8)
+    // over the proxy; set here or in the UI to override.
+    remoteDns: "",
 };
 
 export function resolveConfigPath() {
