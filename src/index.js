@@ -17,6 +17,8 @@ export {
     toSingboxMatcher,
     toSingboxRule,
     toSingboxRules,
+    foldSingboxRules,
+    isRejectTarget,
     SUPPORTED as SUPPORTED_RULE_TYPES,
 } from "./kit/rules/singbox";
 export { ProxyUtils } from "@/core/proxy-utils";

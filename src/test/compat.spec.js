@@ -427,6 +427,7 @@ describe("compat layer", function () {
             server: "8.8.8.8",
             server_port: 853,
             detour: "proxy",
+            tls: { enabled: true, server_name: "dns.google" },
         });
         expect(local).to.deep.equal({
             type: "udp",

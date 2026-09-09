@@ -63,7 +63,15 @@ export function parseDnsAddress(address) {
     return { type: "udp", server: s, server_port: 53 };
 }
 
-function dnsServer(address, tag, detour) {
+function isPlainObject(value) {
+    return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+// Build a DNS server entry from an `address` string (see parseDnsAddress) and
+// attach a tag + optional detour. `override` (optional) merges extra fields,
+// e.g. the TLS server_name a DoT server bound to a bare IP needs for cert
+// verification.
+function dnsServer(address, tag, detour, override) {
     const parsed = parseDnsAddress(address);
     const server = { type: parsed.type, tag };
     if (parsed.type !== "local") {
@@ -71,6 +79,7 @@ function dnsServer(address, tag, detour) {
         server.server_port = parsed.server_port;
         if (parsed.path) server.path = parsed.path;
         server.detour = detour;
+        if (isPlainObject(override)) Object.assign(server, override);
     }
     return server;
 }
@@ -125,15 +134,41 @@ export function defaultDns(options) {
     options = options || {};
     const mode = isProxyMode(options);
     const remoteDefault = mode ? PROXY_REMOTE_DNS : CLIENT_REMOTE_DNS;
+    const supplied = options.remoteDns;
     const remoteAddress =
-        (options.remoteDns && String(options.remoteDns).trim()) || remoteDefault;
+        supplied != null && supplied !== ""
+            ? isPlainObject(supplied)
+                ? supplied
+                : String(supplied).trim() || remoteDefault
+            : remoteDefault;
+    const remoteTag = mode ? "remote" : "google";
+
+    // A structured server object (user-supplied) passes through as-is, only
+    // defaulting tag/detour. A string goes through parseDnsAddress + the
+    // caller-supplied `override` (e.g. a TLS server_name for a bare-IP DoT).
+    function remoteServer(detour, override) {
+        if (isPlainObject(remoteAddress)) {
+            const server = Object.assign({}, remoteAddress);
+            server.tag = remoteTag;
+            if (detour && server.detour === undefined) server.detour = detour;
+            return server;
+        }
+        return dnsServer(String(remoteAddress), remoteTag, detour, override);
+    }
+
+    // The built-in remote is a DoT server addressed by bare IP; it needs an
+    // explicit TLS server_name or sing-box cannot verify the certificate.
+    const builtInOverride =
+        !mode && String(remoteAddress) === CLIENT_REMOTE_DNS
+            ? { tls: { enabled: true, server_name: "dns.google" } }
+            : undefined;
 
     if (mode) {
         // Minimal proxy profile: a DoH remote over the proxy plus a local
         // system resolver (backs route.default_domain_resolver).
         return {
             servers: [
-                dnsServer(remoteAddress, "remote", "proxy"),
+                remoteServer("proxy", builtInOverride),
                 { type: "local", tag: "local" },
             ],
             rules: [],
@@ -145,7 +180,7 @@ export function defaultDns(options) {
     // reached through the proxy + a plain CN resolver for domestic domains.
     return {
         servers: [
-            dnsServer(remoteAddress, "google", "proxy"),
+            remoteServer("proxy", builtInOverride),
             {
                 type: "udp",
                 tag: "local",
@@ -157,6 +192,9 @@ export function defaultDns(options) {
         ],
         final: "google",
         strategy: "ipv4_only",
+        // Preserve DNS answer metadata so TUN connections addressed only by
+        // IP can still match the domain rules that originally routed them.
+        reverse_mapping: true,
     };
 }
 
@@ -185,10 +223,21 @@ export function defaultRoute(options) {
         return route;
     }
 
-    // Client profile: sniff first, hijack DNS, then route CN traffic direct.
+    // Client profile: sniff first, hijack DNS (DNS protocol or classic
+    // port-53 traffic, matching Tower's route prelude), then route CN
+    // traffic direct. Non-final actions run before destination rules so
+    // domain rules can match on the sniffed host/SNI.
     route.rules = [
         { action: "sniff" },
-        { protocol: "dns", action: "hijack-dns" },
+        {
+            type: "logical",
+            mode: "or",
+            rules: [
+                { protocol: "dns" },
+                { port: 53 },
+            ],
+            action: "hijack-dns",
+        },
         { ip_is_private: true, outbound: "direct" },
         { rule_set: "geosite-geolocation-cn", outbound: "direct" },
         { rule_set: "geoip-cn", outbound: "direct" },

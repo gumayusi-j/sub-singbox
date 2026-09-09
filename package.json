@@ -9,6 +9,7 @@
     "test": "mocha src/test/**/*.spec.js --require @babel/register --require ./preload --recursive",
     "cli": "node -r @babel/register -r ./preload src/kit/cli.js",
     "web": "node -r @babel/register -r ./preload src/web/index.js",
+    "validate": "node scripts/validate-config.mjs",
     "build": "pnpm build:web",
     "build:web": "node scripts/build-web.mjs",
     "start": "node dist/singbox-kit-web.js"

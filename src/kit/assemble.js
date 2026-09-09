@@ -6,7 +6,7 @@ import {
     defaultHttpClients,
     defaultExperimental,
 } from "./defaults";
-import { toSingboxRule } from "./rules/singbox";
+import { toSingboxRule, foldSingboxRules } from "./rules/singbox";
 import { migrateConfig, CompatError } from "./compat";
 
 function isPlainObject(value) {
@@ -40,6 +40,21 @@ function uniqueTag(tag, existing) {
     return candidate;
 }
 
+// A urltest group needs a probe target plus cadence or it silently falls back
+// to the reference defaults sing-box ships. These mirror the values Tower's
+// generator uses for its automatic groups.
+const DEFAULT_AUTO_URL = "https://www.gstatic.com/generate_204";
+const DEFAULT_AUTO_INTERVAL = "300s";
+const DEFAULT_AUTO_TOLERANCE = 50;
+
+function autoGroupEnabled(options) {
+    return options.addAutoGroup !== false && options.autoGroup !== false;
+}
+
+function pickScalar(value, fallback) {
+    return value === undefined || value === null ? fallback : value;
+}
+
 function addProxyGroups(outbounds, options, existing) {
     const tags = [];
     for (const o of outbounds || []) {
@@ -47,9 +62,23 @@ function addProxyGroups(outbounds, options, existing) {
     }
     const groups = [];
     let autoTag;
-    if (options.addAutoGroup !== false && tags.length > 0) {
+    if (autoGroupEnabled(options) && tags.length > 0) {
         autoTag = uniqueTag(options.autoGroupTag || "auto", existing);
-        groups.push({ type: "urltest", tag: autoTag, outbounds: tags.slice() });
+        const auto = {
+            type: "urltest",
+            tag: autoTag,
+            outbounds: tags.slice(),
+        };
+        if (options.autoGroupUrl !== false) {
+            auto.url = pickScalar(options.autoGroupUrl, DEFAULT_AUTO_URL);
+        }
+        if (options.autoInterval !== false) {
+            auto.interval = pickScalar(options.autoInterval, DEFAULT_AUTO_INTERVAL);
+        }
+        if (options.autoTolerance !== false) {
+            auto.tolerance = pickScalar(options.autoTolerance, DEFAULT_AUTO_TOLERANCE);
+        }
+        groups.push(auto);
     }
     const proxyTag = uniqueTag(options.proxyGroupTag || "proxy", existing);
     const selectorOutbounds = tags.slice();
@@ -104,6 +133,69 @@ function normalizeProvidedRules(rules, defaultOutbound) {
     );
 }
 
+// Merge caller-supplied overrides after all defaults have been applied so
+// `options.extra` can always win (route/dns/outbounds/... wholesale).
+function applyExtras(config, options) {
+    if (options.extra) {
+        for (const key of Object.keys(options.extra)) {
+            config[key] = options.extra[key];
+        }
+    }
+    return config;
+}
+
+function migrateAndWarn(config, options) {
+    const result = migrateConfig(config);
+    if (result.errors.length > 0) {
+        throw new CompatError(result.errors, result.warnings);
+    }
+    if (typeof options.onWarning === "function" && result.warnings.length > 0) {
+        options.onWarning(result.warnings);
+    }
+    return result.config;
+}
+
+// A document with no proxies at all (empty subscription, or every node was
+// skipped) still assembles to a bootable config. The normal skeleton would
+// otherwise dangle a DNS detour and route.final on a `proxy` selector that
+// never gets created - and sing-box refuses to start on dangling references.
+// Mirroring Tower, fall back to a minimal direct profile instead.
+function directOnlyConfig(options) {
+    const proxyMode = options.mode === "proxy";
+    const config = {
+        log: options.log || defaultLog(options),
+        dns: {
+            servers: [{ type: "local", tag: "local" }],
+            rules: [],
+            final: "local",
+        },
+        inbounds: options.inbounds || defaultInbounds(options),
+        outbounds: [{ type: "direct", tag: "direct" }],
+        route: {
+            auto_detect_interface: options.autoDetectInterface !== false,
+            rules: [
+                { action: "sniff" },
+                {
+                    type: "logical",
+                    mode: "or",
+                    rules: [
+                        { protocol: "dns" },
+                        { port: 53 },
+                    ],
+                    action: "hijack-dns",
+                },
+                { ip_is_private: true, outbound: "direct" },
+            ],
+            final: "direct",
+            default_domain_resolver: { server: "local" },
+        },
+    };
+    if (!proxyMode && config.experimental === undefined) {
+        config.experimental = defaultExperimental();
+    }
+    return applyExtras(config, options);
+}
+
 // assemble(parsed, options):
 //   parsed = { outbounds: [], endpoints: [] } (as produced by kit/convert) or a
 //            plain array of outbound objects.
@@ -123,6 +215,13 @@ export default function assemble(parsed, options) {
         source = { outbounds: [], endpoints: (parsed && parsed.endpoints) || [] };
     }
     const outbounds = (source.outbounds || []).slice();
+    const endpoints = (source.endpoints || []).concat(options.endpoints || []);
+
+    // Zero-node documents produce no proxy groups; emit a minimal direct
+    // profile instead of a config that cannot boot.
+    if (outbounds.length === 0 && endpoints.length === 0) {
+        return migrateAndWarn(directOnlyConfig(options), options);
+    }
 
     const existing = collectTags(outbounds);
     const groups = addProxyGroups(outbounds, options, existing);
@@ -130,10 +229,13 @@ export default function assemble(parsed, options) {
 
     const configOutbounds = outbounds.concat(groups, system);
 
-    const providedRules = normalizeProvidedRules(
+    let providedRules = normalizeProvidedRules(
         options.rules,
         options.ruleOutbound || "proxy",
     );
+    if (options.foldRules) {
+        providedRules = foldSingboxRules(providedRules);
+    }
 
     const route = options.route
         ? options.route
@@ -151,7 +253,6 @@ export default function assemble(parsed, options) {
         route: route,
     };
 
-    const endpoints = (source.endpoints || []).concat(options.endpoints || []);
     if (endpoints.length > 0) config.endpoints = endpoints;
 
     // Client profile ships the dashboard + HTTP client plumbing needed by the
@@ -166,11 +267,7 @@ export default function assemble(parsed, options) {
         }
     }
 
-    if (options.extra) {
-        for (const key of Object.keys(options.extra)) {
-            config[key] = options.extra[key];
-        }
-    }
+    applyExtras(config, options);
 
     // sing-box 1.14 removed `outbound` DNS-rule items; resolution for
     // outbound/dial domains now needs route.default_domain_resolver (or a
@@ -189,14 +286,5 @@ export default function assemble(parsed, options) {
         config.route.default_domain_resolver = { server: "local" };
     }
 
-    // Keep the emitted config aligned with sing-box 1.16: auto-migrate
-    // 1.14-deprecated fields and reject what cannot be migrated safely.
-    const result = migrateConfig(config);
-    if (result.errors.length > 0) {
-        throw new CompatError(result.errors, result.warnings);
-    }
-    if (typeof options.onWarning === "function" && result.warnings.length > 0) {
-        options.onWarning(result.warnings);
-    }
-    return result.config;
+    return migrateAndWarn(config, options);
 }

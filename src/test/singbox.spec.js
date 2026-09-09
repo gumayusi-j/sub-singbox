@@ -2,7 +2,11 @@ import { expect } from "chai";
 import { ProxyUtils } from "@/core/proxy-utils";
 import { fromText, fromNodes } from "@/kit/convert";
 import assemble from "@/kit/assemble";
-import { toSingboxRule, toSingboxRules } from "@/kit/rules/singbox";
+import {
+    toSingboxRule,
+    toSingboxRules,
+    foldSingboxRules,
+} from "@/kit/rules/singbox";
 import { CompatError } from "@/kit/compat";
 
 const UUID = "11111111-1111-4111-8111-111111111111";
@@ -131,6 +135,15 @@ describe("sing-box producer (vendored kernel)", function () {
 describe("kit API", function () {
     const b64 = (s) => Buffer.from(s).toString("base64");
 
+    const oneSS = function () {
+        return [
+            {
+                name: "s1", type: "ss", server: "1.2.3.4", port: 8388,
+                cipher: "aes-128-gcm", password: "x",
+            },
+        ];
+    };
+
     it("fromText parses mixed URI subscription and produces outbounds", function () {
         const text = [
             "ss://" + b64("aes-128-gcm:pw@1.2.3.4:8388") + "#s1",
@@ -231,6 +244,73 @@ describe("kit API", function () {
             ),
         ).to.equal(true);
     });
+
+    it("hardens client DNS/route defaults (reverse_mapping + logical hijack + DoT SNI)", function () {
+        const config = assemble(fromNodes(oneSS()));
+        // DNS answers keep their original domain so IP-only TUN connections
+        // can still match domain rules; the DoT remote over a bare IP needs
+        // an explicit TLS server_name.
+        expect(config.dns.reverse_mapping).to.equal(true);
+        const google = config.dns.servers.find((s) => s.tag === "google");
+        expect(google.tls).to.deep.equal({ enabled: true, server_name: "dns.google" });
+        // DNS hijack is a logical OR of protocol=dns and classic port 53,
+        // and runs after sniffing.
+        const hijack = config.route.rules.find((r) => r.action === "hijack-dns");
+        expect(hijack.type).to.equal("logical");
+        expect(hijack.rules).to.deep.include({ protocol: "dns" });
+        expect(hijack.rules).to.deep.include({ port: 53 });
+        const sniffIdx = config.route.rules.findIndex((r) => r.action === "sniff");
+        const hijackIdx = config.route.rules.findIndex((r) => r.action === "hijack-dns");
+        expect(sniffIdx).to.be.greaterThan(-1);
+        expect(hijackIdx).to.be.greaterThan(sniffIdx);
+    });
+
+    it("assembles an empty subscription into a bootable direct config", function () {
+        const config = assemble({ outbounds: [], endpoints: [] });
+        expect(config.route.final).to.equal("direct");
+        expect(config.dns.final).to.equal("local");
+        const tags = config.outbounds.map((o) => o.tag);
+        expect(tags).to.include("direct");
+        expect(tags).to.not.include("proxy");
+        expect(config.route.rule_set).to.equal(undefined);
+    });
+
+    it("configures the urltest group and allows dropping it", function () {
+        const withAuto = assemble(fromNodes(oneSS()));
+        const auto = withAuto.outbounds.find((o) => o.type === "urltest");
+        expect(auto).to.be.an("object");
+        expect(auto.url).to.equal("https://www.gstatic.com/generate_204");
+        expect(auto.interval).to.equal("300s");
+        expect(auto.tolerance).to.equal(50);
+        const noAuto = assemble(fromNodes(oneSS()), { addAutoGroup: false });
+        expect(noAuto.outbounds.some((o) => o.type === "urltest")).to.equal(false);
+        const selector = noAuto.outbounds.find((o) => o.type === "selector");
+        expect(selector.outbounds).to.include("s1");
+    });
+
+    it("maps provided 'reject' rules to a route action", function () {
+        const config = assemble(fromNodes(oneSS()), {
+            rules: [{ type: "DOMAIN-SUFFIX", content: "ads.io", outbound: "reject" }],
+        });
+        expect(config.route.rules[0]).to.deep.equal({
+            domain_suffix: "ads.io",
+            action: "reject",
+        });
+    });
+
+    it("folds same-target provided rules when foldRules is set", function () {
+        const config = assemble(fromNodes(oneSS()), {
+            rules: [
+                { type: "DOMAIN-SUFFIX", content: "a.io" },
+                { type: "DOMAIN-SUFFIX", content: "b.io" },
+            ],
+            foldRules: true,
+        });
+        expect(config.route.rules[0]).to.deep.equal({
+            domain_suffix: ["a.io", "b.io"],
+            outbound: "proxy",
+        });
+    });
 });
 
 describe("sing-box rule serializer", function () {
@@ -255,5 +335,51 @@ describe("sing-box rule serializer", function () {
         expect(() => toSingboxRule({ type: "URL-REGEX", content: "x" })).to.throw(
             /unsupported route rule type: URL-REGEX/,
         );
+    });
+
+    it("maps an outbound of 'reject' to the route action; 'block' stays an outbound", function () {
+        expect(toSingboxRule({ type: "DOMAIN-SUFFIX", content: "ads.com" }, "reject")).to.deep.equal({
+            domain_suffix: "ads.com",
+            action: "reject",
+        });
+        expect(toSingboxRule({ type: "DOMAIN-SUFFIX", content: "ads.com" }, "REJECT")).to.deep.equal({
+            domain_suffix: "ads.com",
+            action: "reject",
+        });
+        expect(toSingboxRule({ type: "GEOSITE", content: "category-ads-all" }, "block")).to.deep.equal({
+            geosite: "category-ads-all",
+            outbound: "block",
+        });
+    });
+
+    it("folds adjacent same-target rules into array matcher fields", function () {
+        const folded = foldSingboxRules([
+            { domain_suffix: "a.com", outbound: "proxy" },
+            { domain_suffix: "b.com", outbound: "proxy" },
+            { domain: "c.org", outbound: "proxy" },
+            { domain_suffix: "d.net", outbound: "direct" },
+            { domain_suffix: "e.io", action: "reject" },
+            { domain_keyword: "ad", action: "reject" },
+        ]);
+        expect(folded).to.deep.equal([
+            { domain_suffix: ["a.com", "b.com"], domain: "c.org", outbound: "proxy" },
+            { domain_suffix: "d.net", outbound: "direct" },
+            { domain_suffix: "e.io", domain_keyword: "ad", action: "reject" },
+        ]);
+    });
+
+    it("keeps array-valued and non-adjacent rules untouched by folding", function () {
+        const folded = foldSingboxRules([
+            { domain_suffix: "a.com", outbound: "proxy" },
+            { domain_suffix: "b.com", outbound: "direct" },
+            { domain_suffix: "c.com", outbound: "proxy" },
+            { domain_suffix: ["d.com", "e.com"], outbound: "proxy" },
+        ]);
+        expect(folded).to.deep.equal([
+            { domain_suffix: "a.com", outbound: "proxy" },
+            { domain_suffix: "b.com", outbound: "direct" },
+            { domain_suffix: "c.com", outbound: "proxy" },
+            { domain_suffix: ["d.com", "e.com"], outbound: "proxy" },
+        ]);
     });
 });

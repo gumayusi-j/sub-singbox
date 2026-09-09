@@ -33,10 +33,18 @@ function parseArgs(argv) {
             }
             args.headers = args.headers || {};
             args.headers[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
-        } else if (a === "--dns") args.remoteDns = argv[++i];
+        } else if (a === "--dns") {
+            const raw = argv[++i];
+            const trimmed = String(raw).trim();
+            // Accept a structured DNS server object ({ type, server, ... })
+            // as well as the usual "tls://..." / "https://host/dns-query" URL.
+            args.remoteDns = trimmed.startsWith("{") ? JSON.parse(trimmed) : raw;
+        }
         else if (a === "--final") args.final = argv[++i];
         else if (a === "--rule-file") args.ruleFile = argv[++i];
         else if (a === "--proxy-tag") args.proxyGroupTag = argv[++i];
+        else if (a === "--fold-rules") args.foldRules = true;
+        else if (a === "--no-auto-group") args.addAutoGroup = false;
         else if (a === "--include-unsupported-proxy") args.includeUnsupportedProxy = true;
         else if (a === "--mode") args.mode = argv[++i];
         else if (a === "--tun") args.tun = true;
@@ -81,9 +89,13 @@ function usage() {
         "  --mode client|proxy      output profile (default client: tun + clash_api",
         "                           + CN-direct skeleton; proxy: minimal mixed on 1080)",
         "  --tun                    (proxy mode) also add a tun inbound",
-        "  --dns <url>              remote DoH URL for the dns section",
+        "  --dns <url|json>         remote DNS for the dns section: a resolver URL,",
+        "                           or a JSON server object like '{\"type\":\"https\",...}'",
         "  --final <tag>            route.final tag (default proxy)",
         "  --proxy-tag <tag>        name of the selector group (default proxy)",
+        "  --fold-rules             fold consecutive same-target route rules into array",
+        "                           fields (one entry per target instead of one per line)",
+        "  --no-auto-group          drop the urltest auto group (keep only the selector)",
         "  --rule-file <path>       rules: a JSON array, or lines 'TYPE,CONTENT'",
         "  --include-unsupported-proxy   keep proxies sing-box cannot officially run",
         "  --help                   show this help",
@@ -106,6 +118,8 @@ async function main() {
         remoteDns: args.remoteDns,
         final: args.final,
         proxyGroupTag: args.proxyGroupTag,
+        foldRules: args.foldRules,
+        addAutoGroup: args.addAutoGroup,
         userAgent: args.userAgent || DEFAULT_USER_AGENT,
         timeout: args.timeout,
         headers: args.headers,
