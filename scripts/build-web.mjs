@@ -8,6 +8,29 @@ import { fileURLToPath } from "url";
 const ROOT = fileURLToPath(new URL("..", import.meta.url)); // project root
 const OUT = ROOT + "dist/singbox-kit-web.js";
 
+// Bundled single-file default listen: 0.0.0.0:80 so that a bare
+// `node dist/singbox-kit-web.js` is server-ready with no arguments (source/dev
+// mode keeps the loopback 127.0.0.1:8788). Runtime CLI/env/config still win.
+// Override the shipped default with SINGBOX_KIT_BUNDLE_LISTEN, e.g.
+// SINGBOX_KIT_BUNDLE_LISTEN='{"host":"127.0.0.1","port":8080}' pnpm build
+function bundleDefaultListen() {
+    const raw = process.env.SINGBOX_KIT_BUNDLE_LISTEN;
+    if (raw) {
+        try {
+            const value = JSON.parse(raw);
+            if (value && typeof value === "object" && !Array.isArray(value)) {
+                return value;
+            }
+        } catch (_e) {
+            // Malformed override: fall through to the deploy default.
+        }
+    }
+    return { host: "0.0.0.0", port: 80 };
+}
+// JSON.stringify twice: first serialises the object, second turns that JSON
+// text into a JS string literal esbuild can splice into the bundle.
+const injectedDefaultListen = JSON.stringify(JSON.stringify(bundleDefaultListen()));
+
 await build({
     entryPoints: [ROOT + "src/web/index.js"],
     bundle: true,
@@ -19,6 +42,9 @@ await build({
         // The source uses a "@/" -> "src/" import alias that is normally
         // resolved at runtime by preload.js; resolve it here for the bundle.
         "@": ROOT + "src",
+    },
+    define: {
+        "process.env.SINGBOX_KIT_WEB_DEFAULT_LISTEN": injectedDefaultListen,
     },
     plugins: [
         {

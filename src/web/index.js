@@ -4,7 +4,8 @@
 //   --host <addr>   listen host
 //   --config <path> alternative config file path
 //   --help          show usage
-// See singbox-web.config.example.json.
+// Listen config comes from singbox-web.config.json in the run/project dir
+// (see README); CLI flags and HOST/PORT env override it.
 import { start, loadConfig } from "./server";
 
 function usage() {
@@ -12,8 +13,10 @@ function usage() {
         "Usage: node -r @babel/register -r ./preload src/web/index.js [options]",
         "",
         "Options:",
-        "  --port <n>, -p <n>   listen port (default 8788, or PORT env / config file)",
-        "  --host <addr>        listen host (default 127.0.0.1)",
+        "  --port <n>, -p <n>   listen port (source default 8788; the bundled app",
+        "                       defaults to 80; PORT env / config file also apply)",
+        "  --host <addr>        listen host (source default 127.0.0.1; the bundled",
+        "                       app defaults to 0.0.0.0)",
         "  --config <path>      config JSON path (same as SINGBOX_WEB_CONFIG env)",
         "  --help               show this help",
     ].join("\n");

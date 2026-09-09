@@ -5,10 +5,33 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
+// Effective default listen host/port.
+//
+// In source/dev the default stays on the loopback 127.0.0.1:8788. When esbuild
+// bundles the single-file app it injects SINGBOX_KIT_WEB_DEFAULT_LISTEN (see
+// scripts/build-web.mjs), so `node dist/singbox-kit-web.js` with no arguments
+// listens on 0.0.0.0:80 - ready for a plain server deploy. Anything passed at
+// runtime still overrides: CLI flags > HOST/PORT env > config file > default.
+function bundledDefaultListen() {
+    const raw = process.env.SINGBOX_KIT_WEB_DEFAULT_LISTEN;
+    if (typeof raw !== "string" || raw === "") return null;
+    try {
+        const value = JSON.parse(raw);
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+            return value;
+        }
+    } catch (_e) {
+        // Malformed injected default: fall through to the dev default.
+    }
+    return null;
+}
+
+const defaultListen = bundledDefaultListen() || { host: "127.0.0.1", port: 8788 };
+
 export const DEFAULT_CONFIG = {
     listen: {
-        host: "127.0.0.1",
-        port: 8788,
+        host: defaultListen.host,
+        port: defaultListen.port,
     },
     maxBodyBytes: 1048576, // 1 MiB request body cap
     defaultOut: "config", // "config" | "outbounds"
