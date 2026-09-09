@@ -121,4 +121,70 @@ describe("singbox-kit web API", function () {
         const json = await resp.json();
         expect(json.ok).to.equal(false);
     });
+
+    it("merges multiple sources into one config and renames duplicate tags", async function () {
+        // Second source re-uses the same node remark (#ss-one), so the merge
+        // must rename the collision (ss-one -> ss-one-2) to keep the config
+        // bootable - sing-box rejects duplicate outbound tags.
+        const secondSource = "ss://YWVzLTEyOC1nY206cGFzc0AxLjIuMy40OjgzODg=#ss-one";
+        const resp = await fetch(base + "/api/convert", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                sources: [{ input: sampleText }, { input: secondSource }],
+            }),
+        });
+        expect(resp.status).to.equal(200);
+        const json = await resp.json();
+        expect(json.ok).to.equal(true);
+        const data = json.data;
+        expect(data.nodes.length).to.equal(3);
+        const tags = data.output.outbounds.map((o) => o.tag);
+        expect(tags).to.include("ss-one");
+        expect(tags).to.include("ss-one-2");
+        expect(tags).to.include("proxy");
+        expect(tags).to.include("direct");
+        expect(tags).to.include("block");
+        expect(data.warnings.length).to.be.greaterThan(0);
+        const rename = data.warnings.find((w) =>
+            w && typeof w.message === "string" && w.message.indexOf("'ss-one-2'") !== -1);
+        expect(rename).to.not.equal(undefined);
+    });
+
+    it("inspects a source and reports node/protocol counts without assembling", async function () {
+        const resp = await fetch(base + "/api/inspect", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ input: sampleText }),
+        });
+        expect(resp.status).to.equal(200);
+        const json = await resp.json();
+        expect(json.ok).to.equal(true);
+        expect(json.data.totalNodes).to.equal(2);
+        expect(json.data.sources).to.have.length(1);
+        const rec = json.data.sources[0];
+        expect(rec.nodeCount).to.equal(2);
+        expect(rec.protocols).to.deep.equal({ shadowsocks: 1, trojan: 1 });
+        expect(rec.error).to.equal(undefined);
+    });
+
+    it("inspection keeps HTTP 200 and flags a bad source on its own row", async function () {
+        const resp = await fetch(base + "/api/inspect", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                sources: [{ input: "   " }, { input: sampleText }],
+            }),
+        });
+        expect(resp.status).to.equal(200);
+        const json = await resp.json();
+        expect(json.ok).to.equal(true);
+        const sources = json.data.sources;
+        expect(sources).to.have.length(2);
+        expect(sources[0].nodeCount).to.equal(0);
+        expect(sources[0].error).to.equal("input is empty");
+        expect(sources[1].nodeCount).to.equal(2);
+        expect(sources[1].error).to.equal(undefined);
+        expect(json.data.totalNodes).to.equal(2);
+    });
 });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>singbox-kit · 订阅转 sing-box</title>
+<title>singbox-kit · 订阅 → 选择规则 → 导出 sing-box</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -12,132 +12,523 @@
   h1 { font-size: 20px; margin: 6px 0 4px; }
   h1 small { color: #7c8a99; font-weight: normal; font-size: 12px; }
   .card { background: #171f29; border: 1px solid #26313d; border-radius: 10px; padding: 14px; margin-top: 14px; }
+  .inset { background: #141b24; margin-top: 10px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   label.inline { display: inline-flex; align-items: center; gap: 5px; margin-right: 10px; }
   textarea, input[type="text"], input[type="number"] { width: 100%; background: #0d141b; color: inherit; border: 1px solid #2a3948; border-radius: 8px; padding: 8px 10px; font: inherit; }
-  textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, Consolas, monospace; }
+  textarea { resize: vertical; min-height: 80px; font-family: ui-monospace, Consolas, monospace; }
   input[type="text"], input[type="number"] { padding: 7px 9px; }
-  input[type="number"] { width: 110px; }
+  input[type="number"] { width: 130px; }
   button { background: #2f7de1; border: 0; color: #fff; border-radius: 8px; padding: 9px 18px; cursor: pointer; font: inherit; }
   button.secondary { background: #263542; }
+  button.danger { background: #7a2f2f; }
   button:disabled { opacity: .55; cursor: default; }
   button.small { padding: 4px 10px; border-radius: 6px; font-size: 12px; }
-  details { margin-top: 10px; }
+  details { margin-top: 12px; }
   details > summary { cursor: pointer; color: #9fb3c5; }
-  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; margin-top: 8px; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 16px; margin-top: 8px; }
   .fld { display: flex; flex-direction: column; gap: 4px; }
   .fld label { color: #9fb3c5; font-size: 12px; }
-  #status { min-height: 20px; margin-top: 10px; font-size: 13px; }
-  #status.ok { color: #6fcf97; }
-  #status.err { color: #ef7d7d; white-space: pre-wrap; }
-  .tabs { display: flex; gap: 4px; margin-top: 14px; border-bottom: 1px solid #26313d; flex-wrap: wrap; }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+  .muted { color: #7c8a99; }
+  .err { color: #ef7d7d; }
+  .ok { color: #6fcf97; }
+  pre { background: #0d141b; border: 1px solid #22303e; border-radius: 8px; padding: 12px; overflow: auto; max-height: 520px; font-size: 12px; }
+  .warn { color: #ffd479; font-size: 13px; padding: 4px 0; }
+
+  /* three-stage segmented nav */
+  .seg { display: flex; gap: 4px; margin-top: 16px; border-bottom: 1px solid #26313d; }
+  .seg button { background: none; color: #9fb3c5; border-radius: 8px 8px 0 0; padding: 9px 20px; font-size: 14px; }
+  .seg button.active { background: #22303e; color: #fff; }
+  .wsec { display: none; margin-top: 6px; }
+  .wsec.active { display: block; }
+  .seg-num { color: #2f7de1; font-weight: 700; margin-right: 6px; }
+
+  /* subscription list rows */
+  .src { border-bottom: 1px solid #22303e; padding: 10px 2px; }
+  .src:last-child { border-bottom: 0; }
+  .src-name { font-weight: 600; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; margin-left: 6px; vertical-align: 1px; }
+  .kind-url { background: #183a56; color: #7ec3ff; }
+  .kind-text { background: #3b2f18; color: #ffd479; }
+  .src-preview { font-size: 12px; color: #9fb3c5; margin-top: 4px; }
+
+  /* scene template cards */
+  .scene { display: block; border: 1px solid #26313d; border-radius: 10px; padding: 10px 12px; margin-top: 8px; cursor: pointer; }
+  .scene:hover { border-color: #3d5570; }
+  .scene.sel { border-color: #2f7de1; background: #1a2533; }
+  .scene b { display: block; }
+  .scene span { color: #9fb3c5; font-size: 12px; }
+  .scene input { accent-color: #2f7de1; margin-right: 8px; vertical-align: -2px; }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid #26313d; flex-wrap: wrap; margin-top: 10px; }
   .tabs button { background: none; color: #9fb3c5; border-radius: 8px 8px 0 0; padding: 8px 14px; }
   .tabs button.active { background: #22303e; color: #fff; }
   .panel { display: none; margin-top: 10px; }
   .panel.active { display: block; }
-  pre { background: #0d141b; border: 1px solid #22303e; border-radius: 8px; padding: 12px; overflow: auto; max-height: 520px; font-size: 12px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { border-bottom: 1px solid #22303e; padding: 6px 8px; text-align: left; }
   th { color: #9fb3c5; font-weight: 600; }
-  .tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; margin-right: 4px; }
   .kind-outbound { background: #183a56; color: #7ec3ff; }
   .kind-endpoint { background: #3b2f18; color: #ffd479; }
-  .mono { font-family: ui-monospace, Consolas, monospace; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>singbox-kit <small>订阅 → 转换 → 导出 sing-box 配置</small></h1>
+  <h1>singbox-kit <small>添加订阅 → 选择规则 → 导出 sing-box 配置</small></h1>
 
-  <div class="card">
-    <div class="row">
-      <label class="inline"><input type="radio" name="mode" value="text" checked> 订阅文本</label>
-      <label class="inline"><input type="radio" name="mode" value="url"> 远程 URL</label>
+  <div class="seg" id="seg">
+    <button class="active" data-seg="subs"><span class="seg-num">①</span>订阅</button>
+    <button data-seg="rules"><span class="seg-num">②</span>规则</button>
+    <button data-seg="export"><span class="seg-num">③</span>导出</button>
+  </div>
+
+  <!-- ============ ① 订阅 ============ -->
+  <section id="tab-subs" class="wsec active">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <b>订阅源库</b>
+        <button class="secondary small" id="btnAddShow">+ 添加订阅源</button>
+      </div>
+
+      <div id="addForm" class="card inset" style="display:none">
+        <div class="row" style="justify-content:space-between">
+          <b id="addTitle">添加订阅源</b>
+          <button class="secondary small" id="btnAddCancel">取消</button>
+        </div>
+        <div class="grid2">
+          <div class="fld"><label>名称（便于识别，仅保存在本浏览器）</label><input type="text" id="srcName" placeholder="例如：主机场 A"></div>
+          <div class="fld"><label>类型</label>
+            <div class="row">
+              <label class="inline"><input type="radio" name="srckind" value="url" checked> 远程 URL</label>
+              <label class="inline"><input type="radio" name="srckind" value="text"> 订阅文本</label>
+            </div>
+          </div>
+        </div>
+        <div class="fld" id="urlWrap" style="margin-top:8px"><label>订阅 URL（机场订阅链接，添加后每次导出会重新抓取）</label><input type="text" id="srcUrl" placeholder="https://example.com/sub?token=…"></div>
+        <div class="fld" id="textWrap" style="margin-top:8px; display:none"><label>订阅内容（vmess:// vless:// ss:// trojan:// hysteria2:// … 或 YAML/JSON 节点列表）</label><textarea id="srcText" style="min-height:120px"></textarea></div>
+        <div class="row" style="margin-top:10px">
+          <button id="btnSrcSave">保存</button>
+          <span class="muted" id="srcSaveHint" style="font-size:12px">保存后会自动解析一次，显示节点概况。</span>
+        </div>
+      </div>
+
+      <div id="subEmpty" class="muted" style="margin-top:12px">还没有订阅源。点击「添加订阅源」，保存后到「导出」页生成 sing-box 配置。</div>
+      <div id="subList"></div>
+      <div class="muted" style="font-size:12px; margin-top:10px">勾选「参与导出」的订阅会合并进同一份配置；跨订阅重名节点会自动改名（见导出时的提示）。</div>
     </div>
-    <div id="textBox" style="margin-top:10px">
-      <textarea id="inputText" placeholder="粘贴订阅内容（vmess:// vless:// ss:// trojan:// hysteria2:// … 或 YAML/JSON 节点列表）"></textarea>
+  </section>
+
+  <!-- ============ ② 规则 ============ -->
+  <section id="tab-rules" class="wsec">
+    <div class="card">
+      <b>选择一个使用场景</b>
+      <label class="scene" data-shape="client">
+        <input type="radio" name="shape" value="client"><b>全功能客户端</b>
+        <span>TUN 接管 · 分域 DNS（国内直连/国外走代理）· clash_api 面板。适合手机、桌面全局接管。</span>
+      </label>
+      <label class="scene" data-shape="proxy">
+        <input type="radio" name="shape" value="proxy"><b>桌面本地代理</b>
+        <span>仅开 127.0.0.1:1080 的 mixed 代理，不接管系统流量。适合让单个应用走代理的最小配置。</span>
+      </label>
+      <label class="scene" data-shape="custom">
+        <input type="radio" name="shape" value="custom"><b>自定义</b>
+        <span>输出形态由下方高级参数的 mode 决定，其余项逐项微调。</span>
+      </label>
+
+      <details open id="adv">
+        <summary>高级参数（对所选场景追加 / 覆盖）</summary>
+        <div class="row" style="margin:10px 0 6px">
+          <label class="inline">输出形态 mode（仅「自定义」生效）
+            <select id="optMode" disabled>
+              <option value="client">client（TUN + clash_api + 国内直连）</option>
+              <option value="proxy">proxy（本地 1080 mixed 代理）</option>
+            </select>
+          </label>
+          <label class="inline"><input type="checkbox" id="optMixed"> client 下另加 mixed 回退</label>
+          <label class="inline"><input type="checkbox" id="optTun"> proxy 下另加 tun</label>
+          <label class="inline"><input type="checkbox" id="optUnsup"> 含官方版不支持的协议</label>
+        </div>
+        <div class="grid2">
+          <div class="fld"><label>入站端口（mixed）</label><input type="number" id="optPort" value="1080" min="1" max="65535"></div>
+          <div class="fld"><label>final 出口标签</label><input type="text" id="optFinal" value="proxy"></div>
+          <div class="fld"><label>selector 组名</label><input type="text" id="optProxyTag" value="proxy"></div>
+          <div class="fld"><label>远程 DNS（留空 = client 用 tls://8.8.8.8，proxy 用 DoH）</label><input type="text" id="optDns" placeholder="tls://8.8.8.8"></div>
+          <div class="fld"><label>抓取 URL 订阅的 User-Agent（留空 = 内置 Clash UA）</label><input type="text" id="optUa" placeholder="clash.meta/v1.19.23"></div>
+          <div class="fld"><label>抓取超时（ms，留空 = 30000）</label><input type="number" id="optTimeout" min="100" max="300000"></div>
+        </div>
+        <div class="fld" style="margin-top:8px">
+          <label>附加请求头（每行 <span class="mono">Name: Value</span>，用于带 token 的订阅）</label>
+          <textarea id="optHeaders" style="min-height:60px"></textarea>
+        </div>
+        <div class="fld" style="margin-top:8px">
+          <label>附加规则（每行 <span class="mono">TYPE,CONTENT[,OUTBOUND]</span>，如 <span class="mono">DOMAIN-SUFFIX,doubleclick.net,block</span>）</label>
+          <textarea id="optRules" style="min-height:70px"></textarea>
+        </div>
+      </details>
     </div>
-    <div id="urlBox" style="margin-top:10px; display:none">
-      <input type="text" id="inputUrl" placeholder="https://example.com/sub?token=…">
+  </section>
+
+  <!-- ============ ③ 导出 ============ -->
+  <section id="tab-export" class="wsec">
+    <div class="card">
+      <div id="exportSummary" class="muted">把启用的订阅合并，按所选场景生成一份完整的 sing-box 配置。</div>
+      <div class="row" style="margin-top:10px">
+        <button id="btnGenerate">生成配置</button>
+      </div>
+      <div id="genStatus" style="min-height:20px; margin-top:10px; font-size:13px"></div>
+    </div>
+
+    <div id="result" class="card" style="display:none">
+      <div id="warnBox"></div>
+      <div class="tabs" id="outtabs">
+        <button data-p="node" class="active">节点表格</button>
+        <button data-p="cfg">完整配置 JSON</button>
+      </div>
+      <div class="panel active" id="p-node"></div>
+      <div class="panel" id="p-cfg"><pre id="cfgText"></pre></div>
+      <div class="row" style="margin-top:12px">
+        <button class="secondary small" id="btnCopy">复制完整配置</button>
+        <button class="secondary small" id="btnDownload">下载 singbox-config.json</button>
+      </div>
     </div>
 
     <details>
-      <summary>常用配置（可展开）</summary>
-      <div class="row" style="margin-bottom:6px">
-        <label class="inline">输出形态
-          <select id="optMode">
-            <option value="client" selected>client（TUN + clash_api + 国内直连）</option>
-            <option value="proxy">proxy（本地 1080 mixed 代理）</option>
-          </select>
-        </label>
-        <label class="inline"><input type="checkbox" id="optMixed"> 另加 mixed 回退(127.0.0.1:端口)</label>
-        <label class="inline"><input type="checkbox" id="optTun"> proxy 形态下另加 tun</label>
-        <label class="inline"><input type="checkbox" id="optUnsup"> 含官方版不支持的协议</label>
-      </div>
-      <div class="grid2">
-        <div class="fld"><label>入站端口（mixed）</label><input type="number" id="optPort" value="1080" min="1" max="65535"></div>
-        <div class="fld"><label>final 出口标签</label><input type="text" id="optFinal" value="proxy"></div>
-        <div class="fld"><label>selector 组名</label><input type="text" id="optProxyTag" value="proxy"></div>
-        <div class="fld"><label>远程 DNS（留空=google 8.8.8.8）</label><input type="text" id="optDns" placeholder="tls://8.8.8.8"></div>
-      </div>
-      <div class="fld" style="margin-top:8px">
-        <label>附加规则（每行 <span class="mono">TYPE,CONTENT[,OUTBOUND]</span>，如 <span class="mono">DOMAIN-SUFFIX,doubleclick.net,block</span>）</label>
-        <textarea id="optRules" style="min-height:70px"></textarea>
+      <summary>如何使用这份配置</summary>
+      <div class="card inset">
+        生成产物是一份完整的 <span class="mono">sing-box</span> 配置 JSON。
+        <ul style="margin:8px 0">
+          <li><b>GUI 客户端</b>：把下载的 <span class="mono">singbox-config.json</span> 作为配置文件导入。</li>
+          <li><b>命令行</b>：保存为 <span class="mono">config.json</span> 后运行 <span class="mono">sing-box run -c config.json</span>。</li>
+          <li>“全功能客户端”场景默认开 TUN 接管，需给 sing-box 相应的系统权限；“桌面本地代理”则把代理指向 <span class="mono">127.0.0.1:1080</span>。</li>
+        </ul>
+        订阅文本与凭据只存在本浏览器 localStorage，解析与生成都在你自己的服务/本机完成。
       </div>
     </details>
-
-    <div class="row" style="margin-top:12px">
-      <button id="btnConvert">转换</button>
-      <button class="secondary small" id="btnCopy">复制当前视图</button>
-      <button class="secondary small" id="btnDownload">下载 .json</button>
-    </div>
-    <div id="status"></div>
-  </div>
-
-  <div class="tabs" id="tabs">
-    <button data-tab="table" class="active">节点表格</button>
-    <button data-tab="outbounds">outbounds / endpoints JSON</button>
-    <button data-tab="config">完整配置 JSON</button>
-  </div>
-
-  <div class="panel active" id="panel-table"></div>
-  <div class="panel" id="panel-outbounds"><pre></pre></div>
-  <div class="panel" id="panel-config"><pre></pre></div>
+  </section>
 </div>
 
 <script>
 (function () {
   "use strict";
-  var last = null; // { outbounds, endpoints, output, nodes }
+
+  var STORE = { subs: "sbx:subs", enabled: "sbx:enabledIds", shape: "sbx:shape" };
+  var SHAPE_NAME = { client: "全功能客户端", proxy: "桌面本地代理", custom: "自定义" };
 
   function $(id) { return document.getElementById(id); }
-  var inputText = $("inputText"), inputUrl = $("inputUrl");
-  var status = $("status");
-  var panels = {
-    table: $("panel-table"),
-    outbounds: $("panel-outbounds").querySelector("pre"),
-    config: $("panel-config").querySelector("pre"),
-  };
-  var activeTab = "table";
-
-  function setStatus(msg, type) { status.textContent = msg; status.className = type || ""; }
-
+  function load(key, fallback) {
+    try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+    catch (e) { return fallback; }
+  }
+  function save(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage may be full/unavailable */ }
+  }
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
+  function genId() { return Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36); }
 
-  function toggleMode() {
-    var url = document.querySelector('input[name="mode"]:checked').value === "url";
-    $("textBox").style.display = url ? "none" : "block";
-    $("urlBox").style.display = url ? "block" : "none";
+  var subs = load(STORE.subs, []);
+  var enabledIds = load(STORE.enabled, []);
+  var shape = load(STORE.shape, "client");
+  var editingId = null;   // id being edited in the add/edit form, or null
+  var last = null;        // last successful convert result
+  var activeOutTab = "node";
+
+  function persistAll() {
+    save(STORE.subs, subs);
+    save(STORE.enabled, enabledIds);
+    save(STORE.shape, shape);
   }
-  [].forEach.call(document.querySelectorAll('input[name="mode"]'), function (r) {
-    r.addEventListener("change", toggleMode);
-  });
-  toggleMode();
+  function enabledSubs() { return subs.filter(function (s) { return enabledIds.indexOf(s.id) !== -1; }); }
+  function isEnabled(id) { return enabledIds.indexOf(id) !== -1; }
+  function setEnabled(id, on) {
+    var at = enabledIds.indexOf(id);
+    if (on && at === -1) enabledIds.push(id);
+    if (!on && at !== -1) enabledIds.splice(at, 1);
+    persistAll();
+  }
+  function setStatus(el, msg, cls) { el.textContent = msg; el.className = cls || ""; }
 
+  /* ---------------- segmented navigation ---------------- */
+  function showSeg(seg) {
+    [].forEach.call($("seg").querySelectorAll("button"), function (b) {
+      b.classList.toggle("active", b.getAttribute("data-seg") === seg);
+    });
+    ["subs", "rules", "export"].forEach(function (s) {
+      $("tab-" + s).classList.toggle("active", s === seg);
+    });
+    if (seg === "export") updateExport();
+  }
+  [].forEach.call($("seg").querySelectorAll("button"), function (b) {
+    b.addEventListener("click", function () { showSeg(b.getAttribute("data-seg")); });
+  });
+
+  /* ---------------- ① subscriptions ---------------- */
+  function previewParts(rec) {
+    if (!rec) return ["尚未解析"];
+    if (rec.error) return ["解析失败：" + rec.error];
+    var parts = [rec.nodeCount + " 个节点"];
+    if (rec.endpointCount) parts.push(rec.endpointCount + " endpoint");
+    var proto = Object.keys(rec.protocols || {}).sort();
+    if (proto.length) parts.push(proto.map(function (p) { return p + " ×" + rec.protocols[p]; }).join(" · "));
+    return parts;
+  }
+  function renderSubList() {
+    var empty = $("subEmpty"), list = $("subList");
+    empty.style.display = subs.length ? "none" : "block";
+    var html = "";
+    subs.forEach(function (s) {
+      var preview = previewParts(s.lastPreview).map(esc).join(" · ");
+      var errCls = s.lastPreview && s.lastPreview.error ? " err" : "";
+      html +=
+        '<div class="src" data-id="' + esc(s.id) + '">' +
+          '<div class="row">' +
+            '<label class="inline" title="勾选后参与「导出」合并">' +
+              '<input type="checkbox" class="src-en"' + (isEnabled(s.id) ? " checked" : "") + "> 参与导出" +
+            "</label>" +
+            '<span class="src-name">' + esc(s.name) + "</span>" +
+            '<span class="tag kind-' + esc(s.kind) + '">' + (s.kind === "url" ? "URL" : "文本") + "</span>" +
+            '<button class="secondary small" data-action="inspect">解析</button>' +
+            '<button class="secondary small" data-action="edit">编辑</button>' +
+            '<button class="danger small" data-action="del">删除</button>' +
+          "</div>" +
+          '<div class="src-preview"' + errCls + ">" + preview + "</div>" +
+        "</div>";
+    });
+    list.innerHTML = html;
+  }
+  function kindChecked() {
+    var r = document.querySelector('input[name="srckind"]:checked');
+    return r && r.value === "url" ? "url" : "text";
+  }
+  function toggleAdd(kind) {
+    var urlMode = kind === "url";
+    $("urlWrap").style.display = urlMode ? "block" : "none";
+    $("textWrap").style.display = urlMode ? "none" : "block";
+  }
+  function openAddForm() {
+    editingId = null;
+    $("addTitle").textContent = "添加订阅源";
+    $("srcName").value = "";
+    $("srcUrl").value = "";
+    $("srcText").value = "";
+    document.querySelector('input[name="srckind"][value="url"]').checked = true;
+    toggleAdd("url");
+    $("addForm").style.display = "block";
+    $("srcSaveHint").textContent = "保存后会自动解析一次，显示节点概况。";
+  }
+  function openEditForm(id) {
+    var s = subs.find(function (x) { return x.id === id; });
+    if (!s) return;
+    editingId = id;
+    $("addTitle").textContent = "编辑订阅源";
+    $("srcName").value = s.name;
+    var urlMode = s.kind === "url";
+    $("srcUrl").value = urlMode ? s.content : "";
+    $("srcText").value = urlMode ? "" : s.content;
+    document.querySelector('input[name="srckind"][value="' + esc(s.kind) + '"]').checked = true;
+    toggleAdd(s.kind);
+    $("addForm").style.display = "block";
+    $("srcSaveHint").textContent = "保存后重新解析一次，并刷新概况。";
+  }
+  function closeAddForm() {
+    $("addForm").style.display = "none";
+    editingId = null;
+  }
+  function currentSourceFields() {
+    var k = kindChecked();
+    return {
+      name: $("srcName").value.trim(),
+      kind: k,
+      content: (k === "url" ? $("srcUrl").value : $("srcText").value).trim(),
+    };
+  }
+  function saveSource() {
+    var f = currentSourceFields();
+    if (!f.name) { $("srcSaveHint").textContent = "请填写名称。"; return; }
+    if (!f.content) {
+      $("srcSaveHint").textContent = "请填写" + (f.kind === "url" ? "订阅 URL" : "订阅内容") + "。";
+      return;
+    }
+    var id;
+    if (editingId) {
+      id = editingId;
+      var s = subs.find(function (x) { return x.id === id; });
+      s.name = f.name; s.kind = f.kind; s.content = f.content;
+      s.updatedAt = new Date().toISOString();
+      s.lastPreview = undefined;
+    } else {
+      id = genId();
+      subs.push({ id: id, name: f.name, kind: f.kind, content: f.content,
+        updatedAt: new Date().toISOString(), lastPreview: undefined });
+      if (!isEnabled(id)) enabledIds.push(id); // new sources join the export by default
+    }
+    persistAll();
+    closeAddForm();
+    renderSubList();
+    updateExport();
+    inspectSource(id); // immediate feedback on what the source contains
+  }
+  function deleteSource(id) {
+    var s = subs.find(function (x) { return x.id === id; });
+    if (!s) return;
+    if (!window.confirm("删除订阅源「" + s.name + "」？")) return;
+    subs = subs.filter(function (x) { return x.id !== id; });
+    var at = enabledIds.indexOf(id);
+    if (at !== -1) enabledIds.splice(at, 1);
+    persistAll();
+    renderSubList();
+    updateExport();
+  }
+  function renderPreviewOn(id) {
+    var s = subs.find(function (x) { return x.id === id; });
+    if (!s) return;
+    var host = null;
+    [].forEach.call(document.querySelectorAll("#subList .src"), function (el) {
+      if (el.getAttribute("data-id") === id) host = el.querySelector(".src-preview");
+    });
+    if (!host) return;
+    var rec = s.lastPreview;
+    var text = previewParts(rec).join(" · ");
+    host.textContent = text;
+    host.className = "src-preview" + (rec && rec.error ? " err" : "");
+  }
+  async function inspectSource(id) {
+    var s = subs.find(function (x) { return x.id === id; });
+    if (!s) return;
+    var host = null;
+    [].forEach.call(document.querySelectorAll("#subList .src"), function (el) {
+      if (el.getAttribute("data-id") === id) host = el.querySelector(".src-preview");
+    });
+    if (host) host.textContent = "解析中…";
+    try {
+      var resp = await fetch("/api/inspect", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sources: [{ input: s.content, url: s.kind === "url" }] }),
+      });
+      var json = await resp.json();
+      var rec = json && json.data && json.data.sources && json.data.sources[0]
+        ? json.data.sources[0]
+        : { error: (json && json.error) || "HTTP " + resp.status };
+      s.lastPreview = rec;
+    } catch (e) {
+      s.lastPreview = { error: e && e.message ? e.message : String(e) };
+    }
+    persistAll();
+    renderPreviewOn(id);
+  }
+
+  $("btnAddShow").addEventListener("click", openAddForm);
+  $("btnAddCancel").addEventListener("click", closeAddForm);
+  $("btnSrcSave").addEventListener("click", saveSource);
+  [].forEach.call(document.querySelectorAll('input[name="srckind"]'), function (r) {
+    r.addEventListener("change", function () { toggleAdd(kindChecked()); });
+  });
+  $("subList").addEventListener("click", function (e) {
+    var t = e.target;
+    var act = t.getAttribute && t.getAttribute("data-action");
+    if (!act) return;
+    var item = t.closest ? t.closest(".src") : null;
+    var id = item ? item.getAttribute("data-id") : null;
+    if (id == null) return;
+    if (act === "inspect") inspectSource(id);
+    else if (act === "edit") openEditForm(id);
+    else if (act === "del") deleteSource(id);
+  });
+  $("subList").addEventListener("change", function (e) {
+    var cb = e.target;
+    if (!cb.classList.contains("src-en")) return;
+    var item = cb.closest ? cb.closest(".src") : null;
+    if (item) setEnabled(item.getAttribute("data-id"), cb.checked);
+    updateExport();
+  });
+
+  /* ---------------- ② rules / shape ---------------- */
+  function shapeName() { return SHAPE_NAME[shape] || shape; }
+  function currentMode() {
+    if (shape === "proxy") return "proxy";
+    if (shape === "custom") return $("optMode").value;
+    return "client";
+  }
+  function renderShape() {
+    [].forEach.call(document.querySelectorAll('input[name="shape"]'), function (r) {
+      r.checked = r.value === shape;
+      var card = r.closest ? r.closest(".scene") : null;
+      if (card) card.classList.toggle("sel", r.value === shape);
+    });
+    $("optMode").disabled = shape !== "custom";
+  }
+  function invalidate() {
+    // Any rule change makes the last generated config stale; hide it so the
+    // user regenerates before copying/downloading.
+    $("result").style.display = "none";
+    last = null;
+    setStatus($("genStatus"), "", "");
+  }
+  [].forEach.call(document.querySelectorAll('input[name="shape"]'), function (r) {
+    r.addEventListener("change", function () {
+      if (r.checked) {
+        shape = r.value;
+        persistAll();
+        renderShape();
+        invalidate();
+        updateExport();
+      }
+    });
+  });
+  [].forEach.call(document.querySelectorAll("#adv input, #adv textarea, #adv select"), function (f) {
+    f.addEventListener("input", invalidate);
+    f.addEventListener("change", invalidate);
+  });
+
+  /* ---------------- options collection ---------------- */
+  function collectOptions() {
+    var options = { mode: currentMode() };
+    if ($("optMixed").checked) options.addMixed = true;
+    if ($("optTun").checked) options.tun = true;
+    if ($("optUnsup").checked) options.includeUnsupportedProxy = true;
+    var port = parseInt($("optPort").value, 10);
+    if (Number.isInteger(port) && port > 0) options.inboundPort = port;
+    var fin = $("optFinal").value.trim();
+    if (fin) options.final = fin;
+    var tag = $("optProxyTag").value.trim();
+    if (tag) options.proxyGroupTag = tag;
+    var dns = $("optDns").value.trim();
+    if (dns) options.remoteDns = dns;
+    var ua = $("optUa").value.trim();
+    if (ua) options.userAgent = ua;
+    var timeout = parseInt($("optTimeout").value, 10);
+    if (Number.isInteger(timeout) && timeout > 0) options.timeout = timeout;
+    var headers = {};
+    $("optHeaders").value.split(/\r?\n/).forEach(function (line) {
+      var idx = line.indexOf(":");
+      if (idx <= 0) return;
+      headers[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+    });
+    if (Object.keys(headers).length) options.headers = headers;
+    var rules = $("optRules").value.trim();
+    if (rules) options.rules = rules;
+    return options;
+  }
+
+  /* ---------------- ③ export ---------------- */
+  function updateExport() {
+    var es = enabledSubs();
+    var summary = $("exportSummary"), btn = $("btnGenerate");
+    if (es.length === 0) {
+      summary.innerHTML = '<span class="err">还没有参与导出的订阅。</span>请到「订阅」页添加并勾选要合并的订阅源。';
+      btn.disabled = true;
+    } else {
+      summary.textContent =
+        "将合并 " + es.length + " 个订阅源（" + es.map(function (s) { return s.name; }).join("、") +
+        "），按「" + shapeName() + "」生成完整 sing-box 配置。";
+      btn.disabled = false;
+    }
+  }
   function renderTable(nodes) {
     var html = "<table><thead><tr><th>类型</th><th>标签</th><th>服务器</th><th>端口</th><th>类别</th></tr></thead><tbody>";
     if (!nodes || nodes.length === 0) {
@@ -152,42 +543,18 @@
     html += "</tbody></table>";
     return html;
   }
-
-  function collectOptions() {
-    var options = {
-      mode: $("optMode").value,
-      addMixed: $("optMixed").checked,
-      inboundPort: parseInt($("optPort").value, 10) || 1080,
-      tun: $("optTun").checked,
-      includeUnsupportedProxy: $("optUnsup").checked,
-      final: $("optFinal").value.trim() || undefined,
-      proxyGroupTag: $("optProxyTag").value.trim() || undefined,
-      remoteDns: $("optDns").value.trim() || undefined,
-    };
-    var rulesText = $("optRules").value.trim();
-    if (rulesText) options.rules = rulesText;
-    return options;
-  }
-
-  function currentText() {
-    var mode = document.querySelector('input[name="mode"]:checked').value;
-    return mode === "url"
-      ? { input: inputUrl.value.trim(), url: true }
-      : { input: inputText.value };
-  }
-
-  async function convert() {
-    var src = currentText();
-    if (!src.input) { setStatus("请输入订阅文本或远程 URL。", "err"); return; }
-    setStatus("转换中…");
-    $("btnConvert").disabled = true;
+  async function generate() {
+    var es = enabledSubs();
+    if (es.length === 0) { setStatus($("genStatus"), "请先在「订阅」页勾选要导出的订阅。", "err"); return; }
+    var btn = $("btnGenerate");
+    btn.disabled = true;
+    setStatus($("genStatus"), "生成中…");
     try {
       var resp = await fetch("/api/convert", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          input: src.input,
-          url: !!src.url,
+          sources: es.map(function (s) { return { input: s.content, url: s.kind === "url" }; }),
           out: "config",
           options: collectOptions(),
         }),
@@ -195,46 +562,48 @@
       var json = await resp.json();
       if (!resp.ok || !json.ok) throw new Error((json && json.error) || ("HTTP " + resp.status));
       last = json.data;
-      renderTabs();
-      setStatus("完成：" + (last.nodes || []).length + " 个节点（outbound " +
-        (last.outbounds || []).length + " / endpoint " + (last.endpoints || []).length + "）。");
+      renderResult();
     } catch (e) {
-      setStatus("转换失败：" + (e && e.message ? e.message : e), "err");
+      setStatus($("genStatus"), "生成失败：" + (e && e.message ? e.message : e), "err");
     } finally {
-      $("btnConvert").disabled = false;
+      btn.disabled = false;
     }
   }
-
-  function renderTabs() {
+  function renderResult() {
     if (!last) return;
-    panels.table.innerHTML = renderTable(last.nodes);
-    panels.outbounds.textContent = JSON.stringify(
-      { outbounds: last.outbounds, endpoints: last.endpoints }, null, 2);
-    panels.config.textContent = JSON.stringify(last.output, null, 2);
-  }
-
-  function activate(tab) {
-    activeTab = tab;
-    [].forEach.call($("tabs").querySelectorAll("button"), function (b) {
-      b.classList.toggle("active", b.getAttribute("data-tab") === tab);
-    });
-    ["table", "outbounds", "config"].forEach(function (t) {
-      $("panel-" + t).classList.toggle("active", t === tab);
-    });
-  }
-
-  function currentBlob() {
-    if (!last) return null;
-    if (activeTab === "config") {
-      return { name: "singbox-config.json", data: last.output };
+    $("result").style.display = "block";
+    $("p-node").innerHTML = renderTable(last.nodes);
+    $("cfgText").textContent = JSON.stringify(last.output, null, 2);
+    var warns = last.warnings || [];
+    var box = $("warnBox");
+    if (warns.length) {
+      box.innerHTML = '<div class="warn">注意：</div>' + warns.map(function (w) {
+        return '<div class="warn">· ' + esc(w && w.message ? w.message : w) + "</div>";
+      }).join("");
+    } else {
+      box.innerHTML = "";
     }
-    return {
-      name: "singbox-outbounds.json",
-      data: { outbounds: last.outbounds, endpoints: last.endpoints },
-    };
+    setStatus($("genStatus"),
+      "完成：" + (last.nodes || []).length + " 个节点（outbound " +
+      (last.outbounds || []).length + " / endpoint " + (last.endpoints || []).length + "）。", "ok");
+    setOutTab(activeOutTab);
   }
+  function setOutTab(p) {
+    activeOutTab = p;
+    [].forEach.call($("outtabs").querySelectorAll("button"), function (b) {
+      b.classList.toggle("active", b.getAttribute("data-p") === p);
+    });
+    ["node", "cfg"].forEach(function (t) {
+      $("p-" + t).classList.toggle("active", t === p);
+    });
+  }
+  [].forEach.call($("outtabs").querySelectorAll("button"), function (b) {
+    b.addEventListener("click", function () { setOutTab(b.getAttribute("data-p")); });
+  });
 
-  // navigator.clipboard 仅在安全上下文(HTTPS/localhost)可用；否则回退到 execCommand。
+  $("btnGenerate").addEventListener("click", generate);
+
+  /* clipboard helpers: navigator.clipboard only in secure contexts */
   function writeClipboard(text) {
     if (navigator.clipboard && window.isSecureContext) {
       return navigator.clipboard.writeText(text);
@@ -256,38 +625,35 @@
       }
     });
   }
-
-  async function copy() {
-    var blob = currentBlob();
-    if (!blob) { setStatus("还没有可复制的内容。", "err"); return; }
-    var text = typeof blob.data === "string" ? blob.data : JSON.stringify(blob.data, null, 2);
-    try {
-      await writeClipboard(text);
-      setStatus("已复制到剪贴板。", "ok");
-    } catch (e) {
-      setStatus("复制失败：" + (e && e.message ? e.message : e) + "（请改用「下载 .json」导出）", "err");
-    }
+  function currentConfigText() {
+    if (!last) return "";
+    return JSON.stringify(last.output, null, 2);
   }
-
-  function download() {
-    var blob = currentBlob();
-    if (!blob) { setStatus("还没有可下载的内容。", "err"); return; }
-    var text = typeof blob.data === "string" ? blob.data : JSON.stringify(blob.data, null, 2);
+  $("btnCopy").addEventListener("click", async function () {
+    if (!last) return;
+    try {
+      await writeClipboard(currentConfigText());
+      setStatus($("genStatus"), "完整配置已复制到剪贴板。", "ok");
+    } catch (e) {
+      setStatus($("genStatus"), "复制失败，请改用「下载」导出。", "err");
+    }
+  });
+  $("btnDownload").addEventListener("click", function () {
+    if (!last) return;
     var a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-    a.download = blob.name;
+    a.href = URL.createObjectURL(new Blob([currentConfigText()], { type: "application/json" }));
+    a.download = "singbox-config.json";
     document.body.appendChild(a);
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 200);
-  }
-
-  $("btnConvert").addEventListener("click", convert);
-  $("btnCopy").addEventListener("click", copy);
-  $("btnDownload").addEventListener("click", download);
-  [].forEach.call($("tabs").querySelectorAll("button"), function (b) {
-    b.addEventListener("click", function () { activate(b.getAttribute("data-tab")); });
   });
-  activate("table");
+
+  /* ---------------- init ---------------- */
+  renderShape();
+  renderSubList();
+  updateExport();
+  setOutTab("node");
+  showSeg("subs");
 })();
 </script>
 </body>

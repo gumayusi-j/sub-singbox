@@ -116,17 +116,108 @@ function normalizeOptions(options, config) {
     };
 }
 
-// Core handler, exported for tests.
-export async function convertRequest(body, config) {
-    if (!body || typeof body.input !== "string") {
+// Normalise the request body into a list of subscription sources. Two shapes
+// are accepted so the legacy single-input contract stays intact:
+//   { input: <string>, url?: true }                    (single source)
+//   { sources: [{ input: <string>, url?: true }, ...] } (multi-source merge)
+// A `sources` array wins when present and non-empty; anything else falls back
+// to the legacy `input` field.
+function resolveSourceList(body) {
+    body = body || {};
+    if (Array.isArray(body.sources) && body.sources.length > 0) {
+        return body.sources.map((s) => ({
+            input: s && typeof s.input === "string" ? s.input : "",
+            url: !!(s && s.url),
+        }));
+    }
+    if (typeof body.input === "string") {
+        return [{ input: body.input, url: !!body.url }];
+    }
+    return [];
+}
+
+// A document whose tag space carries duplicates would assemble into a config
+// sing-box refuses to boot (duplicate outbound/endpoint tags), so multi-source
+// merges rename colliding tags with the same "-N" suffix the assembler uses
+// for its synthetic groups. Single-source documents pass through untouched so
+// their tags never drift from what the caller pasted.
+function mergeParsed(parsedList, warnings) {
+    if (!Array.isArray(parsedList) || parsedList.length <= 1) {
         return {
-            status: 400,
-            payload: { ok: false, error: "missing string field: input" },
+            outbounds: (parsedList && parsedList[0] && parsedList[0].outbounds) || [],
+            endpoints: (parsedList && parsedList[0] && parsedList[0].endpoints) || [],
         };
     }
-    const input = body.input;
-    if (input.trim() === "") {
-        return { status: 400, payload: { ok: false, error: "input is empty" } };
+    const outbounds = [];
+    const endpoints = [];
+    const seenOut = new Set();
+    const seenEp = new Set();
+    const append = (coll, o, seen, label) => {
+        if (!o) return;
+        let item = o;
+        const tag = item.tag;
+        if (typeof tag === "string" && seen.has(tag)) {
+            let i = 2;
+            let candidate = tag + "-" + i;
+            while (seen.has(candidate)) {
+                i += 1;
+                candidate = tag + "-" + i;
+            }
+            item = Object.assign({}, o, { tag: candidate });
+            warnings.push({
+                message:
+                    "duplicate " + label + " tag '" + tag +
+                    "' across subscriptions renamed to '" + candidate + "'",
+                path: "merge",
+            });
+        }
+        coll.push(item);
+        if (typeof item.tag === "string") seen.add(item.tag);
+    };
+    for (const parsed of parsedList) {
+        for (const o of (parsed && parsed.outbounds) || []) {
+            append(outbounds, o, seenOut, "node");
+        }
+        for (const o of (parsed && parsed.endpoints) || []) {
+            append(endpoints, o, seenEp, "endpoint");
+        }
+    }
+    return { outbounds, endpoints };
+}
+
+// Download-aware subset of the options inspection previews honour, so a URL
+// subscription is fetched with the same UA/headers/timeout as a real convert.
+function inspectOptions(options) {
+    options = options || {};
+    return {
+        userAgent: options.userAgent || undefined,
+        headers: options.headers,
+        timeout: asNumber(options.timeout, undefined),
+    };
+}
+
+// Parse one resolved source (input + optional url flag) into a parsed doc.
+async function parseSource(source, options) {
+    const input = source.input;
+    const urlMode = source.url === true || /^https?:\/\//i.test(input.trim());
+    return urlMode
+        ? await fromUrl(input.trim(), options)
+        : fromText(input, options);
+}
+
+// Core convert handler, exported for tests. Accepts either a single `input`
+// (legacy) or a `sources` array; multi-source documents are tag-deduped before
+// being assembled into one config.
+export async function convertRequest(body, config) {
+    const sources = resolveSourceList(body);
+    if (sources.length === 0) {
+        return {
+            status: 400,
+            payload: {
+                ok: false,
+                error: "missing input: provide a string field 'input' or a non-empty 'sources' array",
+            },
+        };
     }
     const normalized = normalizeOptions(body.options, config);
     // Surface sing-box 1.16 auto-migrations on the success payload.
@@ -137,20 +228,34 @@ export async function convertRequest(body, config) {
     const outMode =
         body.out === "outbounds" ? "outbounds" : config.defaultOut || "config";
 
-    let parsed;
-    try {
-        const urlMode =
-            body.url === true || /^https?:\/\//i.test(input.trim());
-        parsed = urlMode
-            ? await fromUrl(input.trim(), normalized)
-            : fromText(input, normalized);
-    } catch (e) {
-        return {
-            status: 400,
-            payload: { ok: false, error: e && e.message ? e.message : String(e) },
-        };
+    const parsedList = [];
+    for (let i = 0; i < sources.length; i += 1) {
+        const input = sources[i].input;
+        if (typeof input !== "string" || input.trim() === "") {
+            return {
+                status: 400,
+                payload: {
+                    ok: false,
+                    error: "source #" + (i + 1) + " input is empty",
+                },
+            };
+        }
+        try {
+            parsedList.push(await parseSource(sources[i], normalized));
+        } catch (e) {
+            return {
+                status: 400,
+                payload: {
+                    ok: false,
+                    error:
+                        "source #" + (i + 1) + ": " +
+                        (e && e.message ? e.message : String(e)),
+                },
+            };
+        }
     }
 
+    const parsed = mergeParsed(parsedList, warnings);
     const outbounds = parsed.outbounds || [];
     const endpoints = parsed.endpoints || [];
     if (outbounds.length === 0 && endpoints.length === 0) {
@@ -190,6 +295,53 @@ export async function convertRequest(body, config) {
     return { status: 200, payload: { ok: true, data } };
 }
 
+// Lightweight inspection handler (exported for tests): parses each source and
+// reports node counts + protocol distribution WITHOUT assembling a config, so
+// the subscription tab can show what a source contains before it is exported.
+// A failing source reports an error on its own row rather than failing the
+// whole preview (HTTP stays 200) - the UI can flag that row instead of dying.
+export async function inspectRequest(body, config) {
+    const sources = resolveSourceList(body);
+    if (sources.length === 0) {
+        return {
+            status: 400,
+            payload: {
+                ok: false,
+                error: "missing input: provide a string field 'input' or a non-empty 'sources' array",
+            },
+        };
+    }
+    const opts = inspectOptions(body.options);
+    const perSource = [];
+    let totalNodes = 0;
+    for (let i = 0; i < sources.length; i += 1) {
+        const rec = { nodeCount: 0, outboundCount: 0, endpointCount: 0, protocols: {} };
+        const input = sources[i].input;
+        if (typeof input !== "string" || input.trim() === "") {
+            rec.error = "input is empty";
+            perSource.push(rec);
+            continue;
+        }
+        try {
+            const parsed = await parseSource(sources[i], opts);
+            rec.outboundCount = (parsed.outbounds || []).length;
+            rec.endpointCount = (parsed.endpoints || []).length;
+            for (const n of collectNodes(parsed)) {
+                rec.nodeCount += 1;
+                rec.protocols[n.type] = (rec.protocols[n.type] || 0) + 1;
+            }
+        } catch (e) {
+            rec.error = e && e.message ? e.message : String(e);
+        }
+        totalNodes += rec.nodeCount;
+        perSource.push(rec);
+    }
+    return {
+        status: 200,
+        payload: { ok: true, data: { sources: perSource, totalNodes } },
+    };
+}
+
 export function createServer(config) {
     config = config || loadConfig();
 
@@ -198,16 +350,29 @@ export function createServer(config) {
             const url = new URL(req.url, "http://localhost");
             const pathname = decodeURIComponent(url.pathname);
 
-            if (req.method === "POST" && pathname === "/api/convert") {
+            // Read + JSON-parse the POST body once for every JSON API route.
+            async function readJsonBody() {
                 const raw = await readBody(req, config.maxBodyBytes || 1048576);
-                let body;
                 try {
-                    body = JSON.parse(raw.toString("utf8") || "{}");
+                    return JSON.parse(raw.toString("utf8") || "{}");
                 } catch (e) {
+                    return null;
+                }
+            }
+
+            if (
+                req.method === "POST" &&
+                (pathname === "/api/convert" || pathname === "/api/inspect")
+            ) {
+                const body = await readJsonBody();
+                if (body === null) {
                     send(res, 400, { ok: false, error: "invalid JSON body" });
                     return;
                 }
-                const result = await convertRequest(body, config);
+                const result =
+                    pathname === "/api/inspect"
+                        ? await inspectRequest(body, config)
+                        : await convertRequest(body, config);
                 send(res, result.status, result.payload);
                 return;
             }
@@ -245,4 +410,4 @@ export function start(config) {
     });
 }
 
-export default { createServer, start, convertRequest, loadConfig };
+export default { createServer, start, convertRequest, inspectRequest, loadConfig };
