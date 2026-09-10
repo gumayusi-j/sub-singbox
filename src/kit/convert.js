@@ -183,8 +183,8 @@ function responseHeadersToObject(headers) {
     return out;
 }
 
-// url: remote http(s) subscription. Local file paths are not handled here; see
-// the CLI, which resolves a path to text first.
+// url: remote http(s) subscription only. Reading a local file is the caller's
+// job: resolve the path to text first, then hand it to fromText.
 //
 // options: see downloadText, plus
 //   fetchImpl .. fetch implementation to use (default: globalThis.fetch)

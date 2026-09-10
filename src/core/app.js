@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 
 // Minimal logger / environment shim standing in for Sub-Store's "@/core/app".
 // All diagnostics go to stderr so stdout stays clean for structured output
-// (e.g. the CLI prints config JSON to stdout).
+// (e.g. a caller piping generated config JSON to stdout).
 const LEVELS = { log: "LOG", info: "INFO", warn: "WARN", error: "ERROR" };
 
 function emit(level, args) {

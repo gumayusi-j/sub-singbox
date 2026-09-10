@@ -1,11 +1,11 @@
 // Launcher: starts the web UI server. Config via singbox-web.config.json
-// (optional), HOST/PORT env, or CLI flags (highest precedence):
+// (optional), HOST/PORT env, or command-line flags (highest precedence):
 //   --port/-p <n>   listen port
 //   --host <addr>   listen host
 //   --config <path> alternative config file path
 //   --help          show usage
 // Listen config comes from singbox-web.config.json in the run/project dir
-// (see README); CLI flags and HOST/PORT env override it.
+// (see README); command-line flags and HOST/PORT env override it.
 import { start, loadConfig } from "./server";
 
 function usage() {
@@ -19,8 +19,7 @@ function usage() {
         "                       app defaults to 0.0.0.0)",
         "  --config <path>      config JSON path (same as SINGBOX_WEB_CONFIG env)",
         "  --data <path>        subscription data file (same as SINGBOX_WEB_DATA env;",
-        "                       default <cwd>/singbox-web.data.json). The CLI's",
-        "                       `subs` subcommand reads the same file.",
+        "                       default <cwd>/singbox-web.data.json)",
         "  --help               show this help",
     ].join("\n");
 }
@@ -56,7 +55,7 @@ async function main() {
     if (args.config) process.env.SINGBOX_WEB_CONFIG = args.config;
 
     const config = loadConfig();
-    // CLI flags take precedence over env / config file / defaults.
+    // Command-line flags take precedence over env / config file / defaults.
     if (args.host) config.listen.host = args.host;
     if (args.data) config.dataPath = args.data;
     if (args.port !== undefined) {

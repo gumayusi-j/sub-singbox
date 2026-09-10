@@ -1,6 +1,6 @@
 # sub-singbox
 
-把 Sub-Store 的代理解析/归一化内核抽出来，加上"完整 sing-box 配置"拼装能力的最小独立工具（Node 库 + CLI）。
+把 Sub-Store 的代理解析/归一化内核抽出来，加上"完整 sing-box 配置"拼装能力的最小独立工具（Node 库 + Web）。
 
 链路：`导入(HTTP 订阅 / 粘贴文本 / YAML·JSON 节点列表)` → `解析+隐式归一化修复` → `sing-box outbounds/endpoints` → `拼装完整 sing-box 配置`。
 
@@ -12,30 +12,6 @@
 pnpm install
 pnpm test          # mocha（含移植的内核用例 + kit 用例）
 ```
-
-### CLI
-
-```bash
-# 本地订阅文本文件 -> 完整 sing-box 配置(默认)
-pnpm cli --file sub.txt > config.json
-
-# 远程订阅 URL
-pnpm cli "https://example.com/sub?token=x" --url > config.json
-
-# 只输出节点 outbounds/endpoints
-pnpm cli --file sub.txt --out outbounds > nodes.json
-
-# 规则 + tun 入口
-pnpm cli --file sub.txt --rule-file rules.txt --tun --inbound-port 7890 > config.json
-
-# 远程订阅：默认用 Clash 客户端 UA 拉取，面板会返回节点列表而非 sing-box 配置
-pnpm cli "https://example.com/api/v1/client/subscribe?token=xxx" --url > config.json
-pnpm cli "$URL" --url --user-agent "v2rayN/6.23"   # 手动指定 UA
-pnpm cli "$URL" --url --timeout 15000              # 请求超时(ms，默认 30000)
-pnpm cli "$URL" --url --header "Accept-Encoding: gzip"  # 附加请求头(可重复)
-```
-
-规则文件 `rules.txt`：每行 `TYPE,CONTENT[,outbound]`，或一个 JSON 数组（元素可为上述描述符，或已是 sing-box matcher，例如 `{"ip_is_private":true,"outbound":"direct"}`）。支持类型见下。
 
 ### Web 页面
 
@@ -62,7 +38,7 @@ pnpm web -- --help
 { "listen": { "host": "127.0.0.1", "port": 8788 }, "maxBodyBytes": 1048576 }
 ```
 
-优先级从高到低：**CLI 参数（`--port`/`--host`/`--config`） > 环境变量（`HOST` / `PORT` /
+优先级从高到低：**启动参数（`--port`/`--host`/`--config`） > 环境变量（`HOST` / `PORT` /
 `SINGBOX_WEB_CONFIG` 自定义配置文件路径） > 配置文件 > 默认值**。
 
 ### 打包为单文件（Web）

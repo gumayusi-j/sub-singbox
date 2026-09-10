@@ -11,7 +11,7 @@ import { join } from "path";
 // bundles the single-file app it injects SINGBOX_KIT_WEB_DEFAULT_LISTEN (see
 // scripts/build-web.mjs), so `node dist/singbox-kit-web.js` with no arguments
 // listens on 0.0.0.0:80 - ready for a plain server deploy. Anything passed at
-// runtime still overrides: CLI flags > HOST/PORT env > config file > default.
+// runtime still overrides: command-line flags > HOST/PORT env > config file > default.
 function bundledDefaultListen() {
     const raw = process.env.SINGBOX_KIT_WEB_DEFAULT_LISTEN;
     if (typeof raw !== "string" || raw === "") return null;

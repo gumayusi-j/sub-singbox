@@ -7,7 +7,6 @@
   "private": true,
   "scripts": {
     "test": "mocha src/test/**/*.spec.js --require @babel/register --require ./preload --recursive",
-    "cli": "node -r @babel/register -r ./preload src/kit/cli.js",
     "web": "node -r @babel/register -r ./preload src/web/index.js",
     "validate": "node scripts/validate-config.mjs",
     "compile:acl": "node scripts/compile-acl4ssr.mjs",

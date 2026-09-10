@@ -6,7 +6,7 @@
 //                      polls forever. The client dialect comes from the
 //                      request's User-Agent (or an explicit ?target=), which is
 //                      what makes one URL work for sing-box, Clash, Surge, ...
-//   /api/subscript…    the management API the web UI (and the CLI) drives.
+//   /api/subscript…    the management API the web UI drives.
 //
 // handle() returns true when it dealt with the request, so the caller can fall
 // through to the static assets without knowing anything about subscriptions.
