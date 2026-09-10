@@ -173,7 +173,7 @@ describe("kit API", function () {
         expect(config.log).to.deep.equal({ level: "info", timestamp: true });
         expect(config.inbounds.map((i) => i.type)).to.include("tun");
         expect(config.http_clients).to.deep.equal([
-            { tag: "default-client", domain_resolver: "local", detour: "direct" },
+            { tag: "default-client", domain_resolver: "local" },
         ]);
         expect(config.experimental.clash_api).to.deep.equal({
             default_mode: "规则判定",
@@ -504,12 +504,25 @@ describe("sing-box generator — hardening from Tower's generator", function () 
         return assemble(fromNodes(NODES), options);
     }
 
-    it("pins the rule-set downloader's resolver so it resolves before the detour", function () {
+    it("pins the rule-set downloader's resolver without detouring to direct", function () {
         const config = clientConfig();
+        // No detour: the download is direct either way, and naming the bare
+        // direct outbound is what sing-box refuses to start on.
         expect(config.http_clients).to.deep.equal([
-            { tag: "default-client", domain_resolver: "local", detour: "direct" },
+            { tag: "default-client", domain_resolver: "local" },
         ]);
         expect(config.route.default_http_client).to.equal("default-client");
+
+        // Guard the shape that broke a real deployment, not just the literal
+        // object above: every client's detour must resolve to a real outbound
+        // that is not an empty direct one.
+        const tags = new Set(config.outbounds.map((o) => o.tag));
+        for (const client of config.http_clients) {
+            if (client.detour === undefined) continue;
+            expect(tags.has(client.detour), "dangling detour " + client.detour).to.equal(true);
+            const target = config.outbounds.find((o) => o.tag === client.detour);
+            expect(target.type, "detour to a bare direct " + client.detour).to.not.equal("direct");
+        }
     });
 
     it("breaks the resolution loop for a remote resolver addressed by a hostname", function () {

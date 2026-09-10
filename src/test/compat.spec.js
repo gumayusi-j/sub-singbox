@@ -60,9 +60,10 @@ describe("compat layer", function () {
         // the client profile ships explicit http_clients/default_http_client so
         // the remote rule-sets do not need auto-migration. domain_resolver is
         // pinned to the plain resolver so a rule-set hostname resolves before
-        // the detour is dialled.
+        // anything is dialled; there is deliberately no detour, which sing-box
+        // rejects when it points at an empty direct outbound.
         expect(config.http_clients).to.deep.equal([
-            { tag: "default-client", domain_resolver: "local", detour: "direct" },
+            { tag: "default-client", domain_resolver: "local" },
         ]);
         expect(config.certificate_providers).to.equal(undefined);
         expect(config.route.default_http_client).to.equal("default-client");
@@ -106,11 +107,13 @@ describe("compat layer", function () {
         const { config, warnings } = migrateConfig(cfg);
         expect(warnings.some((w) => w.code === "rule_set_download_detour")).to.equal(true);
         expect(config.http_clients).to.be.an("array");
-        const direct = config.http_clients.find((c) => c.detour === "direct");
         const viaProxy = config.http_clients.find((c) => c.detour === "proxy");
-        expect(direct).to.be.an("object");
         expect(viaProxy).to.be.an("object");
-        // two entries sharing "proxy" reuse one client
+        // "direct" here resolves to baseConfig's bare direct outbound. A
+        // detour to that is what sing-box refuses to start on, so the entry
+        // gets no client of its own and falls back to the default one.
+        expect(config.http_clients.some((c) => c.detour === "direct")).to.equal(false);
+
         const byTag = {};
         for (const e of config.route.rule_set) {
             if (e.http_client !== undefined) {
@@ -118,8 +121,51 @@ describe("compat layer", function () {
             }
             expect(e.download_detour).to.equal(undefined);
         }
+        // only the two "proxy" entries got a client, and they share it
+        expect(Object.keys(byTag)).to.deep.equal([viaProxy.tag]);
         expect(byTag[viaProxy.tag]).to.equal(2);
         expect(config.route.default_http_client).to.equal(config.http_clients[0].tag);
+    });
+
+    it("drops a download_detour that would detour to an empty direct outbound", function () {
+        // The exact shape that stopped a real deployment from booting: a
+        // legacy config routing its rule-set downloads through a direct
+        // outbound that carries nothing but its tag.
+        const cfg = baseConfig({
+            outbounds: [
+                { type: "direct", tag: "direct" },
+                { type: "selector", tag: "proxy", outbounds: ["direct"] },
+            ],
+            route: {
+                auto_detect_interface: true,
+                rules: [],
+                final: "proxy",
+                rule_set: [REMOTE_SET("direct")],
+            },
+        });
+        const { config } = migrateConfig(cfg);
+        const entry = config.route.rule_set[0];
+        expect(entry.download_detour).to.equal(undefined);
+        expect(entry.http_client).to.equal(undefined);
+        expect(config.http_clients.every((c) => c.detour !== "direct")).to.equal(true);
+
+        // A direct outbound that does override something is a real hop and
+        // still gets a client - the guard keys on "empty", not on "direct".
+        const overridden = baseConfig({
+            outbounds: [
+                { type: "direct", tag: "direct", override_address: "1.2.3.4" },
+                { type: "selector", tag: "proxy", outbounds: ["direct"] },
+            ],
+            route: {
+                auto_detect_interface: true,
+                rules: [],
+                final: "proxy",
+                rule_set: [REMOTE_SET("direct")],
+            },
+        });
+        const kept = migrateConfig(overridden).config;
+        expect(kept.route.rule_set[0].http_client).to.be.a("string");
+        expect(kept.http_clients.some((c) => c.detour === "direct")).to.equal(true);
     });
 
     it("falls back to the default client when download_detour is gone (boundary)", function () {

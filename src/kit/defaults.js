@@ -280,11 +280,16 @@ export function defaultRoute(options) {
 // working DNS during a cold start (Tower's generator makes the same point).
 // No `engine` is written - "go" is already the default, so it would be a field
 // that documents nothing.
+//
+// No `detour` either, and that one is load-bearing: the rule-set downloads go
+// direct anyway, and naming the bare direct outbound explicitly is a config
+// sing-box refuses to start on - "detour to an empty direct outbound makes no
+// sense". Tower reaches the same place by only ever writing a detour when it
+// has a proxy to route the download through.
 export function defaultHttpClients(dns) {
     const client = { tag: "default-client" };
     const bootstrap = localDnsTag(dns || {});
     if (bootstrap) client.domain_resolver = bootstrap;
-    client.detour = "direct";
     return [client];
 }
 

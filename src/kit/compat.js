@@ -296,6 +296,20 @@ const INSPECTIONS = [
 // Migration (mutates a draft copy).
 // ---------------------------------------------------------------------------
 
+// A direct outbound carrying nothing but its own type and tag is exactly what
+// an absent detour already means, and sing-box rejects the pairing outright:
+// "detour to an empty direct outbound makes no sense". Routing a rule-set
+// download through one therefore converts a config that boots into one that
+// never starts, so the migration leaves the reference out.
+function isBareDirectTag(cfg, tag) {
+    if (typeof tag !== "string" || tag === "") return false;
+    const outbound = (cfg.outbounds || []).find(
+        (o) => isPlainObject(o) && o.tag === tag,
+    );
+    if (!outbound || outbound.type !== "direct") return false;
+    return Object.keys(outbound).every((key) => key === "type" || key === "tag");
+}
+
 function applyRuleSetHttpClients(cfg) {
     const route = cfg.route;
     if (!isPlainObject(route) || !Array.isArray(route.rule_set)) return;
@@ -321,6 +335,7 @@ function applyRuleSetHttpClients(cfg) {
         added = true;
         if (entry.http_client != null) return; // http_client wins
         if (typeof detour !== "string" || !tags.has(detour)) return; // fall back to default client
+        if (isBareDirectTag(cfg, detour)) return; // ditto - see the note above
         let tag = clientByDetour.get(detour);
         if (!tag) {
             tag = uniqueTag("rule-set-" + detour, clientTags);
@@ -337,7 +352,9 @@ function applyRuleSetHttpClients(cfg) {
         if (clients.length === 0 && !hasDefault) {
             const tag = uniqueTag("default-rule-set-client", clientTags);
             const client = { tag };
-            if (typeof route.final === "string" && tags.has(route.final)) client.detour = route.final;
+            if (typeof route.final === "string" && tags.has(route.final) && !isBareDirectTag(cfg, route.final)) {
+                client.detour = route.final;
+            }
             clients.push(client);
             route.default_http_client = tag;
             added = true;
@@ -346,7 +363,9 @@ function applyRuleSetHttpClients(cfg) {
             added = true;
         } else if (clients.length === 0 && hasDefault) {
             const client = { tag: route.default_http_client };
-            if (typeof route.final === "string" && tags.has(route.final)) client.detour = route.final;
+            if (typeof route.final === "string" && tags.has(route.final) && !isBareDirectTag(cfg, route.final)) {
+                client.detour = route.final;
+            }
             clients.push(client);
             added = true;
         }
