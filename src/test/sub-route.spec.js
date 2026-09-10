@@ -226,13 +226,16 @@ describe("/sub/<token> — reaching a client", function () {
         expect(tags.some((tag) => tag !== "proxy" && tag !== "auto")).to.equal(true);
     });
 
-    it("honours ?mode=proxy", async function () {
+    it("ignores ?mode= and always serves the client shape", async function () {
         ctx = await serve();
         const { text } = await ctx.request("/sub/" + ctx.token + "?mode=proxy", {
             headers: { "user-agent": "sing-box/1.14.0" },
         });
         const config = JSON.parse(text);
-        expect(config.inbounds.some((i) => i.type === "tun")).to.equal(false);
+        // The run shape is Tower's and not addressable from the URL: a link
+        // handed out under the old contract must not keep steering it.
+        expect(config.inbounds.some((i) => i.type === "tun")).to.equal(true);
+        expect(config.inbounds.some((i) => i.type === "mixed")).to.equal(false);
     });
 
     it("serves the merged view through the global token", async function () {
@@ -623,11 +626,19 @@ describe("settings — one saved config, two readers", function () {
         return JSON.parse(text).outbounds.map((o) => o.tag);
     }
 
-    it("persists only whitelisted keys", async function () {
+    it("persists the rule preset and nothing else", async function () {
         ctx = await serve();
         const { json, status } = await save({
-            mode: "proxy",
             aclPreset: "acl4ssr-mini",
+            // Every one of these used to be a knob on the rules page. The page
+            // now offers the rule preset alone, so a stored value for any of
+            // them would be a setting with no UI left to turn it back.
+            mode: "proxy",
+            addMixed: true,
+            inboundPort: 7890,
+            remoteDns: "tls://1.1.1.1",
+            rules: "DOMAIN-SUFFIX,a.test,block",
+            includeUnsupportedProxy: true,
             // `out` decides the response shape, so a stray "outbounds" saved
             // here would strip every client's config down to a fragment.
             out: "outbounds",
@@ -635,47 +646,35 @@ describe("settings — one saved config, two readers", function () {
             nonsense: "x",
         });
         expect(status).to.equal(200);
-        expect(json.data.settings.mode).to.equal("proxy");
-        expect(json.data.settings.aclPreset).to.equal("acl4ssr-mini");
-        expect(json.data.settings).to.not.have.property("out");
-        expect(json.data.settings).to.not.have.property("tun");
-        expect(json.data.settings).to.not.have.property("nonsense");
+        expect(json.data.settings).to.deep.equal({ aclPreset: "acl4ssr-mini" });
     });
 
-    it("refuses values that would break a client's config", async function () {
+    it("refuses a preset that does not exist", async function () {
         ctx = await serve();
-        // remoteDns is written verbatim into every client config, so a bad
-        // value would 500 the address rather than merely look wrong.
-        const { json } = await save({
-            mode: "nonsense",
-            aclPreset: "not-a-preset",
-            inboundPort: 70000,
-            remoteDns: { evil: true },
-        });
-        expect(json.data.settings).to.not.have.property("mode");
+        const { json } = await save({ aclPreset: "not-a-preset" });
         expect(json.data.settings).to.not.have.property("aclPreset");
-        expect(json.data.settings).to.not.have.property("inboundPort");
-        expect(json.data.settings).to.not.have.property("remoteDns");
     });
 
     it("clears a field sent as null instead of storing an empty value", async function () {
         ctx = await serve();
-        await save({ remoteDns: "tls://1.1.1.1" });
-        expect(ctx.store.getSettings().defaultOptions.remoteDns).to.equal("tls://1.1.1.1");
+        await save({ aclPreset: "acl4ssr-mini" });
+        expect(ctx.store.getSettings().defaultOptions.aclPreset).to.equal("acl4ssr-mini");
 
-        await save({ remoteDns: null });
-        expect(ctx.store.getSettings().defaultOptions).to.not.have.property("remoteDns");
+        await save({ aclPreset: null });
+        expect(ctx.store.getSettings().defaultOptions).to.not.have.property("aclPreset");
     });
 
-    it("renders the address from the saved settings, with the URL still winning", async function () {
+    it("serves the client shape whatever was saved", async function () {
         ctx = await serve();
-        await save({ mode: "proxy" });
+        // A store written by the build that still had a run-shape picker.
+        await save({ mode: "proxy", aclPreset: "acl4ssr-mini" });
 
         const saved = JSON.parse((await pull()).text);
-        expect(saved.inbounds.some((i) => i.type === "tun")).to.equal(false);
+        expect(saved.inbounds.some((i) => i.type === "tun")).to.equal(true);
+        expect(saved.inbounds.some((i) => i.type === "mixed")).to.equal(false);
 
-        // An address handed out earlier keeps working, and ?mode= overrides.
-        const forced = JSON.parse((await pull("?mode=client")).text);
+        // The preset still wins the ?acl= override; ?mode= does not exist.
+        const forced = JSON.parse((await pull("?acl=none&mode=proxy")).text);
         expect(forced.inbounds.some((i) => i.type === "tun")).to.equal(true);
     });
 
@@ -700,7 +699,7 @@ describe("settings — one saved config, two readers", function () {
 
     it("gives /api/export exactly what the address serves", async function () {
         ctx = await serve();
-        await save({ aclPreset: "acl4ssr-mini", mode: "proxy" });
+        await save({ aclPreset: "acl4ssr-mini" });
 
         const viaAddress = JSON.parse((await pull()).text);
         const exported = await ctx.request("/api/export", {
@@ -713,22 +712,13 @@ describe("settings — one saved config, two readers", function () {
         expect(exported.json.data.output).to.deep.equal(viaAddress);
     });
 
-    it("turns a per-line rule list into the array the assembler wants", async function () {
+    it("never grows a mixed inbound", async function () {
         ctx = await serve();
-        await save({ rules: "DOMAIN-SUFFIX,a.test,block\nDOMAIN-SUFFIX,b.test,direct\n" });
-        // The string used to be passed straight through and silently dropped.
-        expect(ctx.store.getSettings().defaultOptions.rules).to.deep.equal([
-            "DOMAIN-SUFFIX,a.test,block",
-            "DOMAIN-SUFFIX,b.test,direct",
-        ]);
-    });
-
-    it("carries addMixed and inboundPort through to the config", async function () {
-        ctx = await serve();
-        await save({ mode: "client", addMixed: true, inboundPort: 7890 });
+        // The mixed fallback and its port were the last rules-page knobs that
+        // could change the inbound set. Tower emits a TUN and nothing else.
+        await save({ addMixed: true, inboundPort: 7890 });
         const config = JSON.parse((await pull()).text);
-        const mixed = config.inbounds.filter((i) => i.type === "mixed");
-        expect(mixed.length).to.be.greaterThan(0);
-        expect(mixed.some((i) => i.listen_port === 7890)).to.equal(true);
+        expect(config.inbounds.filter((i) => i.type === "mixed")).to.have.length(0);
+        expect(config.inbounds[0].type).to.equal("tun");
     });
 });

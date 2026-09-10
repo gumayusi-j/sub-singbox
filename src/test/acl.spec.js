@@ -51,7 +51,7 @@ describe("ACL4SSR presets", function () {
     });
 
     it("builds the mini preset with base groups and folded reject rules", function () {
-        const config = assembleAcl(parsed(), { aclPreset: "acl4ssr-mini", mode: "proxy" });
+        const config = assembleAcl(parsed(), { aclPreset: "acl4ssr-mini" });
         const tags = config.outbounds.map((o) => o.tag);
         expect(tags).to.include("🚀 节点选择");
         expect(tags).to.include("♻️ 自动选择");
@@ -70,7 +70,7 @@ describe("ACL4SSR presets", function () {
     });
 
     it("adds service groups for the default preset", function () {
-        const config = assembleAcl(parsed(), { aclPreset: "acl4ssr-default", mode: "proxy" });
+        const config = assembleAcl(parsed(), { aclPreset: "acl4ssr-default" });
         const tags = config.outbounds.map((o) => o.tag);
         expect(tags).to.include("🌍 国外媒体");
         expect(tags).to.include("📲 电报信息");
@@ -82,7 +82,7 @@ describe("ACL4SSR presets", function () {
     });
 
     it("only creates region groups whose node-name regex actually matches", function () {
-        const config = assembleAcl(parsed(), { aclPreset: "acl4ssr-full", mode: "proxy" });
+        const config = assembleAcl(parsed(), { aclPreset: "acl4ssr-full" });
         const tags = config.outbounds.map((o) => o.tag);
         expect(tags).to.include("🇭🇰 香港节点");
         expect(tags).to.include("🇯🇵 日本节点");
@@ -104,7 +104,7 @@ describe("ACL4SSR presets", function () {
     it("always reaches the final group even when no region matches", function () {
         const config = assembleAcl(parsed(["随便一个节点"]), {
             aclPreset: "acl4ssr-full",
-            mode: "proxy",
+            
         });
         const tags = config.outbounds.map((o) => o.tag);
         expect(tags).to.not.include("🇭🇰 香港节点");
@@ -115,7 +115,7 @@ describe("ACL4SSR presets", function () {
     it("emits a bootable direct profile for zero nodes", function () {
         const config = assembleAcl({ outbounds: [], endpoints: [] }, {
             aclPreset: "acl4ssr-mini",
-            mode: "proxy",
+            
         });
         expect(config.outbounds.map((o) => o.tag)).to.deep.equal(["direct"]);
         expect(config.route.final).to.equal("direct");

@@ -3,15 +3,12 @@
 // (fields removed in 1.14 - legacy DNS server `address`, `outbound` DNS-rule
 // items - are avoided; validate against your target version before shipping).
 //
-// Two output profiles drive assemble():
-//
-//   mode: "client" (default) — a full client skeleton mirroring the common
-//     reference config: a tun inbound, clash_api dashboard, split DNS
-//     (google over the proxy + a local CN resolver), sniff + hijack-dns
-//     route rules and remote geosite/geoip-CN rule-sets for China direct.
-//
-//   mode: "proxy"            — a minimal local mixed (socks/http) proxy on
-//     127.0.0.1:<port> with plain private/direct routing.
+// There is exactly one output profile and it is Tower's: a tun inbound, a
+// clash_api dashboard, split DNS (google over the proxy + a local CN
+// resolver), sniff + hijack-dns route rules and remote geosite/geoip-CN
+// rule-sets for China direct. A run shape is not a choice this kit offers -
+// Tower hardcodes the same one, and the local mixed-proxy variant that used to
+// live here as `mode: "proxy"` is gone.
 
 import { RULE_MODE } from "./modes";
 
@@ -25,7 +22,6 @@ const DNS_DEFAULT_PORTS = {
 };
 
 export const CLIENT_REMOTE_DNS = "tls://8.8.8.8";
-export const PROXY_REMOTE_DNS = "https://dns.alidns.com/dns-query";
 export const CLIENT_LOCAL_DNS = "223.5.5.5";
 
 // Legacy sing-box (<1.12) spelled a DNS server as a single `address` string,
@@ -141,31 +137,25 @@ export function applyBootstrapResolver(servers, dns) {
     return servers;
 }
 
-function isProxyMode(options) {
-    return !!(options && options.mode === "proxy");
-}
-
 export function defaultLog(options) {
-    const log = { level: (options && options.logLevel) || "info" };
-    if (!isProxyMode(options)) log.timestamp = true;
-    return log;
+    return {
+        level: (options && options.logLevel) || "info",
+        timestamp: true,
+    };
 }
 
+// The one inbound Tower emits: a TUN that takes over system traffic. The field
+// overrides are for callers tuning the interface, not for picking a different
+// shape - a loopback mixed inbound used to be reachable from here and is gone.
 export function defaultInbounds(options) {
     options = options || {};
-    const mode = isProxyMode(options);
-    const port = options.inboundPort || options.inbound_port || 1080;
-    const wantTun =
-        mode === true ? options.tun === true : options.tun !== false;
-    const inbounds = [];
-
-    if (wantTun) {
-        const rawAddress =
-            options.tunAddress || options.inet4_address || ["172.19.0.1/30"];
-        const address = Array.isArray(rawAddress)
-            ? rawAddress.slice()
-            : [String(rawAddress)];
-        inbounds.push({
+    const rawAddress =
+        options.tunAddress || options.inet4_address || ["172.19.0.1/30"];
+    const address = Array.isArray(rawAddress)
+        ? rawAddress.slice()
+        : [String(rawAddress)];
+    return [
+        {
             type: "tun",
             tag: options.tunTag || "tun-in",
             address,
@@ -175,34 +165,20 @@ export function defaultInbounds(options) {
             // future core changing it cannot silently alter behaviour. Tower
             // pins the same value.
             stack: options.tunStack || "mixed",
-        });
-    }
-
-    // The proxy profile keeps a loopback mixed inbound; the client profile
-    // only adds one on request (options.addMixed).
-    if (mode === true || options.addMixed === true || wantTun === false) {
-        inbounds.push({
-            type: "mixed",
-            tag: "mixed-in",
-            listen: "127.0.0.1",
-            listen_port: port,
-        });
-    }
-    return inbounds;
+        },
+    ];
 }
 
 export function defaultDns(options) {
     options = options || {};
-    const mode = isProxyMode(options);
-    const remoteDefault = mode ? PROXY_REMOTE_DNS : CLIENT_REMOTE_DNS;
     const supplied = options.remoteDns;
     const remoteAddress =
         supplied != null && supplied !== ""
             ? isPlainObject(supplied)
                 ? supplied
-                : String(supplied).trim() || remoteDefault
-            : remoteDefault;
-    const remoteTag = mode ? "remote" : "google";
+                : String(supplied).trim() || CLIENT_REMOTE_DNS
+            : CLIENT_REMOTE_DNS;
+    const remoteTag = "google";
 
     // A structured server object (user-supplied) passes through as-is, only
     // defaulting tag/detour. A string goes through parseDnsAddress + the
@@ -220,28 +196,12 @@ export function defaultDns(options) {
     // The built-in remote is a DoT server addressed by bare IP; it needs an
     // explicit TLS server_name or sing-box cannot verify the certificate.
     const builtInOverride =
-        !mode && String(remoteAddress) === CLIENT_REMOTE_DNS
+        String(remoteAddress) === CLIENT_REMOTE_DNS
             ? { tls: { enabled: true, server_name: "dns.google" } }
             : undefined;
 
-    if (mode) {
-        // Minimal proxy profile: a DoH remote over the proxy plus a local
-        // system resolver (backs route.default_domain_resolver).
-        const proxyServers = [
-            remoteServer("proxy", builtInOverride),
-            { type: "local", tag: "local" },
-        ];
-        applyBootstrapResolver(proxyServers, { servers: proxyServers });
-        return {
-            servers: proxyServers,
-            rules: [],
-            final: "remote",
-            strategy: options.dnsStrategy || "ipv4_only",
-        };
-    }
-
-    // Client profile (mirrors the reference template): encrypted resolver
-    // reached through the proxy + a plain CN resolver for domestic domains.
+    // Encrypted resolver reached through the proxy + a plain CN resolver for
+    // domestic domains (mirrors the reference template).
     const servers = [
         remoteServer("proxy", builtInOverride),
         {
@@ -281,18 +241,10 @@ export function defaultRoute(options) {
         final: options.final || "proxy",
     };
 
-    if (isProxyMode(options)) {
-        // Minimal profile: keep private/loopback traffic on direct.
-        if (options.defaultDirectRules !== false) {
-            route.rules.push({ ip_is_private: true, outbound: "direct" });
-        }
-        return route;
-    }
-
-    // Client profile: sniff first, hijack DNS (DNS protocol or classic
-    // port-53 traffic, matching Tower's route prelude), then route CN
-    // traffic direct. Non-final actions run before destination rules so
-    // domain rules can match on the sniffed host/SNI.
+    // Sniff first, hijack DNS (DNS protocol or classic port-53 traffic,
+    // matching Tower's route prelude), then route CN traffic direct. Non-final
+    // actions run before destination rules so domain rules can match on the
+    // sniffed host/SNI.
     route.rules = [
         { action: "sniff" },
         {
@@ -369,6 +321,5 @@ export default {
     applyBootstrapResolver,
     localDnsTag,
     CLIENT_REMOTE_DNS,
-    PROXY_REMOTE_DNS,
     CLIENT_LOCAL_DNS,
 };

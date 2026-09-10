@@ -21,19 +21,16 @@ import { findPreset } from "../kit/acl4ssr/build";
 const API_ROOT = "/api/subscriptions";
 const SUB_ROOT = "/sub/";
 
-// The options a saved default may carry. `out` and `tun` are deliberately
-// absent: `out` decides the response shape (a full config versus a bare
-// outbounds fragment), so a stray "outbounds" saved here would silently strip
-// every client's config down to that fragment, with no way back from the URL.
-const SETTINGS_KEYS = [
-    "mode",
-    "aclPreset",
-    "remoteDns",
-    "addMixed",
-    "inboundPort",
-    "rules",
-    "includeUnsupportedProxy",
-];
+// The options a saved default may carry. Only the ACL4SSR preset: a config's
+// run shape is not a choice here. Tower hardcodes one (a TUN `tun-in`, the DNS
+// skeleton, CN-direct rules) and so does this - see kit/defaults.js, whose
+// "client" profile is the fallthrough whenever no mode is passed.
+//
+// `out` and `tun` are deliberately absent for a second reason: `out` decides
+// the response shape (a full config versus a bare outbounds fragment), so a
+// stray "outbounds" saved here would silently strip every client's config down
+// to that fragment, with no way back from the URL.
+const SETTINGS_KEYS = ["aclPreset"];
 
 // The options a client-visible render is made from: the saved server-side
 // defaults first, then whatever the caller overrides. /sub/<token> and
@@ -57,53 +54,18 @@ function renderOptionsFor(store, overrides) {
     return merged;
 }
 
-// One rule per line in the UI, an array everywhere downstream. The string used
-// to be passed straight through, where the assembler silently dropped it.
-function normalizeRuleList(raw) {
-    let lines;
-    if (Array.isArray(raw)) lines = raw;
-    else if (typeof raw === "string") lines = raw.split(/\r?\n/);
-    else return null;
-    const rules = lines
-        .map((line) => (typeof line === "string" ? line.trim() : ""))
-        .filter((line) => line !== "" && line.length <= 512)
-        .slice(0, 500);
-    return rules.length > 0 ? rules : null;
-}
-
 // Filter an API settings body down to what may be persisted. A null means
 // "clear this field"; the store deletes the key for it.
+//
+// Only the rule preset survives. Everything the rules page used to expose
+// besides it (run shape, mixed fallback, inbound port, remote DNS, extra
+// rules) is either Tower's default or belongs to the deployment config, so a
+// stored value for it would be a knob with no UI left to turn it back.
 function sanitizeSettingsPatch(body) {
     const raw = body && typeof body === "object" ? body : {};
     const patch = {};
-    if (raw.mode !== undefined) {
-        patch.mode =
-            raw.mode === "client" || raw.mode === "proxy" ? raw.mode : null;
-    }
     if (raw.aclPreset !== undefined) {
         patch.aclPreset = findPreset(raw.aclPreset) ? raw.aclPreset : null;
-    }
-    if (raw.remoteDns !== undefined) {
-        // Written verbatim into every client's config, so a bad value would
-        // 500 the subscription address rather than merely look wrong.
-        const dns = typeof raw.remoteDns === "string" ? raw.remoteDns.trim() : "";
-        patch.remoteDns = dns === "" || dns.length > 256 ? null : dns;
-    }
-    if (raw.addMixed !== undefined) {
-        patch.addMixed = raw.addMixed === true || raw.addMixed === "true";
-    }
-    if (raw.inboundPort !== undefined) {
-        const port = Number(raw.inboundPort);
-        patch.inboundPort =
-            Number.isInteger(port) && port > 0 && port < 65536 ? port : null;
-    }
-    if (raw.rules !== undefined) {
-        patch.rules = normalizeRuleList(raw.rules);
-    }
-    if (raw.includeUnsupportedProxy !== undefined) {
-        patch.includeUnsupportedProxy =
-            raw.includeUnsupportedProxy === true ||
-            raw.includeUnsupportedProxy === "true";
     }
     return patch;
 }
@@ -236,11 +198,10 @@ export function createSubscriptionRouter(options) {
 
         const srcParam = url.searchParams.get("src");
         // Saved defaults first, URL parameters over them: an address handed out
-        // earlier keeps working, and ?acl=/?mode= still force a one-off value.
+        // earlier keeps working, and ?acl= still forces a one-off preset.
         const options = renderOptionsFor(store, {
             out: url.searchParams.get("out") || undefined,
             aclPreset: url.searchParams.get("acl") || undefined,
-            mode: url.searchParams.get("mode") || undefined,
         });
         if (options.out === undefined) options.out = config.defaultOut;
         if (options.remoteDns === undefined) options.remoteDns = config.remoteDns;
@@ -497,12 +458,6 @@ export function createSubscriptionRouter(options) {
             const options = renderOptionsFor(store, {
                 out: body.out || undefined,
                 aclPreset: bodyOptions.aclPreset,
-                mode: bodyOptions.mode,
-                remoteDns: bodyOptions.remoteDns,
-                addMixed: bodyOptions.addMixed,
-                inboundPort: bodyOptions.inboundPort,
-                rules: normalizeRuleList(bodyOptions.rules),
-                includeUnsupportedProxy: bodyOptions.includeUnsupportedProxy,
             });
             if (options.out === undefined) options.out = config.defaultOut;
             if (options.remoteDns === undefined) options.remoteDns = config.remoteDns;

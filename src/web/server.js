@@ -93,16 +93,12 @@ function normalizeRules(raw) {
 
 function normalizeOptions(options, config) {
     options = options || {};
+    // No run shape is forwarded: the kit has one profile and it is Tower's.
+    // A caller passing mode/addMixed/inboundPort/tun just gets that shape;
+    // see SETTINGS_KEYS in subscription/router.js for the same call at the
+    // saved-settings level.
     return {
-        mode: options.mode === "client" || options.mode === "proxy"
-            ? options.mode
-            : undefined,
-        addMixed: options.addMixed === true,
         includeUnsupportedProxy: options.includeUnsupportedProxy === true,
-        inboundPort: asNumber(options.inboundPort, undefined),
-        // client profile turns TUN on by default; only forward an explicit
-        // true so the default is never disabled from here.
-        tun: options.tun === true ? true : undefined,
         final: options.final || undefined,
         proxyGroupTag: options.proxyGroupTag || undefined,
         userAgent: options.userAgent || undefined,

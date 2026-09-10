@@ -94,24 +94,26 @@ describe("singbox-kit web API", function () {
         expect(config.http_clients).to.have.length(1);
     });
 
-    it("applies options like mode/proxy, tun and rules", async function () {
+    it("applies options like rules, and ignores run-shape ones", async function () {
         const resp = await fetch(base + "/api/convert", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
                 input: sampleText,
                 options: {
-                    mode: "proxy",
-                    tun: true,
-                    inboundPort: 7890,
                     rules: ["DOMAIN-SUFFIX,doubleclick.net,block"],
+                    // Gone from the API surface. A caller still sending them
+                    // must get the one profile, not a half-applied shape.
+                    mode: "proxy",
+                    tun: false,
+                    inboundPort: 7890,
+                    addMixed: true,
                 },
             }),
         });
         const json = await resp.json();
         const config = json.data.output;
-        expect(config.inbounds.map((i) => i.type)).to.include("tun");
-        expect(config.inbounds.find((i) => i.type === "mixed").listen_port).to.equal(7890);
+        expect(config.inbounds.map((i) => i.type)).to.deep.equal(["tun"]);
         expect(config.route.rules[0]).to.deep.equal({
             domain_suffix: "doubleclick.net",
             outbound: "block",
@@ -214,7 +216,7 @@ describe("singbox-kit web API", function () {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
                 input: sampleText,
-                options: { mode: "proxy", aclPreset: "acl4ssr-mini" },
+                options: { aclPreset: "acl4ssr-mini" },
             }),
         });
         expect(resp.status).to.equal(200);

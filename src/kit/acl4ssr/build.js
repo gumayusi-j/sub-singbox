@@ -276,11 +276,8 @@ function assembleRoute(preset, emitted, options) {
 // geosite rule-set is referenced, so the config carries no dangling remote
 // dependency beyond the optional CN geoip used by the GEOIP,CN rule.
 function buildDns(options) {
-    const proxyMode = options.mode === "proxy";
     const supplied = options.remoteDns;
-    const defaultAddress = proxyMode
-        ? "https://dns.alidns.com/dns-query"
-        : "tls://8.8.8.8";
+    const defaultAddress = "tls://8.8.8.8";
 
     let remote;
     if (isPlainObject(supplied)) {
@@ -303,7 +300,6 @@ function buildDns(options) {
     }
     // A bare-IP DoT endpoint cannot verify its certificate without an SNI.
     if (
-        !proxyMode &&
         remote.type === "tls" &&
         remote.server === "8.8.8.8" &&
         remote.tls === undefined
@@ -311,9 +307,11 @@ function buildDns(options) {
         remote.tls = { enabled: true, server_name: "dns.google" };
     }
 
-    const local = proxyMode
-        ? { type: "local", tag: "local" }
-        : { type: "udp", tag: "local", server: options.localDns || "223.5.5.5" };
+    const local = {
+        type: "udp",
+        tag: "local",
+        server: options.localDns || "223.5.5.5",
+    };
 
     const servers = [remote, local];
     // A remote resolver addressed by a hostname has to be resolvable before it
@@ -405,7 +403,7 @@ export function assembleAcl(parsed, options) {
 
     // Clash-style mode switching, applied before `extra` so a caller override
     // still wins outright.
-    if (options.mode !== "proxy" && options.clashModes !== false) {
+    if (options.clashModes !== false) {
         const localTag = localDnsTag(dns);
         const remoteDns = (dns.servers || []).find((s) => s && s.tag !== localTag);
         const autoGroup = groups.find((g) => g.type === "urltest");

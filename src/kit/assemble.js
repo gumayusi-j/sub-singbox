@@ -174,7 +174,6 @@ function migrateAndWarn(config, options) {
 // never gets created - and sing-box refuses to start on dangling references.
 // Mirroring Tower, fall back to a minimal direct profile instead.
 function directOnlyConfig(options) {
-    const proxyMode = options.mode === "proxy";
     const config = {
         log: options.log || defaultLog(options),
         dns: {
@@ -203,7 +202,7 @@ function directOnlyConfig(options) {
             default_domain_resolver: { server: "local" },
         },
     };
-    if (!proxyMode && config.experimental === undefined) {
+    if (config.experimental === undefined) {
         // No proxy exists to switch to, so no dashboard either.
         config.experimental = defaultExperimental({ clashApi: false });
     }
@@ -217,9 +216,6 @@ function directOnlyConfig(options) {
 // endpoints?, route }).
 export default function assemble(parsed, options) {
     options = options || {};
-    // "client" (default) emits the full tun + clash_api + CN-direct skeleton;
-    // "proxy" keeps the minimal local mixed-proxy config.
-    const proxyMode = options.mode === "proxy";
     let source;
     if (isPlainObject(parsed) && Array.isArray(parsed.outbounds)) {
         source = parsed;
@@ -270,23 +266,21 @@ export default function assemble(parsed, options) {
 
     if (endpoints.length > 0) config.endpoints = endpoints;
 
-    // Client profile ships the dashboard + HTTP client plumbing needed by the
-    // remote rule-sets and clash_api skeleton. options.extra can still
-    // override http_clients / experimental afterwards.
-    if (!proxyMode) {
-        if (config.http_clients === undefined) {
-            config.http_clients = defaultHttpClients(config.dns);
-        }
-        if (config.experimental === undefined) {
-            config.experimental = defaultExperimental(options);
-        }
+    // The dashboard + HTTP client plumbing needed by the remote rule-sets and
+    // clash_api skeleton. options.extra can still override http_clients /
+    // experimental afterwards.
+    if (config.http_clients === undefined) {
+        config.http_clients = defaultHttpClients(config.dns);
+    }
+    if (config.experimental === undefined) {
+        config.experimental = defaultExperimental(options);
     }
 
     // Clash-style mode switching. Applied before applyExtras so a caller that
     // passes `extra` still wins outright. A caller supplying their own `dns` or
     // `route` is replacing the skeleton the mode branches belong to, so leave
     // their document exactly as they wrote it.
-    if (!proxyMode && options.clashModes !== false && !options.dns && !options.route) {
+    if (options.clashModes !== false && !options.dns && !options.route) {
         const dnsServers = (config.dns && config.dns.servers) || [];
         const localTag = localDnsTag(config.dns);
         const remoteDns = dnsServers.find((s) => s && s.tag !== localTag);

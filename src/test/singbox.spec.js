@@ -197,17 +197,19 @@ describe("kit API", function () {
         expect(config.endpoints).to.equal(undefined);
     });
 
-    it("emits a minimal proxy profile when mode is 'proxy'", function () {
+    it("ignores a mode, keeping the one profile", function () {
         const parsed = fromNodes([
             { name: "s1", type: "ss", server: "1.2.3.4", port: 8388, cipher: "aes-128-gcm", password: "x" },
         ]);
+        // The kit used to grow a minimal local mixed proxy under this option.
+        // Tower has one shape, so the option is inert rather than absent - a
+        // caller still passing it must not get a config that cannot route.
         const config = assemble(parsed, { mode: "proxy" });
-        expect(config.inbounds[0].type).to.equal("mixed");
-        expect(config.http_clients).to.equal(undefined);
-        expect(config.experimental).to.equal(undefined);
-        expect(config.route.default_http_client).to.equal(undefined);
-        expect(config.route.rule_set).to.equal(undefined);
-        expect(config.dns.final).to.equal("remote");
+        expect(config.inbounds.map((i) => i.type)).to.deep.equal(["tun"]);
+        expect(config.http_clients).to.be.an("array");
+        expect(config.experimental.clash_api.default_mode).to.equal("规则判定");
+        expect(config.route.rule_set).to.be.an("array");
+        expect(config.dns.final).to.equal("google");
     });
 
     it("rejects legacy dns options that cannot be auto-migrated", function () {
@@ -467,14 +469,10 @@ describe("sing-box generator — Clash mode switching", function () {
         expect(clientConfig().experimental.clash_api.default_mode).to.equal("规则判定");
     });
 
-    it("can be switched off, and never runs in the proxy profile", function () {
+    it("can be switched off", function () {
         const off = clientConfig({ clashModes: false });
         expect(off.outbounds.some((o) => o.tag === "全局代理")).to.equal(false);
         expect(off.route.rules.some((r) => r.clash_mode)).to.equal(false);
-
-        const proxy = clientConfig({ mode: "proxy" });
-        expect(proxy.outbounds.some((o) => o.tag === "全局代理")).to.equal(false);
-        expect(proxy.route.rules.some((r) => r.clash_mode)).to.equal(false);
     });
 
     it("leaves a caller-supplied dns or route document alone", function () {

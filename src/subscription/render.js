@@ -69,20 +69,17 @@ export function selectSources(store, resolved, options) {
     return enabled.filter((s) => wanted.has(s.id));
 }
 
+// No `mode` is forwarded: leaving it unset is what selects the "client"
+// profile in kit/defaults.js, which is Tower's one and only run shape (TUN
+// tun-in, DNS skeleton, CN-direct). The same goes for the knobs that only mean
+// anything to the other profile (addMixed, inboundPort, tun).
 function normalizeOptions(options) {
     options = options || {};
     return {
-        mode:
-            options.mode === "client" || options.mode === "proxy"
-                ? options.mode
-                : undefined,
         out: options.out === "outbounds" ? "outbounds" : "config",
         aclPreset: findPreset(options.aclPreset) ? options.aclPreset : undefined,
         remoteDns: options.remoteDns || undefined,
         // Everything below is only ever read by assemble()/assembleAcl().
-        addMixed: options.addMixed === true,
-        inboundPort: Number.isInteger(options.inboundPort) ? options.inboundPort : undefined,
-        tun: options.tun === true ? true : undefined,
         final: options.final || undefined,
         proxyGroupTag: options.proxyGroupTag || undefined,
         addAutoGroup: options.addAutoGroup,

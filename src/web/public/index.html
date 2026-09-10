@@ -153,39 +153,6 @@
       <div class="muted" style="font-size:12px; margin-top:8px">
         规则文本随页面内置，无需机场提供规则链接；其中 <span class="mono">GEOIP,CN</span> 直连使用 sing-box 远程 geoip-cn 规则集。
       </div>
-    </div>
-
-    <div class="card">
-      <b>运行形态</b>
-      <label class="scene" data-shape="client">
-        <input type="radio" name="shape" value="client"><b>全功能客户端（TUN）</b>
-        <span>接管系统流量（TUN）+ DNS 骨架，适合手机 / 桌面全局。策略组可在面板（clash_api）里切换。</span>
-      </label>
-      <label class="scene" data-shape="proxy">
-        <input type="radio" name="shape" value="proxy"><b>本地代理（mixed）</b>
-        <span>仅监听 127.0.0.1 的 mixed 代理，由应用自行指向，最小侵入。</span>
-      </label>
-    </div>
-
-    <div class="card">
-      <details open id="adv">
-        <summary>高级参数</summary>
-        <div class="row" style="margin:10px 0 6px">
-          <label class="inline"><input type="checkbox" id="optMixed"> client 下另加 mixed 回退</label>
-          <label class="inline"><input type="checkbox" id="optUnsup"> 含官方版不支持的协议</label>
-        </div>
-        <div class="grid2">
-          <div class="fld"><label>入站端口（mixed）</label><input type="number" id="optPort" value="1080" min="1" max="65535"></div>
-          <div class="fld"><label>远程 DNS（留空 = client 用 tls://8.8.8.8，proxy 用 DoH）</label><input type="text" id="optDns" placeholder="tls://8.8.8.8"></div>
-        </div>
-        <div class="muted" style="font-size:12px; margin-top:6px">
-          抓取用的 User-Agent、超时与请求头现在按订阅源设置，见「订阅」页的编辑表单。
-        </div>
-        <div class="fld" style="margin-top:8px">
-          <label>附加规则（每行 <span class="mono">TYPE,CONTENT[,OUTBOUND]</span>，置于 ACL4SSR 规则之前、优先生效）</label>
-          <textarea id="optRules" style="min-height:70px"></textarea>
-        </div>
-      </details>
       <div class="muted" id="rulesSaveHint" style="font-size:12px; margin-top:8px"></div>
     </div>
   </section>
@@ -222,7 +189,7 @@
       <div class="muted" style="font-size:12px; margin-top:4px">
         把这个地址填进客户端（sing-box / Clash / Shadowrocket…）一次即可：之后你在「订阅」页点「刷新」，
         客户端再来拉取时拿到的就是最新节点。格式按客户端的 User-Agent 自动判断，同一个地址可以同时喂给
-        sing-box 和 Clash，不需要手动指定。配置（规则 / 运行形态 / 高级参数）取自「规则」页当前选定的内容。
+        sing-box 和 Clash，不需要手动指定。规则方案取自「规则」页当前选定的内容。
       </div>
       <div class="row" style="margin-top:8px">
         <input type="text" id="exportSubUrl" readonly style="flex:1; min-width:240px">
@@ -239,7 +206,7 @@
         <ul style="margin:8px 0">
           <li><b>GUI 客户端</b>：把下载的 <span class="mono">singbox-config.json</span> 作为配置文件导入。</li>
           <li><b>命令行</b>：保存为 <span class="mono">config.json</span> 后运行 <span class="mono">sing-box run -c config.json</span>。</li>
-          <li>“全功能客户端”形态默认开 TUN 接管，需给 sing-box 相应的系统权限；“本地代理”形态则把应用指向上面的 <span class="mono">127.0.0.1</span> 端口。</li>
+          <li>配置按客户端形态生成：开 TUN 接管并带 DNS 骨架，需给 sing-box 相应的系统权限（与 Tower 生成的一致）。</li>
           <li>ACL4SSR 会生成 <span class="mono">🚀 节点选择 / ♻️ 自动选择 / 各地区组</span> 等策略组，可在带 clash_api 的客户端面板里手动切换。</li>
           <li>国内 IP 直连依赖 sing-box 启动时拉取 <span class="mono">geoip-cn</span> 规则集；不联网的部署可改用「不使用（默认分域模板）」。</li>
         </ul>
@@ -259,13 +226,12 @@
   // is the apiToken (a per-browser secret) and the three legacy keys, read once
   // to migrate an install that predates the server-side store.
   var STORE = {
-    shape: "sbx:shape",   // legacy: the rules choice now lives in settings
-    acl: "sbx:acl",       // legacy: same
+    shape: "sbx:shape",   // legacy: the run shape is gone; only purged now
+    acl: "sbx:acl",       // legacy: the rules choice now lives in settings
     apiToken: "sbx:apiToken",
     legacySubs: "sbx:subs",
     legacyEnabled: "sbx:enabledIds"
   };
-  var SHAPE_NAME = { client: "全功能客户端", proxy: "本地代理" };
   var ACL_NAME = {
     "acl4ssr-default": "ACL4SSR 默认",
     "acl4ssr-full": "ACL4SSR 全分组",
@@ -289,8 +255,9 @@
   // Server mirror: sources, the target list and the global subscription URL.
   var state = { sources: [], targets: [], globalSubUrl: "", dataPath: "", settings: {} };
   // Filled from the server's saved settings once loadSubs() resolves. These are
-  // the same values the subscription address is rendered from.
-  var shape = "client";
+  // the same values the subscription address is rendered from. The rule preset
+  // is the only thing the rules page chooses; the run shape (TUN tun-in, DNS
+  // skeleton, CN-direct) is Tower's default and not user-selectable.
   var acl = "none";
   var settingsReady = false;   // true once the saved settings have been applied
   var pendingSave = false;     // a change made before that first apply
@@ -490,13 +457,7 @@
   // .value fires no events, so this cannot echo back out as a save.
   function applyOptionsToUI(opts) {
     opts = opts || {};
-    shape = SHAPE_NAME[opts.mode] ? opts.mode : "client";
     acl = ACL_NAME[opts.aclPreset] ? opts.aclPreset : "none";
-    $("optMixed").checked = opts.addMixed === true;
-    $("optUnsup").checked = opts.includeUnsupportedProxy === true;
-    $("optPort").value = Number.isInteger(opts.inboundPort) ? opts.inboundPort : 1080;
-    $("optDns").value = typeof opts.remoteDns === "string" ? opts.remoteDns : "";
-    $("optRules").value = Array.isArray(opts.rules) ? opts.rules.join("\n") : "";
     renderRules();
     updateExport();
   }
@@ -550,14 +511,9 @@
     if (pendingSave || saveTimer) return; // the user already changed something
     var patch = {};
     try {
-      // Read the raw entries: load() hands back a default for a browser that
-      // never set them, which would look like a deliberate choice.
-      var rawShape = localStorage.getItem(STORE.shape);
+      // Read the raw entry: load() hands back a default for a browser that
+      // never set it, which would look like a deliberate choice.
       var rawAcl = localStorage.getItem(STORE.acl);
-      if (rawShape !== null) {
-        var v = JSON.parse(rawShape);
-        if (SHAPE_NAME[v]) patch.mode = v;
-      }
       if (rawAcl !== null) {
         var a = JSON.parse(rawAcl);
         if (ACL_NAME[a] && a !== "none") patch.aclPreset = a;
@@ -566,7 +522,9 @@
       forgetLegacyPrefs();
       return;
     }
-    if (patch.mode === undefined && patch.aclPreset === undefined) {
+    // A pre-Tower-fidelity browser may also carry a run shape. It has no
+    // successor, so drop it rather than migrating it.
+    if (patch.aclPreset === undefined) {
       forgetLegacyPrefs();
       return;
     }
@@ -818,8 +776,7 @@
     updateExport();
   });
 
-  /* ---------------- ② rules / shape ---------------- */
-  function shapeName() { return SHAPE_NAME[shape] || shape; }
+  /* ---------------- ② rules ---------------- */
   function aclName() { return ACL_NAME[acl] || acl; }
   function markScene(name, value) {
     [].forEach.call(document.querySelectorAll('input[name="' + name + '"]'), function (r) {
@@ -830,7 +787,6 @@
   }
   function renderRules() {
     markScene("acl", acl);
-    markScene("shape", shape);
   }
   function invalidate() {
     // Any rule change makes the last generated config stale; hide it so the
@@ -852,26 +808,12 @@
     });
   }
   bindScene("acl", function (v) { acl = v; });
-  bindScene("shape", function (v) { shape = v; });
-  [].forEach.call(document.querySelectorAll("#adv input, #adv textarea, #adv select"), function (f) {
-    f.addEventListener("input", function () { invalidate(); persistAll(); });
-    f.addEventListener("change", function () { invalidate(); persistAll(); });
-  });
 
   /* ---------------- options collection ---------------- */
-  // Always carries every key: the server merges shallowly, so a cleared field
-  // has to be sent as an explicit null for the stored value to go away.
+  // The rule preset is the whole of what this page chooses; the server's
+  // whitelist drops anything else, so there is nothing further to send.
   function collectOptions() {
-    var port = parseInt($("optPort").value, 10);
-    return {
-      mode: shape,
-      aclPreset: acl === "none" ? null : acl,
-      addMixed: $("optMixed").checked,
-      includeUnsupportedProxy: $("optUnsup").checked,
-      inboundPort: Number.isInteger(port) && port > 0 ? port : null,
-      remoteDns: $("optDns").value.trim() || null,
-      rules: $("optRules").value.trim() || null
-    };
+    return { aclPreset: acl === "none" ? null : acl };
   }
 
   /* ---------------- ③ export ---------------- */
@@ -884,7 +826,7 @@
     } else {
       summary.textContent =
         "将合并 " + es.length + " 个订阅源（" + es.map(function (s) { return s.name; }).join("、") +
-        "），按「" + aclName() + " · " + shapeName() + "」生成完整 sing-box 配置。";
+        "），按「" + aclName() + "」生成完整 sing-box 配置。";
       btn.disabled = false;
     }
   }
