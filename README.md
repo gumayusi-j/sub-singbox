@@ -4,7 +4,7 @@
 
 链路：`导入(HTTP 订阅 / 粘贴文本 / YAML·JSON 节点列表)` → `解析+隐式归一化修复` → `sing-box outbounds/endpoints` → `拼装完整 sing-box 配置`。
 
-> 说明：`src/core/proxy-utils`、`src/utils/*`、`src/constants.js`、`src/vendor/md5.js` 改编自 [Sub-Store](https://github.com/sub-store-org/Sub-Store)（AGPL-3.0）。本工程不提供 Sub-Store 的 Web 服务/数据库/脚本算子链，只保留 parse/produce 内核。
+> 说明：`src/core/proxy-utils`、`src/utils/*`、`src/constants.js`、`src/vendor/md5.js` 基于 [Sub-Store](https://github.com/sub-store-org/Sub-Store)（AGPL-3.0）。本工程不提供 Sub-Store 的 Web 服务/数据库/脚本算子链，只保留 parse/produce 内核。
 
 ## 快速开始
 
