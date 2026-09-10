@@ -1,4 +1,6 @@
 import http from "http";
+import net from "net";
+import os from "os";
 import { loadConfig, resolveDataPath } from "./config";
 import { readStatic } from "./static";
 import { fromText, fromUrl } from "../kit/convert";
@@ -63,6 +65,61 @@ function readBody(req, limit) {
 function asNumber(value, fallback) {
     const n = Number(value);
     return Number.isInteger(n) ? n : fallback;
+}
+
+// TCP ping: connect to host:port and measure the round-trip time.
+// Returns { host, port, delay } on success, or { host, port, delay: -1, error } on failure.
+function tcpPing(host, port, timeout) {
+    return new Promise((resolve) => {
+        const start = Date.now();
+        const socket = new net.Socket();
+        let settled = false;
+        const done = (delay, error) => {
+            if (settled) return;
+            settled = true;
+            try { socket.destroy(); } catch (_e) { /* ignore */ }
+            resolve({ host, port, delay, error: error || undefined });
+        };
+        socket.setTimeout(timeout || 5000);
+        socket.once("connect", () => done(Date.now() - start));
+        socket.once("timeout", () => done(-1, "timeout"));
+        socket.once("error", (e) => done(-1, e && e.message ? e.message : "error"));
+        try {
+            socket.connect(port, host);
+        } catch (e) {
+            done(-1, e && e.message ? e.message : "connect failed");
+        }
+    });
+}
+
+// Run TCP pings with concurrency control (Promise pool).
+async function pingMany(targets, timeout, concurrency) {
+    const limit = Math.max(1, Math.min(concurrency || 32, 128));
+    const results = new Array(targets.length);
+    let index = 0;
+    async function worker() {
+        while (index < targets.length) {
+            const i = index++;
+            const t = targets[i];
+            results[i] = await tcpPing(t.host, Number(t.port) || 443, timeout);
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, targets.length) }, () => worker()));
+    return results;
+}
+
+// Detect LAN IP addresses (non-internal IPv4).
+function getLanIps() {
+    const interfaces = os.networkInterfaces();
+    const ips = [];
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name] || []) {
+            if (iface.family === "IPv4" && !iface.internal) {
+                ips.push({ name, address: iface.address });
+            }
+        }
+    }
+    return ips;
 }
 
 function collectNodes(parsed) {
@@ -347,6 +404,32 @@ export function createServer(config, deps) {
                         ? await inspectRequest(body, config)
                         : await convertRequest(body, config);
                 send(res, result.status, result.payload);
+                return;
+            }
+
+            // TCP ping: measure latency to proxy servers.
+            if (req.method === "POST" && pathname === "/api/ping") {
+                const body = await readJsonBody();
+                if (body === null || !Array.isArray(body.targets)) {
+                    send(res, 400, { ok: false, error: "invalid JSON body; expects { targets: [{host, port}] }" });
+                    return;
+                }
+                const timeout = asNumber(body.timeout, 5000);
+                const concurrency = asNumber(body.concurrency, 32);
+                const results = await pingMany(body.targets, timeout, concurrency);
+                send(res, 200, { ok: true, data: { results } });
+                return;
+            }
+
+            // LAN info: returns local network IPs for sharing.
+            if (req.method === "GET" && pathname === "/api/lan") {
+                const lanIps = getLanIps();
+                const port = config.listen.port;
+                const urls = lanIps.map((iface) => ({
+                    name: iface.name,
+                    url: "http://" + iface.address + ":" + port,
+                }));
+                send(res, 200, { ok: true, data: { lanIps: urls } });
                 return;
             }
 

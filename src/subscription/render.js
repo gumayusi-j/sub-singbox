@@ -147,7 +147,26 @@ export function renderSubscription(store, resolved, options) {
     // Each body is parsed twice on the sing-box path (once into nodes, once
     // into outbounds); parseNodes is the expensive half and is memoised by the
     // caller's snapshot, so keep one list and reuse it.
-    const parsedNodes = withSnapshots.map((entry) => parseNodes(entry.text));
+    const parsedNodes = withSnapshots.map((entry) => {
+        let nodes = parseNodes(entry.text);
+        // Filter out excluded nodes for this source
+        const excluded = entry.source.excludedNodes;
+        if (Array.isArray(excluded) && excluded.length > 0) {
+            const excludedSet = new Set(excluded);
+            nodes = nodes.filter((node) => !excludedSet.has(node && node.name));
+        }
+        // Apply custom node order if set
+        const order = entry.source.nodeOrder;
+        if (Array.isArray(order) && order.length > 0) {
+            const orderIndex = new Map(order.map((name, i) => [name, i]));
+            nodes.sort((a, b) => {
+                const ai = orderIndex.has(a && a.name) ? orderIndex.get(a.name) : Infinity;
+                const bi = orderIndex.has(b && b.name) ? orderIndex.get(b.name) : Infinity;
+                return ai - bi;
+            });
+        }
+        return nodes;
+    });
     const nodeCount = parsedNodes.reduce((sum, list) => sum + list.length, 0);
     if (nodeCount === 0) {
         return errorResponse(409, "stored snapshot contains no supported nodes");

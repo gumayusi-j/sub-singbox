@@ -106,6 +106,8 @@ function normalizeSource(raw) {
         nodeCount: Number.isInteger(raw.nodeCount) ? raw.nodeCount : 0,
         protocols: isPlainObject(raw.protocols) ? raw.protocols : {},
         usage: isPlainObject(raw.usage) ? raw.usage : null,
+        excludedNodes: Array.isArray(raw.excludedNodes) ? raw.excludedNodes.filter((n) => typeof n === "string") : [],
+        nodeOrder: Array.isArray(raw.nodeOrder) ? raw.nodeOrder.filter((n) => typeof n === "string") : [],
     };
 }
 

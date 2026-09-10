@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>singbox-kit · 订阅 → 选择规则 → 导出 sing-box</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -71,6 +72,34 @@
   th { color: #9fb3c5; font-weight: 600; }
   .kind-outbound { background: #183a56; color: #7ec3ff; }
   .kind-endpoint { background: #3b2f18; color: #ffd479; }
+
+  /* latency coloring */
+  .latency { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .latency-fast { color: #6fcf97; }   /* <200ms */
+  .latency-mid { color: #ffd479; }    /* 200-500ms */
+  .latency-slow { color: #ef7d7d; }   /* >500ms */
+  .latency-timeout { color: #7c8a99; } /* timeout/error */
+
+  /* drag and drop */
+  .node-row { cursor: grab; }
+  .node-row:active { cursor: grabbing; }
+  .node-row.drag-over { border-top: 2px solid #2f7de1; }
+  .node-row.dragging { opacity: .4; }
+
+  /* world map */
+  .map-container { position: relative; margin-top: 12px; background: #0d141b; border: 1px solid #22303e; border-radius: 8px; overflow: hidden; }
+  .map-container canvas { display: block; width: 100%; cursor: grab; }
+  .map-container canvas:active { cursor: grabbing; }
+  .map-legend { position: absolute; bottom: 8px; right: 8px; background: rgba(23,31,41,.85); border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #9fb3c5; }
+  .map-legend span { margin-left: 8px; }
+  .map-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 2px; vertical-align: -1px; }
+
+  /* QR modal */
+  .qr-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }
+  .qr-overlay.show { display:flex; }
+  .qr-modal { background:#171f29; border:1px solid #26313d; border-radius:12px; padding:20px; text-align:center; max-width:340px; }
+  .qr-modal canvas { margin:12px auto; border-radius:8px; }
+  .qr-modal .qr-url { font-size:11px; color:#7c8a99; word-break:break-all; margin-top:8px; max-height:60px; overflow:auto; }
 </style>
 </head>
 <body>
@@ -171,13 +200,28 @@
       <div id="warnBox"></div>
       <div class="tabs" id="outtabs">
         <button data-p="node" class="active">节点表格</button>
+        <button data-p="map">节点地图</button>
         <button data-p="cfg">完整配置 JSON</button>
       </div>
       <div class="panel active" id="p-node"></div>
+      <div class="panel" id="p-map">
+        <div class="map-container" id="mapContainer" style="height:320px">
+          <canvas id="worldMap" width="800" height="400"></canvas>
+          <div class="map-legend">
+            <span><span class="dot" style="background:#6fcf97"></span>快(&lt;200ms)</span>
+            <span><span class="dot" style="background:#ffd479"></span>中(200-500ms)</span>
+            <span><span class="dot" style="background:#ef7d7d"></span>慢(&gt;500ms)</span>
+            <span><span class="dot" style="background:#7c8a99"></span>超时</span>
+            <span><span class="dot" style="background:#2f7de1"></span>未测试</span>
+          </div>
+        </div>
+      </div>
       <div class="panel" id="p-cfg"><pre id="cfgText"></pre></div>
       <div class="row" style="margin-top:12px">
         <button class="secondary small" id="btnCopy">复制完整配置</button>
         <button class="secondary small" id="btnDownload">下载 singbox-config.json</button>
+        <button class="secondary small" id="btnPing">延迟测试</button>
+        <span id="pingStatus" class="muted" style="font-size:12px"></span>
       </div>
     </div>
 
@@ -206,9 +250,21 @@
       <div class="row" style="margin-top:8px">
         <input type="text" id="exportSubUrl" readonly style="flex:1; min-width:240px">
         <button class="secondary small" id="btnCopyExportSubUrl">复制</button>
+        <button class="secondary small" id="btnQrExportSubUrl">QR 码</button>
         <button class="secondary small" id="btnRotateGlobal">轮换密钥</button>
       </div>
       <div class="muted" id="exportSubHint" style="font-size:12px; margin-top:6px"></div>
+    </div>
+
+    <div class="card" id="lanCard" style="display:none">
+      <div class="row" style="justify-content:space-between">
+        <b>局域网分享</b>
+        <span class="tag">同一 Wi-Fi 下的设备可导入</span>
+      </div>
+      <div class="muted" style="font-size:12px; margin-top:4px">
+        以下地址可在局域网内其他设备上使用，导入对应客户端即可同步订阅。
+      </div>
+      <div id="lanUrls" style="margin-top:8px"></div>
     </div>
 
     <details>
@@ -233,6 +289,16 @@
       </div>
     </details>
   </section>
+</div>
+
+<!-- QR Code Modal -->
+<div class="qr-overlay" id="qrOverlay">
+  <div class="qr-modal">
+    <b>扫码导入</b>
+    <canvas id="qrCanvas"></canvas>
+    <div class="qr-url" id="qrUrl"></div>
+    <button class="secondary small" id="qrClose" style="margin-top:10px">关闭</button>
+  </div>
 </div>
 
 <script>
@@ -429,7 +495,8 @@
           '<div class="src-preview' + (st.cls === "err" ? " err" : "") + '">' + esc(st.text) + "</div>" +
           (usage ? '<div class="src-preview muted">' + esc(usage) + "</div>" : "") +
           '<div class="src-preview muted"><span class="mono">' + esc(s.subUrl || "") + "</span>" +
-            ' <button class="secondary small" data-action="copysub">复制此源地址</button></div>' +
+            ' <button class="secondary small" data-action="copysub">复制此源地址</button>' +
+            ' <button class="secondary small" data-action="qrsub">QR 码</button></div>' +
           '<div class="src-nodes muted"></div>' +
         "</div>";
     });
@@ -455,6 +522,27 @@
   }
 
   var AUTO_TARGET_LABEL = "自动识别客户端（按 User-Agent）";
+
+  // Client protocol support matrix (referenced from Tower's ClientDescriptor).
+  // Used to filter unsupported protocols when exporting.
+  var CLIENT_PROTOCOLS = {
+    "sing-box": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls","snell","socks","http"],
+    "clash": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
+    "surge": ["shadowsocks","vmess","vless","trojan","tuic","wireguard","snell","socks","http"],
+    "loon": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard","socks","http"],
+    "quantumultx": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","http"],
+    "shadowrocket": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
+    "stash": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
+    "surfboard": ["shadowsocks","vmess","vless","trojan","tuic","wireguard","socks","http"],
+    "v2ray": ["shadowsocks","vmess","vless","trojan"],
+    "egern": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard"],
+    "hiddify": ["shadowsocks","vmess","vless","trojan","hysteria2","tuic","wireguard"],
+    "karing": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"],
+    "uri": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"]
+  };
+  function getClientProtocols(targetId) {
+    return CLIENT_PROTOCOLS[targetId] || null;
+  }
 
   // Rebuilt on every loadSubs(), so the selection has to be restored each time -
   // and dropped when the server no longer offers it (allowedTargets can narrow
@@ -492,6 +580,31 @@
     if ($("dataPathHint")) $("dataPathHint").textContent = path;
   }
 
+  async function loadLanInfo() {
+    try {
+      var data = await api("GET", "/api/lan");
+      var lanIps = (data && data.lanIps) || [];
+      var card = $("lanCard");
+      var urlsDiv = $("lanUrls");
+      if (!card || !urlsDiv) return;
+      if (lanIps.length === 0) { card.style.display = "none"; return; }
+      card.style.display = "block";
+      var query = exportTarget ? "?target=" + encodeURIComponent(exportTarget) : "";
+      var html = "";
+      lanIps.forEach(function (iface) {
+        var url = iface.url + state.globalSubUrl + query;
+        html += '<div class="row" style="margin-top:6px">' +
+          '<span class="mono" style="flex:1; font-size:12px">' + esc(iface.name) + ": " + esc(url) + '</span>' +
+          '<button class="secondary small" onclick="navigator.clipboard.writeText(\'' + esc(url) + '\')">复制</button>' +
+          '<button class="secondary small" onclick="showQr(\'' + esc(url) + '\')">QR 码</button>' +
+          '</div>';
+      });
+      urlsDiv.innerHTML = html;
+    } catch (e) {
+      // LAN detection failed silently; not critical
+    }
+  }
+
   async function loadSubs() {
     var data = await api("GET", "/api/subscriptions");
     state.sources = data.sources || [];
@@ -515,6 +628,7 @@
     renderExportSubCard();
     renderSubList();
     updateExport();
+    loadLanInfo();
   }
 
   // Push the server's saved settings into the rules page. Assigning .checked /
@@ -727,10 +841,32 @@
       // freely and cannot fail because a panel happens to be down.
       var data = await api("GET", "/api/subscriptions/" + encodeURIComponent(id) + "/preview");
       if (!host) return;
+      var s = subById(id);
+      var excluded = (s && s.excludedNodes) || [];
+      var excludedSet = {};
+      excluded.forEach(function (n) { excludedSet[n] = true; });
+      var nodes = data.nodes || [];
       var proto = Object.keys(data.protocols || {}).sort().map(function (p) {
         return p + " ×" + data.protocols[p];
       });
-      host.textContent = data.nodeCount + " 个节点" + (proto.length ? " · " + proto.join(" · ") : "");
+      var summary = data.nodeCount + " 个节点" + (proto.length ? " · " + proto.join(" · ") : "");
+      var html = '<div style="margin-top:6px">' + esc(summary) + '</div>';
+      if (nodes.length > 0) {
+        html += '<div style="margin-top:6px; max-height:300px; overflow:auto">' +
+          '<table><thead><tr><th style="width:30px"><input type="checkbox" class="node-check-all" data-src="' + esc(id) + '" checked></th>' +
+          '<th>名称</th><th>类型</th><th>服务器</th></tr></thead><tbody class="node-tbody" data-src="' + esc(id) + '">';
+        nodes.forEach(function (n, idx) {
+          var checked = !excludedSet[n.tag];
+          html += '<tr class="node-row" draggable="true" data-idx="' + idx + '" data-name="' + esc(n.tag) + '">' +
+            '<td><input type="checkbox" class="node-check" data-src="' + esc(id) + '" data-name="' + esc(n.tag) + '"' + (checked ? ' checked' : '') + '></td>' +
+            '<td>' + esc(n.tag) + '</td><td class="mono">' + esc(n.type) + '</td>' +
+            '<td class="mono">' + esc(n.server || '-') + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+        html += '<div class="row" style="margin-top:6px"><button class="secondary small" data-action="save-nodes" data-src="' + esc(id) + '">保存节点选择与排序</button>' +
+          '<span class="muted node-save-hint" style="font-size:12px">取消勾选的节点将不会出现在导出配置中。拖拽行可调整顺序。</span></div>';
+      }
+      host.innerHTML = html;
       host.className = "src-nodes";
     } catch (e) {
       if (!host) return;
@@ -784,12 +920,40 @@
     }
   }
 
+  /* QR code modal */
+  function showQr(text) {
+    if (!text) return;
+    $("qrUrl").textContent = text;
+    $("qrOverlay").classList.add("show");
+    var canvas = $("qrCanvas");
+    if (typeof QRCode !== "undefined" && QRCode.toCanvas) {
+      QRCode.toCanvas(canvas, text, { width: 256, margin: 2, color: { dark: "#d6dee6", light: "#171f29" } }, function (err) {
+        if (err) {
+          var ctx = canvas.getContext("2d");
+          canvas.width = 256; canvas.height = 256;
+          ctx.fillStyle = "#171f29"; ctx.fillRect(0, 0, 256, 256);
+          ctx.fillStyle = "#ef7d7d"; ctx.font = "14px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("QR 码生成失败", 128, 128);
+        }
+      });
+    }
+  }
+  function hideQr() { $("qrOverlay").classList.remove("show"); }
+  $("qrClose").addEventListener("click", hideQr);
+  $("qrOverlay").addEventListener("click", function (e) {
+    if (e.target === $("qrOverlay")) hideQr();
+  });
+
   $("btnAddShow").addEventListener("click", openAddForm);
   $("btnAddCancel").addEventListener("click", closeAddForm);
   $("btnSrcSave").addEventListener("click", saveSource);
   $("btnRefreshAll").addEventListener("click", refreshAll);
   $("btnCopyExportSubUrl").addEventListener("click", function () {
     copySubUrl($("exportSubUrl").value, $("exportSubHint"));
+  });
+  $("btnQrExportSubUrl").addEventListener("click", function () {
+    showQr($("exportSubUrl").value);
   });
   $("btnRotateGlobal").addEventListener("click", async function () {
     if (!window.confirm("轮换密钥会让已经填进客户端的旧地址立刻失效，需要重新复制。继续？")) return;
@@ -854,7 +1018,23 @@
   $("subList").addEventListener("click", function (e) {
     var t = e.target;
     var act = t.getAttribute && t.getAttribute("data-action");
-    if (!act) return;
+    if (!act) {
+      // Handle check-all checkbox
+      if (t.classList && t.classList.contains("node-check-all")) {
+        var srcId = t.getAttribute("data-src");
+        var checked = t.checked;
+        var host = nodeHost(srcId);
+        if (host) {
+          [].forEach.call(host.querySelectorAll(".node-check"), function (cb) {
+            cb.checked = checked;
+          });
+        }
+        return;
+      }
+      // Handle save-nodes button
+      if (t.classList && t.classList.contains("node-check")) return; // individual checkbox, ignore click
+      return;
+    }
     var item = t.closest ? t.closest(".src") : null;
     var id = item ? item.getAttribute("data-id") : null;
     if (id == null) return;
@@ -866,7 +1046,106 @@
       var s = subById(id);
       if (s) copySubUrl(location.origin + s.subUrl);
     }
+    else if (act === "qrsub") {
+      var s2 = subById(id);
+      if (s2) showQr(location.origin + s2.subUrl);
+    }
+    else if (act === "save-nodes") saveNodeSelection(id);
   });
+  // Handle individual checkbox change for check-all sync
+  $("subList").addEventListener("change", function (e) {
+    var cb = e.target;
+    if (!cb.classList.contains("node-check")) return;
+    var srcId = cb.getAttribute("data-src");
+    var host = nodeHost(srcId);
+    if (!host) return;
+    var all = host.querySelectorAll(".node-check");
+    var checkedCount = 0;
+    [].forEach.call(all, function (c) { if (c.checked) checkedCount++; });
+    var checkAll = host.querySelector(".node-check-all");
+    if (checkAll) checkAll.checked = checkedCount === all.length;
+  });
+
+  // Drag-and-drop for node reordering
+  var dragSrcRow = null;
+  $("subList").addEventListener("dragstart", function (e) {
+    var row = e.target.closest ? e.target.closest(".node-row") : null;
+    if (!row) return;
+    dragSrcRow = row;
+    row.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", row.getAttribute("data-idx"));
+  });
+  $("subList").addEventListener("dragend", function (e) {
+    var row = e.target.closest ? e.target.closest(".node-row") : null;
+    if (row) row.classList.remove("dragging");
+    dragSrcRow = null;
+    // Clean up all drag-over styles
+    [].forEach.call(document.querySelectorAll(".node-row.drag-over"), function (r) {
+      r.classList.remove("drag-over");
+    });
+  });
+  $("subList").addEventListener("dragover", function (e) {
+    var row = e.target.closest ? e.target.closest(".node-row") : null;
+    if (!row || row === dragSrcRow) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  });
+  $("subList").addEventListener("dragenter", function (e) {
+    var row = e.target.closest ? e.target.closest(".node-row") : null;
+    if (!row || row === dragSrcRow) return;
+    row.classList.add("drag-over");
+  });
+  $("subList").addEventListener("dragleave", function (e) {
+    var row = e.target.closest ? e.target.closest(".node-row") : null;
+    if (row) row.classList.remove("drag-over");
+  });
+  $("subList").addEventListener("drop", function (e) {
+    e.preventDefault();
+    var targetRow = e.target.closest ? e.target.closest(".node-row") : null;
+    if (!targetRow || !dragSrcRow || targetRow === dragSrcRow) return;
+    targetRow.classList.remove("drag-over");
+    var tbody = targetRow.closest("tbody");
+    if (!tbody) return;
+    var rows = Array.from(tbody.querySelectorAll(".node-row"));
+    var fromIdx = rows.indexOf(dragSrcRow);
+    var toIdx = rows.indexOf(targetRow);
+    if (fromIdx < 0 || toIdx < 0) return;
+    // Reorder DOM
+    if (fromIdx < toIdx) {
+      tbody.insertBefore(dragSrcRow, targetRow.nextSibling);
+    } else {
+      tbody.insertBefore(dragSrcRow, targetRow);
+    }
+  });
+  async function saveNodeSelection(id) {
+    var host = nodeHost(id);
+    if (!host) return;
+    var excluded = [];
+    var order = [];
+    var tbody = host.querySelector(".node-tbody");
+    if (tbody) {
+      [].forEach.call(tbody.querySelectorAll(".node-row"), function (row) {
+        var name = row.getAttribute("data-name");
+        order.push(name);
+        var cb = row.querySelector(".node-check");
+        if (cb && !cb.checked) excluded.push(name);
+      });
+    } else {
+      [].forEach.call(host.querySelectorAll(".node-check"), function (cb) {
+        if (!cb.checked) excluded.push(cb.getAttribute("data-name"));
+      });
+    }
+    var hint = host.querySelector(".node-save-hint");
+    try {
+      await api("PATCH", "/api/subscriptions/" + encodeURIComponent(id), { excludedNodes: excluded, nodeOrder: order });
+      var s = subById(id);
+      if (s) { s.excludedNodes = excluded; s.nodeOrder = order; }
+      if (hint) hint.textContent = "已保存，排除 " + excluded.length + " 个节点，自定义排序 " + order.length + " 个。";
+    } catch (e) {
+      if (hint) hint.textContent = "保存失败：" + (e && e.message ? e.message : e);
+    }
+  }
   $("subList").addEventListener("change", async function (e) {
     var cb = e.target;
     if (!cb.classList.contains("src-en")) return;
@@ -941,19 +1220,289 @@
       btn.disabled = false;
     }
   }
+  // Latency results: { "server:port": delay_ms }. -1 = timeout/error.
+  var pingResults = {};
+  var pingRunning = false;
+
+  function latencyClass(delay) {
+    if (delay == null || delay < 0) return "latency-timeout";
+    if (delay < 200) return "latency-fast";
+    if (delay < 500) return "latency-mid";
+    return "latency-slow";
+  }
+  function latencyText(delay) {
+    if (delay == null) return "-";
+    if (delay < 0) return "超时";
+    return delay + " ms";
+  }
+  function latencyKey(server, port) { return (server || "") + ":" + (port || ""); }
+
   function renderTable(nodes) {
-    var html = "<table><thead><tr><th>类型</th><th>标签</th><th>服务器</th><th>端口</th><th>类别</th></tr></thead><tbody>";
+    var hasPing = Object.keys(pingResults).length > 0;
+    var cols = hasPing ? 6 : 5;
+    var html = "<table><thead><tr><th>类型</th><th>标签</th><th>服务器</th><th>端口</th><th>类别</th>";
+    if (hasPing) html += "<th>延迟</th>";
+    html += "</tr></thead><tbody>";
     if (!nodes || nodes.length === 0) {
-      html += '<tr><td colspan="5">无节点</td></tr>';
+      html += '<tr><td colspan="' + cols + '">无节点</td></tr>';
     } else {
       nodes.forEach(function (n) {
+        var key = latencyKey(n.server, n.port);
+        var delay = pingResults[key];
         html += "<tr><td class=\"mono\">" + esc(n.type) + "</td><td>" + esc(n.tag) + "</td>" +
           "<td class=\"mono\">" + esc(n.server || "-") + "</td><td class=\"mono\">" + esc(n.port || "-") + "</td>" +
-          '<td><span class="tag kind-' + (n.kind === "endpoint" ? "endpoint" : "outbound") + '">' + esc(n.kind) + "</span></td></tr>";
+          '<td><span class="tag kind-' + (n.kind === "endpoint" ? "endpoint" : "outbound") + '">' + esc(n.kind) + "</span></td>";
+        if (hasPing) {
+          html += '<td class="latency ' + latencyClass(delay) + '">' + latencyText(delay) + '</td>';
+        }
+        html += "</tr>";
       });
     }
     html += "</tbody></table>";
     return html;
+  }
+
+  /* World Map - simplified Canvas-based dot map */
+  // Country detection from node names (Chinese + English)
+  var COUNTRY_MAP = {
+    "香港": { code: "HK", lat: 22.3, lng: 114.2 },
+    "台湾": { code: "TW", lat: 23.7, lng: 121.0 },
+    "日本": { code: "JP", lat: 36.2, lng: 138.3 },
+    "韩国": { code: "KR", lat: 35.9, lng: 127.8 },
+    "新加坡": { code: "SG", lat: 1.35, lng: 103.8 },
+    "美国": { code: "US", lat: 37.1, lng: -95.7 },
+    "美西": { code: "US", lat: 36.8, lng: -119.4 },
+    "美东": { code: "US", lat: 40.7, lng: -74.0 },
+    "洛杉矶": { code: "US", lat: 34.1, lng: -118.2 },
+    "硅谷": { code: "US", lat: 37.4, lng: -122.1 },
+    "圣何塞": { code: "US", lat: 37.3, lng: -121.9 },
+    "英国": { code: "GB", lat: 55.4, lng: -3.4 },
+    "伦敦": { code: "GB", lat: 51.5, lng: -0.1 },
+    "德国": { code: "DE", lat: 51.2, lng: 10.5 },
+    "法国": { code: "FR", lat: 46.2, lng: 2.2 },
+    "巴黎": { code: "FR", lat: 48.9, lng: 2.3 },
+    "加拿大": { code: "CA", lat: 56.1, lng: -106.3 },
+    "澳大利亚": { code: "AU", lat: -25.3, lng: 133.8 },
+    "澳洲": { code: "AU", lat: -25.3, lng: 133.8 },
+    "悉尼": { code: "AU", lat: -33.9, lng: 151.2 },
+    "印度": { code: "IN", lat: 20.6, lng: 79.0 },
+    "巴西": { code: "BR", lat: -14.2, lng: -51.9 },
+    "俄罗斯": { code: "RU", lat: 61.5, lng: 105.3 },
+    "荷兰": { code: "NL", lat: 52.1, lng: 5.3 },
+    "土耳其": { code: "TR", lat: 38.9, lng: 35.2 },
+    "泰国": { code: "TH", lat: 15.9, lng: 100.9 },
+    "越南": { code: "VN", lat: 14.1, lng: 108.3 },
+    "马来西亚": { code: "MY", lat: 4.2, lng: 101.9 },
+    "印尼": { code: "ID", lat: -0.8, lng: 113.9 },
+    "菲律宾": { code: "PH", lat: 12.9, lng: 121.8 },
+    "澳门": { code: "MO", lat: 22.2, lng: 113.5 },
+    "阿根廷": { code: "AR", lat: -38.4, lng: -63.6 },
+    "智利": { code: "CL", lat: -35.7, lng: -71.5 },
+    "墨西哥": { code: "MX", lat: 23.6, lng: -102.6 },
+    "以色列": { code: "IL", lat: 31.0, lng: 34.9 },
+    "迪拜": { code: "AE", lat: 23.4, lng: 53.8 },
+    "阿联酋": { code: "AE", lat: 23.4, lng: 53.8 },
+    "瑞士": { code: "CH", lat: 46.8, lng: 8.2 },
+    "瑞典": { code: "SE", lat: 60.1, lng: 18.6 },
+    "芬兰": { code: "FI", lat: 61.9, lng: 25.7 },
+    "挪威": { code: "NO", lat: 60.5, lng: 8.5 },
+    "波兰": { code: "PL", lat: 51.9, lng: 19.1 },
+    "意大利": { code: "IT", lat: 41.9, lng: 12.6 },
+    "西班牙": { code: "ES", lat: 40.5, lng: -3.7 },
+    "葡萄牙": { code: "PT", lat: 39.4, lng: -8.2 },
+    "埃及": { code: "EG", lat: 26.8, lng: 30.8 },
+    "南非": { code: "ZA", lat: -30.6, lng: 22.9 },
+    "hong kong": { code: "HK", lat: 22.3, lng: 114.2 },
+    "japan": { code: "JP", lat: 36.2, lng: 138.3 },
+    "korea": { code: "KR", lat: 35.9, lng: 127.8 },
+    "singapore": { code: "SG", lat: 1.35, lng: 103.8 },
+    "usa": { code: "US", lat: 37.1, lng: -95.7 },
+    "united states": { code: "US", lat: 37.1, lng: -95.7 },
+    "uk": { code: "GB", lat: 55.4, lng: -3.4 },
+    "london": { code: "GB", lat: 51.5, lng: -0.1 },
+    "germany": { code: "DE", lat: 51.2, lng: 10.5 },
+    "france": { code: "FR", lat: 46.2, lng: 2.2 },
+    "canada": { code: "CA", lat: 56.1, lng: -106.3 },
+    "australia": { code: "AU", lat: -25.3, lng: 133.8 },
+    "india": { code: "IN", lat: 20.6, lng: 79.0 },
+    "brazil": { code: "BR", lat: -14.2, lng: -51.9 },
+    "russia": { code: "RU", lat: 61.5, lng: 105.3 },
+    "netherlands": { code: "NL", lat: 52.1, lng: 5.3 },
+    "turkey": { code: "TR", lat: 38.9, lng: 35.2 },
+    "thailand": { code: "TH", lat: 15.9, lng: 100.9 },
+    "taiwan": { code: "TW", lat: 23.7, lng: 121.0 },
+  };
+
+  function detectCountry(name) {
+    if (!name) return null;
+    var lower = name.toLowerCase();
+    var keys = Object.keys(COUNTRY_MAP);
+    for (var i = 0; i < keys.length; i++) {
+      if (lower.indexOf(keys[i].toLowerCase()) >= 0) return COUNTRY_MAP[keys[i]];
+    }
+    return null;
+  }
+
+  // Simple world map drawing
+  var mapZoom = 1;
+  var mapPanX = 0;
+  var mapPanY = 0;
+  var mapDragging = false;
+  var mapLastX = 0;
+  var mapLastY = 0;
+
+  function drawWorldMap() {
+    var canvas = $("worldMap");
+    if (!canvas) return;
+    var ctx = canvas.getContext("2d");
+    var w = canvas.width;
+    var h = canvas.height;
+
+    ctx.fillStyle = "#0d141b";
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.translate(w / 2 + mapPanX, h / 2 + mapPanY);
+    ctx.scale(mapZoom, mapZoom);
+    ctx.translate(-w / 2, -h / 2);
+
+    // Draw grid
+    ctx.strokeStyle = "#162030";
+    ctx.lineWidth = 0.5 / mapZoom;
+    function geoToX(lon) { return (lon + 180) / 360 * w; }
+    function geoToY(lat) { return (90 - lat) / 180 * h; }
+    for (var lat = -60; lat <= 80; lat += 20) {
+      ctx.beginPath(); ctx.moveTo(0, geoToY(lat)); ctx.lineTo(w, geoToY(lat)); ctx.stroke();
+    }
+    for (var lon = -180; lon <= 180; lon += 30) {
+      ctx.beginPath(); ctx.moveTo(geoToX(lon), 0); ctx.lineTo(geoToX(lon), h); ctx.stroke();
+    }
+
+    // Draw simplified continents
+    ctx.fillStyle = "#1e2d3d";
+    var continents = [
+      [[-170,72],[-170,15],[-50,15],[-50,72]],        // N. America
+      [[-82,15],[-82,-55],[-34,-55],[-34,15]],          // S. America
+      [[-10,72],[-10,36],[40,36],[40,72]],              // Europe
+      [[-18,37],[-18,-35],[52,-35],[52,37]],            // Africa
+      [[40,72],[40,0],[150,0],[150,72]],                // Asia
+      [[95,25],[95,-10],[155,-10],[155,25]],            // SE Asia
+      [[113,-10],[113,-44],[154,-44],[154,-10]],        // Australia
+    ];
+    continents.forEach(function (coords) {
+      ctx.beginPath();
+      ctx.moveTo(geoToX(coords[0][0]), geoToY(coords[0][1]));
+      for (var i = 1; i < coords.length; i++) ctx.lineTo(geoToX(coords[i][0]), geoToY(coords[i][1]));
+      ctx.closePath(); ctx.fill();
+    });
+
+    // Draw node markers
+    if (last && last.nodes) {
+      var nodeGroups = {};
+      last.nodes.forEach(function (n) {
+        var country = detectCountry(n.tag);
+        if (!country) return;
+        var key = country.code;
+        if (!nodeGroups[key]) nodeGroups[key] = { country: country, nodes: [], delay: null };
+        nodeGroups[key].nodes.push(n);
+        var pingKey = latencyKey(n.server, n.port);
+        if (pingResults[pingKey] != null) {
+          var d = pingResults[pingKey];
+          if (nodeGroups[key].delay == null || (d >= 0 && d < nodeGroups[key].delay)) {
+            nodeGroups[key].delay = d;
+          }
+        }
+      });
+
+      Object.keys(nodeGroups).forEach(function (key) {
+        var group = nodeGroups[key];
+        var x = geoToX(group.country.lng);
+        var y = geoToY(group.country.lat);
+        var delay = group.delay;
+        var color;
+        if (delay == null) color = "#2f7de1";
+        else if (delay < 0) color = "#7c8a99";
+        else if (delay < 200) color = "#6fcf97";
+        else if (delay < 500) color = "#ffd479";
+        else color = "#ef7d7d";
+
+        var r = Math.min(12, 4 + group.nodes.length * 2) / mapZoom;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.8;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1 / mapZoom;
+        ctx.stroke();
+
+        ctx.fillStyle = "#d6dee6";
+        ctx.font = (11 / mapZoom) + "px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(group.country.code + " (" + group.nodes.length + ")", x, y - r - 4 / mapZoom);
+      });
+    }
+
+    ctx.restore();
+  }
+
+  // Map zoom/pan
+  (function () {
+    var c = $("worldMap");
+    if (!c) return;
+    c.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      mapZoom = Math.max(0.5, Math.min(5, mapZoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+      drawWorldMap();
+    });
+    c.addEventListener("mousedown", function (e) { mapDragging = true; mapLastX = e.clientX; mapLastY = e.clientY; });
+    document.addEventListener("mousemove", function (e) {
+      if (!mapDragging) return;
+      mapPanX += e.clientX - mapLastX; mapPanY += e.clientY - mapLastY;
+      mapLastX = e.clientX; mapLastY = e.clientY;
+      drawWorldMap();
+    });
+    document.addEventListener("mouseup", function () { mapDragging = false; });
+  })();
+
+  async function pingNodes() {
+    if (!last || !last.nodes || last.nodes.length === 0) return;
+    if (pingRunning) return;
+    pingRunning = true;
+    pingResults = {};
+    setStatus($("pingStatus"), "测试中…");
+    $("btnPing").disabled = true;
+    // Re-render table to show latency column header
+    $("p-node").innerHTML = renderTable(last.nodes);
+
+    var targets = [];
+    last.nodes.forEach(function (n) {
+      if (n.server && n.port) targets.push({ host: n.server, port: n.port });
+    });
+    try {
+      var data = await api("POST", "/api/ping", { targets: targets, timeout: 5000, concurrency: 32 });
+      var results = (data && data.results) || [];
+      results.forEach(function (r) {
+        if (r && r.host) pingResults[latencyKey(r.host, r.port)] = r.delay;
+      });
+      // Re-render with results
+      $("p-node").innerHTML = renderTable(last.nodes);
+      var fast = 0, mid = 0, slow = 0, fail = 0;
+      results.forEach(function (r) {
+        if (r.delay < 0) fail++;
+        else if (r.delay < 200) fast++;
+        else if (r.delay < 500) mid++;
+        else slow++;
+      });
+      setStatus($("pingStatus"), "完成：共 " + results.length + " 个，" +
+        fast + " 快/" + mid + " 中/" + slow + " 慢/" + fail + " 超时", "ok");
+    } catch (e) {
+      setStatus($("pingStatus"), "测试失败：" + (e && e.message ? e.message : e), "err");
+    } finally {
+      pingRunning = false;
+      $("btnPing").disabled = false;
+    }
   }
   async function generate() {
     var es = enabledSubs();
@@ -980,19 +1529,41 @@
   function renderResult() {
     if (!last) return;
     $("result").style.display = "block";
-    $("p-node").innerHTML = renderTable(last.nodes);
+
+    // Filter nodes by client protocol support if a target is selected
+    var filteredNodes = last.nodes || [];
+    var filterWarning = null;
+    if (exportTarget) {
+      var supported = getClientProtocols(exportTarget);
+      if (supported) {
+        var supportedSet = {};
+        supported.forEach(function (p) { supportedSet[p] = true; });
+        var before = filteredNodes.length;
+        filteredNodes = filteredNodes.filter(function (n) { return supportedSet[n.type]; });
+        var removed = before - filteredNodes.length;
+        if (removed > 0) {
+          filterWarning = "客户端「" + exportTarget + "」不支持 " + removed + " 个节点的协议，已自动过滤。";
+        }
+      }
+    }
+
+    $("p-node").innerHTML = renderTable(filteredNodes);
     $("cfgText").textContent = JSON.stringify(last.output, null, 2);
     var warns = last.warnings || [];
     var box = $("warnBox");
+    var warnHtml = "";
+    if (filterWarning) {
+      warnHtml += '<div class="warn">· ' + esc(filterWarning) + '</div>';
+    }
     if (warns.length) {
-      box.innerHTML = '<div class="warn">注意：</div>' + warns.map(function (w) {
+      warnHtml += warns.map(function (w) {
         return '<div class="warn">· ' + esc(w && w.message ? w.message : w) + "</div>";
       }).join("");
-    } else {
-      box.innerHTML = "";
     }
+    box.innerHTML = warnHtml ? '<div class="warn">注意：</div>' + warnHtml : "";
     setStatus($("genStatus"),
-      "完成：" + (last.nodes || []).length + " 个节点。", "ok");
+      "完成：" + filteredNodes.length + " 个节点" +
+      (filterWarning ? "（已过滤 " + ((last.nodes || []).length - filteredNodes.length) + " 个不兼容节点）" : "") + "。", "ok");
     setOutTab(activeOutTab);
   }
   function setOutTab(p) {
@@ -1000,15 +1571,17 @@
     [].forEach.call($("outtabs").querySelectorAll("button"), function (b) {
       b.classList.toggle("active", b.getAttribute("data-p") === p);
     });
-    ["node", "cfg"].forEach(function (t) {
+    ["node", "map", "cfg"].forEach(function (t) {
       $("p-" + t).classList.toggle("active", t === p);
     });
+    if (p === "map") drawWorldMap();
   }
   [].forEach.call($("outtabs").querySelectorAll("button"), function (b) {
     b.addEventListener("click", function () { setOutTab(b.getAttribute("data-p")); });
   });
 
   $("btnGenerate").addEventListener("click", generate);
+  $("btnPing").addEventListener("click", pingNodes);
 
   /* clipboard helpers: navigator.clipboard only in secure contexts */
   function writeClipboard(text) {

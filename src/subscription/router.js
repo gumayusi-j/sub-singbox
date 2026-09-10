@@ -164,6 +164,8 @@ export function createSubscriptionRouter(options) {
             usage: source.usage,
             usageSummary: usageSummary(source.usage, now()),
             requestOptions: source.requestOptions,
+            excludedNodes: source.excludedNodes || [],
+            nodeOrder: source.nodeOrder || [],
             // The stable per-source address, relative so the client can prefix
             // whatever host it actually reached the server on.
             subUrl: SUB_ROOT + source.token,
@@ -396,6 +398,16 @@ export function createSubscriptionRouter(options) {
                     }
                     if (body.requestOptions !== undefined) {
                         patch.requestOptions = body.requestOptions;
+                    }
+                    if (body.excludedNodes !== undefined) {
+                        patch.excludedNodes = Array.isArray(body.excludedNodes)
+                            ? body.excludedNodes.filter((n) => typeof n === "string")
+                            : [];
+                    }
+                    if (body.nodeOrder !== undefined) {
+                        patch.nodeOrder = Array.isArray(body.nodeOrder)
+                            ? body.nodeOrder.filter((n) => typeof n === "string")
+                            : [];
                     }
                     const updated = store.updateSource(id, patch);
                     if (!updated) {
