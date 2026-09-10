@@ -122,37 +122,49 @@
   <!-- ============ ② 规则 ============ -->
   <section id="tab-rules" class="wsec">
     <div class="card">
-      <b>选择一个使用场景</b>
+      <b>分流规则（内置 ACL4SSR）</b>
+      <label class="scene" data-acl="acl4ssr-default">
+        <input type="radio" name="acl" value="acl4ssr-default"><b>ACL4SSR 默认</b>
+        <span>去广告、自动测速，含国外媒体、电报、微软和苹果分流。</span>
+      </label>
+      <label class="scene" data-acl="acl4ssr-full">
+        <input type="radio" name="acl" value="acl4ssr-full"><b>ACL4SSR 全分组</b>
+        <span>最完整分组：流媒体、AI、游戏、音乐，并按节点名自动分出地区组（完整 GFW 列表）。</span>
+      </label>
+      <label class="scene" data-acl="acl4ssr-mini">
+        <input type="radio" name="acl" value="acl4ssr-mini"><b>ACL4SSR 精简</b>
+        <span>只保留节点选择、自动选择、全球直连与拦截，策略组最少、规则最省。</span>
+      </label>
+      <label class="scene" data-acl="none">
+        <input type="radio" name="acl" value="none"><b>不使用（默认分域模板）</b>
+        <span>用内置的国内直连 / 局域网 / 私有地址模板，不引入 ACL4SSR 规则。</span>
+      </label>
+      <div class="muted" style="font-size:12px; margin-top:8px">
+        规则文本随页面内置，无需机场提供规则链接；其中 <span class="mono">GEOIP,CN</span> 直连使用 sing-box 远程 geoip-cn 规则集。
+      </div>
+    </div>
+
+    <div class="card">
+      <b>运行形态</b>
       <label class="scene" data-shape="client">
-        <input type="radio" name="shape" value="client"><b>全功能客户端</b>
-        <span>TUN 接管 · 分域 DNS（国内直连/国外走代理）· clash_api 面板。适合手机、桌面全局接管。</span>
+        <input type="radio" name="shape" value="client"><b>全功能客户端（TUN）</b>
+        <span>接管系统流量（TUN）+ DNS 骨架，适合手机 / 桌面全局。策略组可在面板（clash_api）里切换。</span>
       </label>
       <label class="scene" data-shape="proxy">
-        <input type="radio" name="shape" value="proxy"><b>桌面本地代理</b>
-        <span>仅开 127.0.0.1:1080 的 mixed 代理，不接管系统流量。适合让单个应用走代理的最小配置。</span>
+        <input type="radio" name="shape" value="proxy"><b>本地代理（mixed）</b>
+        <span>仅监听 127.0.0.1 的 mixed 代理，由应用自行指向，最小侵入。</span>
       </label>
-      <label class="scene" data-shape="custom">
-        <input type="radio" name="shape" value="custom"><b>自定义</b>
-        <span>输出形态由下方高级参数的 mode 决定，其余项逐项微调。</span>
-      </label>
+    </div>
 
+    <div class="card">
       <details open id="adv">
-        <summary>高级参数（对所选场景追加 / 覆盖）</summary>
+        <summary>高级参数</summary>
         <div class="row" style="margin:10px 0 6px">
-          <label class="inline">输出形态 mode（仅「自定义」生效）
-            <select id="optMode" disabled>
-              <option value="client">client（TUN + clash_api + 国内直连）</option>
-              <option value="proxy">proxy（本地 1080 mixed 代理）</option>
-            </select>
-          </label>
           <label class="inline"><input type="checkbox" id="optMixed"> client 下另加 mixed 回退</label>
-          <label class="inline"><input type="checkbox" id="optTun"> proxy 下另加 tun</label>
           <label class="inline"><input type="checkbox" id="optUnsup"> 含官方版不支持的协议</label>
         </div>
         <div class="grid2">
           <div class="fld"><label>入站端口（mixed）</label><input type="number" id="optPort" value="1080" min="1" max="65535"></div>
-          <div class="fld"><label>final 出口标签</label><input type="text" id="optFinal" value="proxy"></div>
-          <div class="fld"><label>selector 组名</label><input type="text" id="optProxyTag" value="proxy"></div>
           <div class="fld"><label>远程 DNS（留空 = client 用 tls://8.8.8.8，proxy 用 DoH）</label><input type="text" id="optDns" placeholder="tls://8.8.8.8"></div>
           <div class="fld"><label>抓取 URL 订阅的 User-Agent（留空 = 内置 Clash UA）</label><input type="text" id="optUa" placeholder="clash.meta/v1.19.23"></div>
           <div class="fld"><label>抓取超时（ms，留空 = 30000）</label><input type="number" id="optTimeout" min="100" max="300000"></div>
@@ -162,7 +174,7 @@
           <textarea id="optHeaders" style="min-height:60px"></textarea>
         </div>
         <div class="fld" style="margin-top:8px">
-          <label>附加规则（每行 <span class="mono">TYPE,CONTENT[,OUTBOUND]</span>，如 <span class="mono">DOMAIN-SUFFIX,doubleclick.net,block</span>）</label>
+          <label>附加规则（每行 <span class="mono">TYPE,CONTENT[,OUTBOUND]</span>，置于 ACL4SSR 规则之前、优先生效）</label>
           <textarea id="optRules" style="min-height:70px"></textarea>
         </div>
       </details>
@@ -200,7 +212,9 @@
         <ul style="margin:8px 0">
           <li><b>GUI 客户端</b>：把下载的 <span class="mono">singbox-config.json</span> 作为配置文件导入。</li>
           <li><b>命令行</b>：保存为 <span class="mono">config.json</span> 后运行 <span class="mono">sing-box run -c config.json</span>。</li>
-          <li>“全功能客户端”场景默认开 TUN 接管，需给 sing-box 相应的系统权限；“桌面本地代理”则把代理指向 <span class="mono">127.0.0.1:1080</span>。</li>
+          <li>“全功能客户端”形态默认开 TUN 接管，需给 sing-box 相应的系统权限；“本地代理”形态则把应用指向上面的 <span class="mono">127.0.0.1</span> 端口。</li>
+          <li>ACL4SSR 会生成 <span class="mono">🚀 节点选择 / ♻️ 自动选择 / 各地区组</span> 等策略组，可在带 clash_api 的客户端面板里手动切换。</li>
+          <li>国内 IP 直连依赖 sing-box 启动时拉取 <span class="mono">geoip-cn</span> 规则集；不联网的部署可改用「不使用（默认分域模板）」。</li>
         </ul>
         订阅文本与凭据只存在本浏览器 localStorage，解析与生成都在你自己的服务/本机完成。
       </div>
@@ -212,8 +226,14 @@
 (function () {
   "use strict";
 
-  var STORE = { subs: "sbx:subs", enabled: "sbx:enabledIds", shape: "sbx:shape" };
-  var SHAPE_NAME = { client: "全功能客户端", proxy: "桌面本地代理", custom: "自定义" };
+  var STORE = { subs: "sbx:subs", enabled: "sbx:enabledIds", shape: "sbx:shape", acl: "sbx:acl" };
+  var SHAPE_NAME = { client: "全功能客户端", proxy: "本地代理" };
+  var ACL_NAME = {
+    "acl4ssr-default": "ACL4SSR 默认",
+    "acl4ssr-full": "ACL4SSR 全分组",
+    "acl4ssr-mini": "ACL4SSR 精简",
+    none: "默认分域模板"
+  };
 
   function $(id) { return document.getElementById(id); }
   function load(key, fallback) {
@@ -233,6 +253,7 @@
   var subs = load(STORE.subs, []);
   var enabledIds = load(STORE.enabled, []);
   var shape = load(STORE.shape, "client");
+  var acl = load(STORE.acl, "acl4ssr-default");
   var editingId = null;   // id being edited in the add/edit form, or null
   var last = null;        // last successful convert result
   var activeOutTab = "node";
@@ -241,6 +262,7 @@
     save(STORE.subs, subs);
     save(STORE.enabled, enabledIds);
     save(STORE.shape, shape);
+    save(STORE.acl, acl);
   }
   function enabledSubs() { return subs.filter(function (s) { return enabledIds.indexOf(s.id) !== -1; }); }
   function isEnabled(id) { return enabledIds.indexOf(id) !== -1; }
@@ -449,18 +471,17 @@
 
   /* ---------------- ② rules / shape ---------------- */
   function shapeName() { return SHAPE_NAME[shape] || shape; }
-  function currentMode() {
-    if (shape === "proxy") return "proxy";
-    if (shape === "custom") return $("optMode").value;
-    return "client";
-  }
-  function renderShape() {
-    [].forEach.call(document.querySelectorAll('input[name="shape"]'), function (r) {
-      r.checked = r.value === shape;
+  function aclName() { return ACL_NAME[acl] || acl; }
+  function markScene(name, value) {
+    [].forEach.call(document.querySelectorAll('input[name="' + name + '"]'), function (r) {
+      r.checked = r.value === value;
       var card = r.closest ? r.closest(".scene") : null;
-      if (card) card.classList.toggle("sel", r.value === shape);
+      if (card) card.classList.toggle("sel", r.value === value);
     });
-    $("optMode").disabled = shape !== "custom";
+  }
+  function renderRules() {
+    markScene("acl", acl);
+    markScene("shape", shape);
   }
   function invalidate() {
     // Any rule change makes the last generated config stale; hide it so the
@@ -469,17 +490,20 @@
     last = null;
     setStatus($("genStatus"), "", "");
   }
-  [].forEach.call(document.querySelectorAll('input[name="shape"]'), function (r) {
-    r.addEventListener("change", function () {
-      if (r.checked) {
-        shape = r.value;
+  function bindScene(name, apply) {
+    [].forEach.call(document.querySelectorAll('input[name="' + name + '"]'), function (r) {
+      r.addEventListener("change", function () {
+        if (!r.checked) return;
+        apply(r.value);
         persistAll();
-        renderShape();
+        renderRules();
         invalidate();
         updateExport();
-      }
+      });
     });
-  });
+  }
+  bindScene("acl", function (v) { acl = v; });
+  bindScene("shape", function (v) { shape = v; });
   [].forEach.call(document.querySelectorAll("#adv input, #adv textarea, #adv select"), function (f) {
     f.addEventListener("input", invalidate);
     f.addEventListener("change", invalidate);
@@ -487,16 +511,12 @@
 
   /* ---------------- options collection ---------------- */
   function collectOptions() {
-    var options = { mode: currentMode() };
+    var options = { mode: shape };
+    if (acl !== "none") options.aclPreset = acl;
     if ($("optMixed").checked) options.addMixed = true;
-    if ($("optTun").checked) options.tun = true;
     if ($("optUnsup").checked) options.includeUnsupportedProxy = true;
     var port = parseInt($("optPort").value, 10);
     if (Number.isInteger(port) && port > 0) options.inboundPort = port;
-    var fin = $("optFinal").value.trim();
-    if (fin) options.final = fin;
-    var tag = $("optProxyTag").value.trim();
-    if (tag) options.proxyGroupTag = tag;
     var dns = $("optDns").value.trim();
     if (dns) options.remoteDns = dns;
     var ua = $("optUa").value.trim();
@@ -525,7 +545,7 @@
     } else {
       summary.textContent =
         "将合并 " + es.length + " 个订阅源（" + es.map(function (s) { return s.name; }).join("、") +
-        "），按「" + shapeName() + "」生成完整 sing-box 配置。";
+        "），按「" + aclName() + " · " + shapeName() + "」生成完整 sing-box 配置。";
       btn.disabled = false;
     }
   }
@@ -649,7 +669,7 @@
   });
 
   /* ---------------- init ---------------- */
-  renderShape();
+  renderRules();
   renderSubList();
   updateExport();
   setOutTab("node");

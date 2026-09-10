@@ -3,6 +3,7 @@ import { loadConfig } from "./config";
 import { readStatic } from "./static";
 import { fromText, fromUrl } from "../kit/convert";
 import assemble from "../kit/assemble";
+import { assembleAcl, findPreset } from "../kit/acl4ssr/build";
 
 export { loadConfig };
 
@@ -112,6 +113,10 @@ function normalizeOptions(options, config) {
         addAutoGroup: options.addAutoGroup,
         addDirect: options.addDirect,
         addBlock: options.addBlock,
+        // A known ACL4SSR preset switches assembly to the ACL builder; an
+        // unknown id is ignored so a stale client falls back to the default
+        // skeleton instead of erroring.
+        aclPreset: findPreset(options.aclPreset) ? options.aclPreset : undefined,
         rules: normalizeRules(options.rules),
     };
 }
@@ -275,7 +280,9 @@ export async function convertRequest(body, config) {
     } else {
         let configJson;
         try {
-            configJson = assemble(parsed, normalized);
+            configJson = normalized.aclPreset
+                ? assembleAcl(parsed, normalized)
+                : assemble(parsed, normalized);
         } catch (e) {
             // Startup-rejection findings surface as 4xx so the client can act
             // on the migration hints, not as a server fault.

@@ -187,4 +187,37 @@ describe("singbox-kit web API", function () {
         expect(sources[1].error).to.equal(undefined);
         expect(json.data.totalNodes).to.equal(2);
     });
+
+    it("assembles an ACL4SSR preset when aclPreset is given", async function () {
+        const resp = await fetch(base + "/api/convert", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                input: sampleText,
+                options: { mode: "proxy", aclPreset: "acl4ssr-mini" },
+            }),
+        });
+        expect(resp.status).to.equal(200);
+        const json = await resp.json();
+        expect(json.ok).to.equal(true);
+        const config = json.data.output;
+        const tags = config.outbounds.map((o) => o.tag);
+        expect(tags).to.include("🚀 节点选择");
+        expect(tags).to.include("♻️ 自动选择");
+        expect(tags).to.include("🐟 漏网之鱼");
+        expect(new Set(tags).size).to.equal(tags.length);
+        expect(config.route.final).to.equal("🐟 漏网之鱼");
+        expect((config.route.rule_set || []).map((r) => r.tag)).to.deep.equal(["geoip-cn"]);
+    });
+
+    it("falls back to the default skeleton for an unknown aclPreset", async function () {
+        const resp = await fetch(base + "/api/convert", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ input: sampleText, options: { aclPreset: "bogus" } }),
+        });
+        const json = await resp.json();
+        expect(json.ok).to.equal(true);
+        expect(json.data.output.outbounds.map((o) => o.tag)).to.include("proxy");
+    });
 });
