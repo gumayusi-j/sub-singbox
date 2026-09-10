@@ -173,10 +173,10 @@ describe("kit API", function () {
         expect(config.log).to.deep.equal({ level: "info", timestamp: true });
         expect(config.inbounds.map((i) => i.type)).to.include("tun");
         expect(config.http_clients).to.deep.equal([
-            { tag: "default-client", detour: "direct" },
+            { tag: "default-client", domain_resolver: "local", detour: "direct" },
         ]);
         expect(config.experimental.clash_api).to.deep.equal({
-            default_mode: "Enhanced",
+            default_mode: "规则判定",
         });
         expect(config.dns.final).to.equal("google");
         expect(config.dns.servers.find((s) => s.tag === "google").server).to.equal("8.8.8.8");
@@ -381,5 +381,195 @@ describe("sing-box rule serializer", function () {
             { domain_suffix: "c.com", outbound: "proxy" },
             { domain_suffix: ["d.com", "e.com"], outbound: "proxy" },
         ]);
+    });
+});
+
+describe("sing-box generator — Clash mode switching", function () {
+    const NODES = [
+        { name: "s1", type: "ss", server: "1.2.3.4", port: 8388, cipher: "aes-128-gcm", password: "x" },
+        { name: "s2", type: "ss", server: "5.6.7.8", port: 8388, cipher: "aes-128-gcm", password: "y" },
+    ];
+
+    function clientConfig(options) {
+        return assemble(fromNodes(NODES), options);
+    }
+
+    it("puts a global selector first, defaulting to the automatic group", function () {
+        const config = clientConfig();
+        const first = config.outbounds[0];
+        expect(first.tag).to.equal("全局代理");
+        expect(first.type).to.equal("selector");
+        expect(first.default).to.equal("auto");
+        expect(first.outbounds[0]).to.equal("auto");
+        expect(first.outbounds).to.include.members(["s1", "s2"]);
+        // Switching mode must not leave connections on the old route.
+        expect(first.interrupt_exist_connections).to.equal(true);
+    });
+
+    it("branches the route rules on global and direct mode", function () {
+        const config = clientConfig();
+        const global = config.route.rules.find((r) => r.clash_mode === "全局代理");
+        const direct = config.route.rules.find((r) => r.clash_mode === "直接连接");
+        expect(global).to.deep.equal({
+            clash_mode: "全局代理",
+            action: "route",
+            outbound: "全局代理",
+        });
+        expect(direct).to.deep.equal({
+            clash_mode: "直接连接",
+            action: "route",
+            outbound: "direct",
+        });
+        // Resolve through the DNS module, not the bootstrap resolver.
+        const resolve = config.route.rules.findIndex((r) => r.action === "resolve");
+        expect(resolve).to.be.above(-1);
+        expect(resolve).to.be.below(config.route.rules.indexOf(global));
+        // Rule mode is the fallthrough, so it needs no branch of its own.
+        expect(config.route.rules.some((r) => r.clash_mode === "规则判定")).to.equal(false);
+        expect(config.route.final).to.equal("proxy");
+    });
+
+    it("places the mode branches behind the private-IP rule but ahead of the CN rules", function () {
+        const config = clientConfig();
+        const rules = config.route.rules;
+        const privateIndex = rules.findIndex((r) => r.ip_is_private !== undefined);
+        const globalIndex = rules.findIndex((r) => r.clash_mode === "全局代理");
+        const cnIndex = rules.findIndex((r) => r.rule_set === "geosite-geolocation-cn");
+        // Global mode must not cut off the LAN...
+        expect(globalIndex).to.be.above(privateIndex);
+        // ...but must override the China-direct destination rules.
+        expect(globalIndex).to.be.below(cnIndex);
+    });
+
+    it("branches the DNS rules and clones the remote resolver per mode", function () {
+        const config = clientConfig();
+        const modeDns = config.dns.rules.filter((r) => r.clash_mode);
+        expect(modeDns).to.have.length(2);
+        expect(modeDns[0]).to.deep.equal({
+            clash_mode: "直接连接",
+            action: "route",
+            server: "local",
+        });
+
+        const globalDnsRule = modeDns[1];
+        expect(globalDnsRule.clash_mode).to.equal("全局代理");
+
+        const cloned = config.dns.servers.find((s) => s.tag === globalDnsRule.server);
+        expect(cloned).to.be.an("object");
+        // The clone keeps the transport settings but follows the mode.
+        expect(cloned.detour).to.equal("全局代理");
+        const original = config.dns.servers.find((s) => s.tag === "google");
+        expect(cloned.type).to.equal(original.type);
+        expect(cloned.server).to.equal(original.server);
+    });
+
+    it("keeps default_mode in step with the branches", function () {
+        expect(clientConfig().experimental.clash_api.default_mode).to.equal("规则判定");
+    });
+
+    it("can be switched off, and never runs in the proxy profile", function () {
+        const off = clientConfig({ clashModes: false });
+        expect(off.outbounds.some((o) => o.tag === "全局代理")).to.equal(false);
+        expect(off.route.rules.some((r) => r.clash_mode)).to.equal(false);
+
+        const proxy = clientConfig({ mode: "proxy" });
+        expect(proxy.outbounds.some((o) => o.tag === "全局代理")).to.equal(false);
+        expect(proxy.route.rules.some((r) => r.clash_mode)).to.equal(false);
+    });
+
+    it("leaves a caller-supplied dns or route document alone", function () {
+        const custom = {
+            servers: [{ type: "local", tag: "local" }],
+            rules: [],
+            final: "local",
+        };
+        const config = clientConfig({ dns: custom });
+        expect(config.dns.rules).to.deep.equal([]);
+        expect(config.route.rules.some((r) => r.clash_mode)).to.equal(false);
+    });
+
+    it("applies to the ACL4SSR builder too", function () {
+        const { assembleAcl } = require("@/kit/acl4ssr/build");
+        const config = assembleAcl(fromNodes(NODES), { aclPreset: "acl4ssr-mini" });
+        expect(config.outbounds[0].tag).to.equal("全局代理");
+        expect(config.route.rules.some((r) => r.clash_mode === "全局代理")).to.equal(true);
+        expect(config.experimental.clash_api.default_mode).to.equal("规则判定");
+    });
+});
+
+describe("sing-box generator — hardening from Tower's generator", function () {
+    const NODES = [
+        { name: "s1", type: "ss", server: "1.2.3.4", port: 8388, cipher: "aes-128-gcm", password: "x" },
+    ];
+
+    function clientConfig(options) {
+        return assemble(fromNodes(NODES), options);
+    }
+
+    it("pins the rule-set downloader's resolver so it resolves before the detour", function () {
+        const config = clientConfig();
+        expect(config.http_clients).to.deep.equal([
+            { tag: "default-client", domain_resolver: "local", detour: "direct" },
+        ]);
+        expect(config.route.default_http_client).to.equal("default-client");
+    });
+
+    it("breaks the resolution loop for a remote resolver addressed by a hostname", function () {
+        const config = clientConfig({ remoteDns: "https://dns.google/dns-query" });
+        const remote = config.dns.servers.find((s) => s.tag === "google");
+        expect(remote.server).to.equal("dns.google");
+        expect(remote.domain_resolver).to.equal("local");
+    });
+
+    it("does not add a bootstrap resolver to a literal-IP resolver", function () {
+        const config = clientConfig({ remoteDns: "tls://9.9.9.9" });
+        const remote = config.dns.servers.find((s) => s.tag === "google");
+        expect(remote.server).to.equal("9.9.9.9");
+        expect(remote.domain_resolver).to.equal(undefined);
+    });
+
+    it("fixes the tun stack rather than trusting the core default", function () {
+        const tun = clientConfig().inbounds.find((i) => i.type === "tun");
+        expect(tun.stack).to.equal("mixed");
+    });
+
+    it("turns the fakeip cache off, since the profile resolves real names", function () {
+        expect(clientConfig().experimental.cache_file).to.deep.equal({
+            enabled: true,
+            store_dns: true,
+            store_fakeip: false,
+        });
+    });
+
+    it("keeps ipv4_only by default and allows another strategy", function () {
+        expect(clientConfig().dns.strategy).to.equal("ipv4_only");
+        expect(clientConfig({ dnsStrategy: "prefer_ipv4" }).dns.strategy).to.equal(
+            "prefer_ipv4",
+        );
+    });
+
+    it("drops PROCESS-NAME unless it is asked for", function () {
+        const rules = ["PROCESS-NAME,curl,proxy", "DOMAIN-SUFFIX,example.com,direct"];
+        const dropped = clientConfig({ rules });
+        expect(dropped.route.rules.some((r) => r.process_name !== undefined)).to.equal(false);
+        expect(dropped.route.rules.some((r) => r.domain_suffix === "example.com")).to.equal(
+            true,
+        );
+
+        const kept = clientConfig({ rules, allowProcessName: true });
+        expect(kept.route.rules.some((r) => r.process_name === "curl")).to.equal(true);
+    });
+
+    it("drops PROCESS-NAME from an ACL4SSR preset list too", function () {
+        const { assembleAcl } = require("@/kit/acl4ssr/build");
+        const config = assembleAcl(fromNodes(NODES), { aclPreset: "acl4ssr-mini" });
+        const all = JSON.stringify(config.route.rules);
+        expect(all).to.not.contain("process_name");
+    });
+
+    it("emits no dashboard when there is no proxy to switch between", function () {
+        const config = assemble({ outbounds: [], endpoints: [] });
+        expect(config.experimental.clash_api).to.equal(undefined);
+        expect(config.outbounds).to.deep.equal([{ type: "direct", tag: "direct" }]);
     });
 });

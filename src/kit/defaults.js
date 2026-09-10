@@ -13,6 +13,8 @@
 //   mode: "proxy"            — a minimal local mixed (socks/http) proxy on
 //     127.0.0.1:<port> with plain private/direct routing.
 
+import { RULE_MODE } from "./modes";
+
 const DNS_DEFAULT_PORTS = {
     udp: 53,
     tcp: 53,
@@ -67,6 +69,49 @@ function isPlainObject(value) {
     return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
+// Is this address already usable without a DNS lookup? A DNS server or an
+// outbound addressed by a hostname needs one resolved *before* it can be
+// dialled, which is a chicken-and-egg problem unless something points at a
+// plain resolver - see needsBootstrapResolver.
+export function isLiteralAddress(value) {
+    if (typeof value !== "string" || value === "") return false;
+    const host = value.replace(/^\[|\]$/g, "");
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+        return host.split(".").every((part) => Number(part) <= 255);
+    }
+    // A colon can only mean IPv6 here: hostnames cannot contain one.
+    return host.indexOf(":") >= 0;
+}
+
+// A DNS server whose own address is a hostname cannot be reached until that
+// hostname resolves, and the resolver it would use is itself. Point it at the
+// plain local resolver instead. Tower's generator does the same thing with a
+// dedicated "bootstrap" server.
+export function needsBootstrapResolver(server) {
+    if (!isPlainObject(server)) return false;
+    if (server.type === "local") return false;
+    if (typeof server.server !== "string" || server.server === "") return false;
+    if (server.domain_resolver !== undefined) return false;
+    return !isLiteralAddress(server.server);
+}
+
+// Tag of the plain resolver used to bootstrap everything else, or null when
+// the config has none (nothing to point at, so no domain_resolver is added).
+//
+// The client profile's bootstrap is a plain UDP server *tagged* "local" rather
+// than a `type: "local"` system resolver, so match on either.
+export function localDnsTag(dns) {
+    if (!isPlainObject(dns) || !Array.isArray(dns.servers)) return null;
+    const byType = dns.servers.find(
+        (server) => isPlainObject(server) && server.type === "local" && server.tag,
+    );
+    if (byType) return byType.tag;
+    const byTag = dns.servers.find(
+        (server) => isPlainObject(server) && server.tag === "local",
+    );
+    return byTag ? byTag.tag : null;
+}
+
 // Build a DNS server entry from an `address` string (see parseDnsAddress) and
 // attach a tag + optional detour. `override` (optional) merges extra fields,
 // e.g. the TLS server_name a DoT server bound to a bare IP needs for cert
@@ -82,6 +127,18 @@ function dnsServer(address, tag, detour, override) {
         if (isPlainObject(override)) Object.assign(server, override);
     }
     return server;
+}
+
+// Attach the bootstrap resolver to any DNS server addressed by a hostname, so
+// a `--dns https://dns.google/dns-query` cannot turn into a resolution loop.
+export function applyBootstrapResolver(servers, dns) {
+    if (!Array.isArray(servers)) return servers;
+    const bootstrap = localDnsTag(dns);
+    if (!bootstrap) return servers;
+    for (const server of servers) {
+        if (needsBootstrapResolver(server)) server.domain_resolver = bootstrap;
+    }
+    return servers;
 }
 
 function isProxyMode(options) {
@@ -114,6 +171,10 @@ export function defaultInbounds(options) {
             address,
             auto_route: options.autoRoute !== false,
             strict_route: options.strictRoute !== false,
+            // Written out rather than left to sing-box's current default, so a
+            // future core changing it cannot silently alter behaviour. Tower
+            // pins the same value.
+            stack: options.tunStack || "mixed",
         });
     }
 
@@ -166,32 +227,37 @@ export function defaultDns(options) {
     if (mode) {
         // Minimal proxy profile: a DoH remote over the proxy plus a local
         // system resolver (backs route.default_domain_resolver).
+        const proxyServers = [
+            remoteServer("proxy", builtInOverride),
+            { type: "local", tag: "local" },
+        ];
+        applyBootstrapResolver(proxyServers, { servers: proxyServers });
         return {
-            servers: [
-                remoteServer("proxy", builtInOverride),
-                { type: "local", tag: "local" },
-            ],
+            servers: proxyServers,
             rules: [],
             final: "remote",
+            strategy: options.dnsStrategy || "ipv4_only",
         };
     }
 
     // Client profile (mirrors the reference template): encrypted resolver
     // reached through the proxy + a plain CN resolver for domestic domains.
+    const servers = [
+        remoteServer("proxy", builtInOverride),
+        {
+            type: "udp",
+            tag: "local",
+            server: options.localDns || CLIENT_LOCAL_DNS,
+        },
+    ];
+    applyBootstrapResolver(servers, { servers });
     return {
-        servers: [
-            remoteServer("proxy", builtInOverride),
-            {
-                type: "udp",
-                tag: "local",
-                server: options.localDns || CLIENT_LOCAL_DNS,
-            },
-        ],
+        servers,
         rules: [
             { action: "route", server: "local", rule_set: "geosite-geolocation-cn" },
         ],
         final: "google",
-        strategy: "ipv4_only",
+        strategy: options.dnsStrategy || "ipv4_only",
         // Preserve DNS answer metadata so TUN connections addressed only by
         // IP can still match the domain rules that originally routed them.
         reverse_mapping: true,
@@ -255,15 +321,39 @@ export function defaultRoute(options) {
     return route;
 }
 
-export function defaultHttpClients() {
-    return [{ tag: "default-client", detour: "direct" }];
+// Remote rule-set downloads. sing-box 1.14 deprecated the implicit downloader
+// and 1.16 removes it, so the client is declared explicitly. The field that
+// carries weight is `domain_resolver`: the rule-set host must resolve *before*
+// the detour is dialled, and the outbound being detoured through may have no
+// working DNS during a cold start (Tower's generator makes the same point).
+// No `engine` is written - "go" is already the default, so it would be a field
+// that documents nothing.
+export function defaultHttpClients(dns) {
+    const client = { tag: "default-client" };
+    const bootstrap = localDnsTag(dns || {});
+    if (bootstrap) client.domain_resolver = bootstrap;
+    client.detour = "direct";
+    return [client];
 }
 
-export function defaultExperimental() {
-    return {
-        cache_file: { enabled: true, store_dns: true },
-        clash_api: { default_mode: "Enhanced" },
+export function defaultExperimental(options) {
+    options = options || {};
+    const experimental = {
+        cache_file: {
+            enabled: true,
+            store_dns: true,
+            // This profile resolves real names rather than using fakeip, so a
+            // persisted fakeip table would only hold mappings nothing reads.
+            store_fakeip: options.storeFakeip === true,
+        },
     };
+    // The dashboard is only useful when something branches on clash_mode; a
+    // profile with no proxy to switch to (the zero-node fallback) would be
+    // offering a mode selector wired to nothing, so it opts out.
+    if (options.clashApi !== false) {
+        experimental.clash_api = { default_mode: RULE_MODE };
+    }
+    return experimental;
 }
 
 export default {
@@ -274,6 +364,10 @@ export default {
     defaultHttpClients,
     defaultExperimental,
     parseDnsAddress,
+    isLiteralAddress,
+    needsBootstrapResolver,
+    applyBootstrapResolver,
+    localDnsTag,
     CLIENT_REMOTE_DNS,
     PROXY_REMOTE_DNS,
     CLIENT_LOCAL_DNS,

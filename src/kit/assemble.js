@@ -5,8 +5,10 @@ import {
     defaultRoute,
     defaultHttpClients,
     defaultExperimental,
+    localDnsTag,
 } from "./defaults";
-import { toSingboxRule, foldSingboxRules } from "./rules/singbox";
+import { toSingboxRule, foldSingboxRules, isSupportedType } from "./rules/singbox";
+import { applyClashModes } from "./modes";
 import { migrateConfig, CompatError } from "./compat";
 
 function isPlainObject(value) {
@@ -110,27 +112,38 @@ function addSystemOutbounds(existing, options) {
     return outbounds;
 }
 
-// Normalize a single provided rule into a sing-box route rule object.
-function normalizeProvidedRule(rule, defaultOutbound) {
+// Normalize a single provided rule into a sing-box route rule object. Returns
+// null for a rule whose matcher this target cannot express, so the caller can
+// drop it and report the omission instead of emitting a rule that never fires.
+function normalizeProvidedRule(rule, defaultOutbound, options) {
     if (typeof rule === "string") {
         const parts = rule.split(",").map((p) => p.trim());
+        if (!isSupportedType(parts[0], options)) return null;
         const outbound = parts[2] || defaultOutbound;
         return toSingboxRule({ type: parts[0], content: parts[1] }, outbound);
     }
     if (!isPlainObject(rule)) return rule;
     if (rule.type && rule.content !== undefined) {
         // internal descriptor { type, content, outbound? }
+        if (!isSupportedType(rule.type, options)) return null;
         return toSingboxRule(rule, rule.outbound || defaultOutbound);
     }
     // already a sing-box matcher, e.g. { ip_is_private: true, outbound: "direct" }
     return rule;
 }
 
-function normalizeProvidedRules(rules, defaultOutbound) {
+function normalizeProvidedRules(rules, defaultOutbound, options) {
     if (!Array.isArray(rules) || rules.length === 0) return [];
-    return rules.map((rule) =>
-        normalizeProvidedRule(rule, defaultOutbound),
-    );
+    const out = [];
+    for (const rule of rules) {
+        const normalized = normalizeProvidedRule(rule, defaultOutbound, options);
+        if (normalized == null) {
+            if (typeof options.onSkip === "function") options.onSkip(rule);
+            continue;
+        }
+        out.push(normalized);
+    }
+    return out;
 }
 
 // Merge caller-supplied overrides after all defaults have been applied so
@@ -191,7 +204,8 @@ function directOnlyConfig(options) {
         },
     };
     if (!proxyMode && config.experimental === undefined) {
-        config.experimental = defaultExperimental();
+        // No proxy exists to switch to, so no dashboard either.
+        config.experimental = defaultExperimental({ clashApi: false });
     }
     return applyExtras(config, options);
 }
@@ -232,6 +246,7 @@ export default function assemble(parsed, options) {
     let providedRules = normalizeProvidedRules(
         options.rules,
         options.ruleOutbound || "proxy",
+        Object.assign({ onSkip: options.onSkipRule }, options),
     );
     if (options.foldRules) {
         providedRules = foldSingboxRules(providedRules);
@@ -260,11 +275,30 @@ export default function assemble(parsed, options) {
     // override http_clients / experimental afterwards.
     if (!proxyMode) {
         if (config.http_clients === undefined) {
-            config.http_clients = defaultHttpClients();
+            config.http_clients = defaultHttpClients(config.dns);
         }
         if (config.experimental === undefined) {
-            config.experimental = defaultExperimental();
+            config.experimental = defaultExperimental(options);
         }
+    }
+
+    // Clash-style mode switching. Applied before applyExtras so a caller that
+    // passes `extra` still wins outright. A caller supplying their own `dns` or
+    // `route` is replacing the skeleton the mode branches belong to, so leave
+    // their document exactly as they wrote it.
+    if (!proxyMode && options.clashModes !== false && !options.dns && !options.route) {
+        const dnsServers = (config.dns && config.dns.servers) || [];
+        const localTag = localDnsTag(config.dns);
+        const remoteDns = dnsServers.find((s) => s && s.tag !== localTag);
+        const directOutbound = system.find((o) => o.type === "direct");
+        const autoGroup = groups.find((g) => g.type === "urltest");
+        applyClashModes(config, {
+            nodeTags: outbounds.map((o) => o && o.tag).filter((t) => typeof t === "string"),
+            autoTag: autoGroup ? autoGroup.tag : null,
+            directTag: directOutbound ? directOutbound.tag : null,
+            localDnsTag: localTag,
+            remoteDnsTag: remoteDns ? remoteDns.tag : null,
+        });
     }
 
     applyExtras(config, options);

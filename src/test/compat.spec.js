@@ -58,9 +58,11 @@ describe("compat layer", function () {
         expect(report.errors).to.deep.equal([]);
         expect(report.warnings).to.deep.equal([]);
         // the client profile ships explicit http_clients/default_http_client so
-        // the remote rule-sets do not need auto-migration
+        // the remote rule-sets do not need auto-migration. domain_resolver is
+        // pinned to the plain resolver so a rule-set hostname resolves before
+        // the detour is dialled.
         expect(config.http_clients).to.deep.equal([
-            { tag: "default-client", detour: "direct" },
+            { tag: "default-client", domain_resolver: "local", detour: "direct" },
         ]);
         expect(config.certificate_providers).to.equal(undefined);
         expect(config.route.default_http_client).to.equal("default-client");

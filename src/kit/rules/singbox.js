@@ -24,6 +24,19 @@ const TYPE_TO_MATCHER = {
 
 export const SUPPORTED = new Set(Object.keys(TYPE_TO_MATCHER));
 
+// `process_name` is understood by the standalone builds only. On the App Store
+// iPhone client every connection it sees logs "Not implemented" - and, worse,
+// when the matcher is grouped with a domain condition the whole rule stops
+// matching, silently. Tower's generator leaves it out for the same reason, and
+// so does this one unless the caller asks for it explicitly.
+export const OPT_IN_TYPES = new Set(["PROCESS-NAME"]);
+
+export function isSupportedType(type, options) {
+    if (!SUPPORTED.has(type)) return false;
+    if (OPT_IN_TYPES.has(type) && !(options && options.allowProcessName)) return false;
+    return true;
+}
+
 // Route rules that mean "drop this traffic". sing-box 1.11+ rejects via a
 // route action, not an outbound (the legacy `block` outbound only survives as
 // a selector member). Mapping an outbound of "reject" to `action: reject`
@@ -162,5 +175,7 @@ export default {
     toSingboxRules,
     foldSingboxRules,
     isRejectTarget,
+    isSupportedType,
     SUPPORTED,
+    OPT_IN_TYPES,
 };

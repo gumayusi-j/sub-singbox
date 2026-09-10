@@ -24,8 +24,11 @@ import {
     defaultExperimental,
     defaultHttpClients,
     parseDnsAddress,
+    applyBootstrapResolver,
+    localDnsTag,
 } from "../defaults";
-import { toSingboxRule, foldSingboxRules } from "../rules/singbox";
+import { toSingboxRule, foldSingboxRules, isSupportedType } from "../rules/singbox";
+import { applyClashModes } from "../modes";
 import { migrateConfig, CompatError } from "../compat";
 
 const AUTO_GROUP = "♻️ 自动选择";
@@ -158,13 +161,16 @@ function buildGroups(preset, tags) {
 }
 
 // Normalise a caller-supplied rule (string "TYPE,CONTENT[,OUTBOUND]" or a
-// descriptor object) into a sing-box route rule.
-function providedRule(rule, defaultOutbound) {
+// descriptor object) into a sing-box route rule. Returns null for a matcher
+// this target cannot express, so the caller drops it and says so.
+function providedRule(rule, defaultOutbound, options) {
     if (typeof rule === "string") {
         const parts = rule.split(",").map((p) => p.trim());
+        if (!isSupportedType(parts[0], options)) return null;
         return toSingboxRule({ type: parts[0], content: parts[1] }, parts[2] || defaultOutbound);
     }
     if (isPlainObject(rule) && rule.type && rule.content !== undefined) {
+        if (!isSupportedType(rule.type, options)) return null;
         return toSingboxRule(rule, rule.outbound || defaultOutbound);
     }
     return rule; // already a sing-box matcher object
@@ -182,7 +188,12 @@ function assembleRoute(preset, emitted, options) {
     const extra = Array.isArray(options.rules) ? options.rules : [];
     for (const rule of extra) {
         if (rule == null) continue;
-        rules.push(providedRule(rule, options.ruleOutbound || "proxy"));
+        const normalized = providedRule(rule, options.ruleOutbound || "proxy", options);
+        if (normalized == null) {
+            skipped += 1;
+            continue;
+        }
+        rules.push(normalized);
     }
 
     let finalTag = null;
@@ -208,17 +219,24 @@ function assembleRoute(preset, emitted, options) {
             continue;
         }
         for (const descriptor of listRules(entry.list)) {
+            if (!isSupportedType(descriptor.type, options)) {
+                // PROCESS-NAME (opt-in only) and types with no sing-box
+                // equivalent such as URL-REGEX.
+                skipped += 1;
+                continue;
+            }
             try {
                 rules.push(toSingboxRule(descriptor, outbound));
             } catch (_e) {
-                skipped += 1; // e.g. URL-REGEX has no sing-box matcher
+                skipped += 1;
             }
         }
     }
     if (skipped > 0) {
         warnings.push({
             message:
-                skipped + " 条规则无 sing-box 等价写法已跳过（如 URL-REGEX 与空目标组）",
+                skipped + " 条规则无 sing-box 等价写法已跳过" +
+                "（如 URL-REGEX、PROCESS-NAME 与空目标组）",
             path: "acl4ssr",
         });
     }
@@ -297,11 +315,17 @@ function buildDns(options) {
         ? { type: "local", tag: "local" }
         : { type: "udp", tag: "local", server: options.localDns || "223.5.5.5" };
 
+    const servers = [remote, local];
+    // A remote resolver addressed by a hostname has to be resolvable before it
+    // can answer anything; point it at the plain resolver (no-op when the
+    // address is already a literal IP, which is the normal case).
+    applyBootstrapResolver(servers, { servers });
+
     return {
-        servers: [remote, local],
+        servers,
         rules: [],
         final: "remote",
-        strategy: "ipv4_only",
+        strategy: options.dnsStrategy || "ipv4_only",
         reverse_mapping: true,
     };
 }
@@ -329,7 +353,8 @@ function directOnly(options) {
             final: "direct",
             default_domain_resolver: { server: "local" },
         },
-        experimental: defaultExperimental(),
+        // No proxy exists to switch modes between, so no dashboard either.
+        experimental: defaultExperimental({ clashApi: false }),
         http_clients: defaultHttpClients(),
     };
 }
@@ -366,16 +391,33 @@ export function assembleAcl(parsed, options) {
     const { route, warnings } = assembleRoute(preset, emitted, options);
 
     const outbounds = nodes.concat(groups, [{ type: "direct", tag: "direct" }]);
+    const dns = buildDns(options);
     const config = {
         log: defaultLog(options),
-        dns: buildDns(options),
+        dns,
         inbounds: defaultInbounds(options),
         outbounds: outbounds,
         route: route,
-        experimental: defaultExperimental(),
-        http_clients: defaultHttpClients(),
+        experimental: defaultExperimental(options),
+        http_clients: defaultHttpClients(dns),
     };
     if (endpoints.length > 0) config.endpoints = endpoints;
+
+    // Clash-style mode switching, applied before `extra` so a caller override
+    // still wins outright.
+    if (options.mode !== "proxy" && options.clashModes !== false) {
+        const localTag = localDnsTag(dns);
+        const remoteDns = (dns.servers || []).find((s) => s && s.tag !== localTag);
+        const autoGroup = groups.find((g) => g.type === "urltest");
+        applyClashModes(config, {
+            nodeTags: tags,
+            autoTag: autoGroup ? autoGroup.tag : null,
+            directTag: "direct",
+            localDnsTag: localTag,
+            remoteDnsTag: remoteDns ? remoteDns.tag : null,
+        });
+    }
+
     if (options.extra) {
         for (const key of Object.keys(options.extra)) config[key] = options.extra[key];
     }
