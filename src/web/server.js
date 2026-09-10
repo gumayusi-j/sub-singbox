@@ -1,9 +1,13 @@
 import http from "http";
-import { loadConfig } from "./config";
+import { loadConfig, resolveDataPath } from "./config";
 import { readStatic } from "./static";
 import { fromText, fromUrl } from "../kit/convert";
+import { mergeParsed } from "../kit/merge";
 import assemble from "../kit/assemble";
 import { assembleAcl, findPreset } from "../kit/acl4ssr/build";
+import { createStore } from "../subscription/store";
+import { createCoordinator } from "../subscription/coordinator";
+import { createSubscriptionRouter } from "../subscription/router";
 
 export { loadConfig };
 
@@ -139,55 +143,6 @@ function resolveSourceList(body) {
         return [{ input: body.input, url: !!body.url }];
     }
     return [];
-}
-
-// A document whose tag space carries duplicates would assemble into a config
-// sing-box refuses to boot (duplicate outbound/endpoint tags), so multi-source
-// merges rename colliding tags with the same "-N" suffix the assembler uses
-// for its synthetic groups. Single-source documents pass through untouched so
-// their tags never drift from what the caller pasted.
-function mergeParsed(parsedList, warnings) {
-    if (!Array.isArray(parsedList) || parsedList.length <= 1) {
-        return {
-            outbounds: (parsedList && parsedList[0] && parsedList[0].outbounds) || [],
-            endpoints: (parsedList && parsedList[0] && parsedList[0].endpoints) || [],
-        };
-    }
-    const outbounds = [];
-    const endpoints = [];
-    const seenOut = new Set();
-    const seenEp = new Set();
-    const append = (coll, o, seen, label) => {
-        if (!o) return;
-        let item = o;
-        const tag = item.tag;
-        if (typeof tag === "string" && seen.has(tag)) {
-            let i = 2;
-            let candidate = tag + "-" + i;
-            while (seen.has(candidate)) {
-                i += 1;
-                candidate = tag + "-" + i;
-            }
-            item = Object.assign({}, o, { tag: candidate });
-            warnings.push({
-                message:
-                    "duplicate " + label + " tag '" + tag +
-                    "' across subscriptions renamed to '" + candidate + "'",
-                path: "merge",
-            });
-        }
-        coll.push(item);
-        if (typeof item.tag === "string") seen.add(item.tag);
-    };
-    for (const parsed of parsedList) {
-        for (const o of (parsed && parsed.outbounds) || []) {
-            append(outbounds, o, seenOut, "node");
-        }
-        for (const o of (parsed && parsed.endpoints) || []) {
-            append(endpoints, o, seenEp, "endpoint");
-        }
-    }
-    return { outbounds, endpoints };
 }
 
 // Download-aware subset of the options inspection previews honour, so a URL
@@ -349,10 +304,25 @@ export async function inspectRequest(body, config) {
     };
 }
 
-export function createServer(config) {
+// createServer(config, deps)
+//
+// `deps` is optional and exists so tests can inject a temp store, a mock fetch
+// and a fixed clock. Production callers keep using createServer(config) and the
+// subscription store is built from the config's dataPath.
+export function createServer(config, deps) {
     config = config || loadConfig();
+    deps = deps || {};
+    const store = deps.store || createStore({ dataPath: resolveDataPath(config) });
+    const coordinator = deps.coordinator || createCoordinator();
+    const subscriptions = createSubscriptionRouter({
+        store,
+        coordinator,
+        config,
+        fetchImpl: deps.fetchImpl,
+        now: deps.now,
+    });
 
-    return http.createServer(async (req, res) => {
+    const server = http.createServer(async (req, res) => {
         try {
             const url = new URL(req.url, "http://localhost");
             const pathname = decodeURIComponent(url.pathname);
@@ -384,6 +354,17 @@ export function createServer(config) {
                 return;
             }
 
+            // Subscription store: GET|HEAD /sub/<token> plus the management
+            // API. Runs before the method check below because it answers
+            // PATCH/DELETE/PUT as well as GET/HEAD.
+            const handled = await subscriptions.handle(req, res, {
+                url,
+                pathname,
+                readJsonBody,
+                sendJson: send,
+            });
+            if (handled) return;
+
             if (req.method !== "GET" && req.method !== "HEAD") {
                 send(res, 405, { ok: false, error: "method not allowed" });
                 return;
@@ -406,15 +387,26 @@ export function createServer(config) {
             });
         }
     });
+
+    // Exposed so callers (and tests) can close the store's write queue before
+    // exiting instead of losing a queued write.
+    server.subscriptionStore = store;
+    return server;
 }
 
-export function start(config) {
+export function start(config, deps) {
     config = config || loadConfig();
-    const server = createServer(config);
+    const server = createServer(config, deps);
     const { host, port } = config.listen;
     return new Promise((resolve) => {
         server.listen(port, host, () => resolve(server));
     });
 }
 
-export default { createServer, start, convertRequest, inspectRequest, loadConfig };
+export default {
+    createServer,
+    start,
+    convertRequest,
+    inspectRequest,
+    loadConfig,
+};

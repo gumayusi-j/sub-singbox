@@ -38,7 +38,36 @@ export const DEFAULT_CONFIG = {
     // Leave empty so the client profile defaults to google (tls://8.8.8.8)
     // over the proxy; set here or in the UI to override.
     remoteDns: "",
+    // Subscription store. An empty path means <cwd>/singbox-web.data.json -
+    // the launch directory, not the module directory, so the single-file
+    // bundle writes next to wherever it was started.
+    dataPath: "",
+    // When set, every /api/* route requires `Authorization: Bearer <token>`.
+    // /sub/<token> is deliberately exempt: it is itself a capability URL.
+    apiToken: "",
+    subscription: {
+        defaultTarget: "sing-box",
+        // What to do with a User-Agent the target table does not recognise:
+        // "reject" answers 400 and lists the known targets (Tower's behaviour).
+        // Any other value must be a target id, which is then served instead.
+        unknownUaTarget: "reject",
+        allowedTargets: [], // empty = all targets permitted
+        cacheSeconds: 0, // 0 -> Cache-Control: no-store
+        exposeUsageHeader: true, // send Subscription-Userinfo to the client
+    },
 };
+
+// Where the subscription store lives. Mirrors resolveConfigPath's precedence
+// and uses process.cwd() for the same reason: under the bundled
+// dist/singbox-kit-web.js, __dirname points at dist/ while the data belongs
+// with whatever directory the process was started from.
+export function resolveDataPath(config) {
+    if (process.env.SINGBOX_WEB_DATA) return process.env.SINGBOX_WEB_DATA;
+    if (config && typeof config.dataPath === "string" && config.dataPath !== "") {
+        return config.dataPath;
+    }
+    return join(process.cwd(), "singbox-web.data.json");
+}
 
 export function resolveConfigPath() {
     if (process.env.SINGBOX_WEB_CONFIG) return process.env.SINGBOX_WEB_CONFIG;
@@ -62,6 +91,11 @@ export function loadConfig() {
                 DEFAULT_CONFIG.listen,
                 (fileConfig && fileConfig.listen) || {},
             );
+            config.subscription = Object.assign(
+                {},
+                DEFAULT_CONFIG.subscription,
+                (fileConfig && fileConfig.subscription) || {},
+            );
         } catch (e) {
             process.stderr.write(
                 "[singbox-kit web] failed to parse " + path + ": " + e.message + "\n",
@@ -76,7 +110,11 @@ export function loadConfig() {
             config.listen.port = port;
         }
     }
+    if (process.env.SINGBOX_WEB_DATA) config.dataPath = process.env.SINGBOX_WEB_DATA;
+    if (process.env.SINGBOX_WEB_API_TOKEN) {
+        config.apiToken = process.env.SINGBOX_WEB_API_TOKEN;
+    }
     return config;
 }
 
-export default { loadConfig, resolveConfigPath, DEFAULT_CONFIG };
+export default { loadConfig, resolveConfigPath, resolveDataPath, DEFAULT_CONFIG };

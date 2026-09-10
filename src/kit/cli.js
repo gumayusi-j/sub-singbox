@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { fromText, fromUrl, DEFAULT_USER_AGENT } from "./convert";
 import assemble from "./assemble";
+import { runSubs } from "./cli-subs";
 
 function readStdin() {
     // Synchronous read of piped stdin.
@@ -99,11 +100,29 @@ function usage() {
         "  --rule-file <path>       rules: a JSON array, or lines 'TYPE,CONTENT'",
         "  --include-unsupported-proxy   keep proxies sing-box cannot officially run",
         "  --help                   show this help",
+        "",
+        "Subcommands:",
+        "  subs <command>           manage the persistent subscription store",
+        "                           (list/add/rm/enable/disable/refresh/show/url/",
+        "                            export/rotate-token). See `subs --help`.",
+        "",
+        "  A stored subscription can be served at a stable address that any",
+        "  client polls, so it keeps itself up to date:",
+        "    singbox-kit subs add 主机场 https://example.com/sub?token=…",
+        "    singbox-kit subs refresh --all",
+        "    singbox-kit subs url          → the address to paste into a client",
     ].join("\n");
 }
 
 async function main() {
-    const args = parseArgs(process.argv.slice(2));
+    const argv = process.argv.slice(2);
+    // `subs` manages the persistent subscription store; every other invocation
+    // is the original one-shot conversion. The first positional argument of a
+    // conversion is always a URL, a path or "-", so "subs" cannot collide.
+    if (argv[0] === "subs") {
+        process.exit(await runSubs(argv.slice(1)));
+    }
+    const args = parseArgs(argv);
     if (args.help) {
         console.log(usage());
         process.exit(0);

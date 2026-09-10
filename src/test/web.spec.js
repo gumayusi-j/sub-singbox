@@ -36,7 +36,10 @@ describe("singbox-kit web API", function () {
         const html = await resp.text();
         expect(resp.headers.get("content-type")).to.include("text/html");
         expect(html).to.include("singbox-kit");
-        expect(html).to.include("api/convert");
+        // The page drives the subscription store; /api/convert still exists and
+        // is covered below, but the UI no longer calls it.
+        expect(html).to.include("/api/subscriptions");
+        expect(html).to.include("/api/export");
     });
 
     it("returns 404 for unknown static paths", async function () {

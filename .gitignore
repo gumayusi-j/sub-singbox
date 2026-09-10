@@ -5,3 +5,8 @@ singbox-web.config.json
 *.bak
 .DS_Store
 Thumbs.db
+
+# Subscription store: holds subscription URLs, their access tokens and the
+# generated per-source subscription tokens. Treated as credentials.
+singbox-web.data.json*
+singbox-web.data.snapshots/
