@@ -458,6 +458,10 @@ export function createServer(config, deps) {
                 return;
             }
             const ext = rel.slice(rel.lastIndexOf(".")).toLowerCase();
+            if (ext === ".html") {
+                res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+                res.setHeader("Pragma", "no-cache");
+            }
             send(res, 200, body, MIME[ext] || "application/octet-stream");
         } catch (e) {
             send(res, 500, {

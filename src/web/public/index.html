@@ -3,1652 +3,1404 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>singbox-kit · 订阅 → 选择规则 → 导出 sing-box</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<!-- Vue 3 -->
+<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+<!-- Element Plus Light Theme -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.9.1/dist/index.css">
+<!-- Element Plus -->
+<script src="https://cdn.jsdelivr.net/npm/element-plus@2.9.1/dist/index.full.min.js"></script>
+<!-- Element Plus Icons -->
+<script src="https://cdn.jsdelivr.net/npm/@element-plus/icons-vue@2.3.1/dist/index.iife.min.js"></script>
+<!-- QR Code -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: light;
+    --el-color-primary: #3b82f6;
+    --el-color-primary-light-3: #5e9ff0;
+    --el-color-primary-light-5: #8bb8f5;
+    --el-color-primary-light-7: #aed1fa;
+    --el-color-primary-light-9: #eff6ff;
+    --el-color-primary-dark-2: #2563eb;
+    --el-bg-color: #ffffff;
+    --el-bg-color-page: #f8fafc;
+    --el-bg-color-overlay: #ffffff;
+    --el-text-color-primary: #0f172a;
+    --el-text-color-regular: #334155;
+    --el-text-color-secondary: #64748b;
+    --el-text-color-placeholder: #94a3b8;
+    --el-border-color: #e2e8f0;
+    --el-border-color-light: #eef2f6;
+    --el-border-color-lighter: #f1f5f9;
+    --el-border-color-extra-light: #f8fafc;
+    --el-fill-color: #f1f5f9;
+    --el-fill-color-light: #f8fafc;
+    --el-fill-color-lighter: #fbfdff;
+    --el-fill-color-extra-light: #ffffff;
+    --el-fill-color-blank: #ffffff;
+    --el-mask-color: rgba(0,0,0,0.4);
+    --el-mask-color-extra-light: rgba(0,0,0,0.15);
+  }
+
   * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.55 system-ui, "Segoe UI", sans-serif; background: #11161c; color: #d6dee6; }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 60px; }
-  h1 { font-size: 20px; margin: 6px 0 4px; }
-  h1 small { color: #7c8a99; font-weight: normal; font-size: 12px; }
-  .card { background: #171f29; border: 1px solid #26313d; border-radius: 10px; padding: 14px; margin-top: 14px; }
-  .inset { background: #141b24; margin-top: 10px; }
-  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  label.inline { display: inline-flex; align-items: center; gap: 5px; margin-right: 10px; }
-  textarea, input[type="text"], input[type="number"], select { width: 100%; background: #0d141b; color: inherit; border: 1px solid #2a3948; border-radius: 8px; padding: 8px 10px; font: inherit; }
-  textarea { resize: vertical; min-height: 80px; font-family: ui-monospace, Consolas, monospace; }
-  input[type="text"], input[type="number"] { padding: 7px 9px; }
-  input[type="number"] { width: 130px; }
-  button { background: #2f7de1; border: 0; color: #fff; border-radius: 8px; padding: 9px 18px; cursor: pointer; font: inherit; }
-  button.secondary { background: #263542; }
-  button.danger { background: #7a2f2f; }
-  button:disabled { opacity: .55; cursor: default; }
-  button.small { padding: 4px 10px; border-radius: 6px; font-size: 12px; }
-  details { margin-top: 12px; }
-  details > summary { cursor: pointer; color: #9fb3c5; }
-  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 16px; margin-top: 8px; }
-  .fld { display: flex; flex-direction: column; gap: 4px; }
-  .fld label { color: #9fb3c5; font-size: 12px; }
-  .mono { font-family: ui-monospace, Consolas, monospace; }
-  .muted { color: #7c8a99; }
-  .err { color: #ef7d7d; }
-  .ok { color: #6fcf97; }
-  pre { background: #0d141b; border: 1px solid #22303e; border-radius: 8px; padding: 12px; overflow: auto; max-height: 520px; font-size: 12px; }
-  .warn { color: #ffd479; font-size: 13px; padding: 4px 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: linear-gradient(135deg, #f0f4f8 0%, #e8eef5 50%, #f0f4f8 100%);
+    color: #0f172a;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
 
-  /* three-stage segmented nav */
-  .seg { display: flex; gap: 4px; margin-top: 16px; border-bottom: 1px solid #26313d; }
-  .seg button { background: none; color: #9fb3c5; border-radius: 8px 8px 0 0; padding: 9px 20px; font-size: 14px; }
-  .seg button.active { background: #22303e; color: #fff; }
-  .wsec { display: none; margin-top: 6px; }
-  .wsec.active { display: block; }
-  .seg-num { color: #2f7de1; font-weight: 700; margin-right: 6px; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-  /* subscription list rows */
-  .src { border-bottom: 1px solid #22303e; padding: 10px 2px; }
-  .src:last-child { border-bottom: 0; }
-  .src-name { font-weight: 600; }
-  .tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; margin-left: 6px; vertical-align: 1px; }
-  .kind-url { background: #183a56; color: #7ec3ff; }
-  .kind-text { background: #3b2f18; color: #ffd479; }
-  .src-preview { font-size: 12px; color: #9fb3c5; margin-top: 4px; }
+  .app-wrap { max-width: 1100px; margin: 0 auto; padding: 28px 24px 80px; }
+  .app-header {
+    margin-bottom: 24px;
+    padding: 28px 32px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+    border-radius: 20px;
+    color: #fff;
+    box-shadow: 0 8px 32px rgba(59,130,246,0.25), 0 2px 8px rgba(59,130,246,0.15);
+  }
+  .app-header h1 { font-size: 24px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.02em; color: #fff; }
+  .app-header small { color: rgba(255,255,255,0.8); font-weight: 400; font-size: 14px; }
 
-  /* scene template cards */
-  .scene { display: block; border: 1px solid #26313d; border-radius: 10px; padding: 10px 12px; margin-top: 8px; cursor: pointer; }
-  .scene:hover { border-color: #3d5570; }
-  .scene.sel { border-color: #2f7de1; background: #1a2533; }
-  .scene b { display: block; }
-  .scene span { color: #9fb3c5; font-size: 12px; }
-  .scene input { accent-color: #2f7de1; margin-right: 8px; vertical-align: -2px; }
+  /* Element Plus overrides */
+  .el-card {
+    --el-card-bg-color: #ffffff;
+    border: 1px solid #e8eef5;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .el-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.03);
+    border-color: #d0d9e6;
+  }
+  .el-card__header {
+    border-bottom: 1px solid #f0f3f7;
+    padding: 16px 20px;
+  }
+  .el-card__body { padding: 20px; }
+  .el-tabs__header { margin: 0 0 20px; }
+  .el-tabs__item {
+    font-weight: 600;
+    font-size: 15px;
+    padding: 0 24px;
+    height: 48px;
+    line-height: 48px;
+  }
+  .el-tabs__item.is-active { color: #3b82f6; }
+  .el-tabs__active-bar { background: #3b82f6; height: 3px; border-radius: 2px; }
 
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid #26313d; flex-wrap: wrap; margin-top: 10px; }
-  .tabs button { background: none; color: #9fb3c5; border-radius: 8px 8px 0 0; padding: 8px 14px; }
-  .tabs button.active { background: #22303e; color: #fff; }
-  .panel { display: none; margin-top: 10px; }
-  .panel.active { display: block; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { border-bottom: 1px solid #22303e; padding: 6px 8px; text-align: left; }
-  th { color: #9fb3c5; font-weight: 600; }
-  .kind-outbound { background: #183a56; color: #7ec3ff; }
-  .kind-endpoint { background: #3b2f18; color: #ffd479; }
+  .el-table {
+    --el-table-bg-color: #ffffff;
+    --el-table-tr-bg-color: #ffffff;
+    --el-table-header-bg-color: #f8fafc;
+    --el-table-row-hover-bg-color: #f0f7ff;
+    --el-table-border-color: #f0f3f7;
+    border-radius: 12px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  .el-table th.el-table__cell {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    font-weight: 700;
+    background: #f8fafc;
+    border-bottom: 2px solid #e8eef5;
+  }
+  .el-table td.el-table__cell { border-bottom: 1px solid #f5f7fa; }
 
-  /* latency coloring */
-  .latency { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
-  .latency-fast { color: #6fcf97; }   /* <200ms */
-  .latency-mid { color: #ffd479; }    /* 200-500ms */
-  .latency-slow { color: #ef7d7d; }   /* >500ms */
-  .latency-timeout { color: #7c8a99; } /* timeout/error */
+  .el-dialog {
+    --el-dialog-bg-color: #ffffff;
+    border: 1px solid #e8eef5;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+  }
+  .el-dialog__header { border-bottom: 1px solid #f0f3f7; padding: 16px 20px; }
+  .el-dialog__title { font-weight: 600; font-size: 16px; }
 
-  /* drag and drop */
-  .node-row { cursor: grab; }
-  .node-row:active { cursor: grabbing; }
-  .node-row.drag-over { border-top: 2px solid #2f7de1; }
-  .node-row.dragging { opacity: .4; }
+  .el-input__wrapper {
+    background: #ffffff !important;
+    border-radius: 10px !important;
+    box-shadow: 0 0 0 1px #e2e8f0 inset !important;
+    transition: box-shadow 0.2s ease !important;
+  }
+  .el-input__wrapper:hover { box-shadow: 0 0 0 1px #cbd5e1 inset !important; }
+  .el-input__wrapper.is-focus {
+    box-shadow: 0 0 0 1px #3b82f6 inset, 0 0 0 3px rgba(59,130,246,0.12) inset !important;
+  }
+  .el-textarea__inner {
+    background: #ffffff !important;
+    border-radius: 10px !important;
+    border: 1px solid #e2e8f0 !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+  }
+  .el-textarea__inner:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important;
+  }
 
-  /* world map */
-  .map-container { position: relative; margin-top: 12px; background: #0d141b; border: 1px solid #22303e; border-radius: 8px; overflow: hidden; }
-  .map-container canvas { display: block; width: 100%; cursor: grab; }
-  .map-container canvas:active { cursor: grabbing; }
-  .map-legend { position: absolute; bottom: 8px; right: 8px; background: rgba(23,31,41,.85); border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #9fb3c5; }
-  .map-legend span { margin-left: 8px; }
-  .map-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 2px; vertical-align: -1px; }
+  .el-button { border-radius: 10px; font-weight: 500; transition: all 0.15s ease; }
+  .el-button--primary { box-shadow: 0 2px 8px rgba(59,130,246,0.2); }
+  .el-button--primary:hover { box-shadow: 0 4px 14px rgba(59,130,246,0.3); transform: translateY(-1px); }
+  .el-button:active { transform: scale(0.97); }
+  .el-button--small { border-radius: 8px; }
 
-  /* QR modal */
-  .qr-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.6); z-index:1000; justify-content:center; align-items:center; }
-  .qr-overlay.show { display:flex; }
-  .qr-modal { background:#171f29; border:1px solid #26313d; border-radius:12px; padding:20px; text-align:center; max-width:340px; }
-  .qr-modal canvas { margin:12px auto; border-radius:8px; }
-  .qr-modal .qr-url { font-size:11px; color:#7c8a99; word-break:break-all; margin-top:8px; max-height:60px; overflow:auto; }
+  .el-radio-button__inner {
+    background: #ffffff;
+    border-color: #e2e8f0;
+    font-weight: 500;
+    transition: all 0.15s ease;
+  }
+  .el-radio-button__original-radio:checked + .el-radio-button__inner {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #2563eb;
+    box-shadow: 0 0 0 1px #3b82f6;
+  }
+  .el-radio-button__inner:hover { color: #3b82f6; }
+
+  .el-tag { border-radius: 8px; font-weight: 500; }
+  .el-tag--dark { border: none; }
+  .el-alert { border-radius: 12px; }
+  .el-collapse { border: none; }
+  .el-collapse-item__header {
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 0 16px;
+    font-weight: 500;
+    color: #334155;
+    border: 1px solid #e8eef5;
+  }
+  .el-collapse-item__wrap { border: 1px solid #e8eef5; border-top: none; border-radius: 0 0 10px 10px; }
+  .el-collapse-item__content { padding: 16px; }
+
+  .el-checkbox__label { color: #334155; }
+  .el-form-item__label { color: #475569; font-weight: 500; font-size: 13px; }
+  .el-empty__description p { color: #94a3b8; }
+
+  /* Custom components */
+  .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; font-size: 0.9em; }
+  .muted { color: #94a3b8; }
+  .status-err { color: #ef4444; }
+  .status-ok { color: #10b981; }
+
+  .sub-item {
+    padding: 16px 8px;
+    border-bottom: 1px solid #f0f3f7;
+    border-radius: 10px;
+    transition: background 0.15s ease;
+  }
+  .sub-item:last-child { border-bottom: none; }
+  .sub-item:hover { background: #f8fafc; }
+
+  .scene-card {
+    display: block;
+    border: 2px solid #e8eef5;
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-top: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #ffffff;
+  }
+  .scene-card:hover {
+    border-color: #93c5fd;
+    background: #fafcff;
+    box-shadow: 0 2px 12px rgba(59,130,246,0.08);
+  }
+  .scene-card.selected {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12), 0 2px 12px rgba(59,130,246,0.1);
+  }
+  .scene-card .el-radio { margin-right: 0; }
+  .scene-card b { display: block; font-size: 14px; margin-bottom: 3px; color: #0f172a; }
+  .scene-card span { color: #64748b; font-size: 13px; line-height: 1.6; }
+
+  /* Map */
+  .map-box {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    background: #f1f5f9;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.04);
+  }
+  .map-box canvas { display: block; width: 100%; cursor: grab; }
+  .map-box canvas:active { cursor: grabbing; }
+  .map-legend {
+    position: absolute; bottom: 12px; right: 12px;
+    background: rgba(255,255,255,0.95); backdrop-filter: blur(12px);
+    border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 10px 14px; font-size: 11px; color: #475569;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .map-legend span { margin-left: 10px; }
+  .map-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 3px; vertical-align: -1px; }
+
+  /* Latency dots */
+  .latency-cell { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; font-weight: 500; }
+  .latency-cell .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
+  /* QR canvas */
+  .qr-canvas-wrap canvas { border-radius: 12px; margin: 12px auto; display: block; }
+
+  /* Pre/Code */
+  pre {
+    background: #f8fafc !important;
+    border: 1px solid #e8eef5 !important;
+    border-radius: 10px !important;
+    color: #334155;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  code {
+    background: #f1f5f9;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: #3b82f6;
+  }
+
+  /* Animations */
+  .fade-enter-active { animation: fadeIn 0.25s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .app-wrap { padding: 16px 14px 60px; }
+    .app-header { padding: 20px 20px; border-radius: 16px; }
+    .app-header h1 { font-size: 18px; }
+    .el-card { border-radius: 12px; }
+    .el-tabs__item { padding: 0 14px; font-size: 13px; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>singbox-kit <small>添加订阅 → 选择规则 → 导出 sing-box 配置</small></h1>
+<div id="app">
+  <div class="app-wrap">
+    <!-- Header -->
+    <div class="app-header">
+      <h1>singbox-kit <small>添加订阅 → 选择规则 → 导出 sing-box 配置</small> <span style="font-size:10px;opacity:0.5">v2</span></h1>
+    </div>
 
-  <div class="seg" id="seg">
-    <button class="active" data-seg="subs"><span class="seg-num">①</span>订阅</button>
-    <button data-seg="rules"><span class="seg-num">②</span>规则</button>
-    <button data-seg="export"><span class="seg-num">③</span>导出</button>
-  </div>
+    <!-- Main Tabs -->
+    <el-tabs v-model="activeTab" @tab-change="onTabChange">
+      <!-- ============ ① 订阅 ============ -->
+      <el-tab-pane label="① 订阅" name="subs">
+        <el-card>
+          <template #header>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-weight:600;font-size:15px">订阅源库</span>
+              <div>
+                <el-button size="small" :loading="refreshingAll" @click="refreshAll">
+                  <el-icon><Refresh /></el-icon> 刷新全部
+                </el-button>
+                <el-button size="small" type="primary" @click="openAddForm">
+                  <el-icon><Plus /></el-icon> 添加订阅源
+                </el-button>
+              </div>
+            </div>
+          </template>
 
-  <!-- ============ ① 订阅 ============ -->
-  <section id="tab-subs" class="wsec active">
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <b>订阅源库</b>
-        <div class="row">
-          <button class="secondary small" id="btnRefreshAll">刷新全部</button>
-          <button class="secondary small" id="btnAddShow">+ 添加订阅源</button>
-        </div>
-      </div>
+          <!-- Loading State -->
+          <div v-if="pageLoading" style="text-align:center;padding:40px 0;color:#94a3b8">
+            <div style="width:24px;height:24px;border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto"></div>
+            <div style="margin-top:8px;font-size:13px">加载中…</div>
+          </div>
 
-      <div id="addForm" class="card inset" style="display:none">
-        <div class="row" style="justify-content:space-between">
-          <b id="addTitle">添加订阅源</b>
-          <button class="secondary small" id="btnAddCancel">取消</button>
-        </div>
-        <div class="grid2">
-          <div class="fld"><label>名称（便于识别，保存在服务端数据文件）</label><input type="text" id="srcName" placeholder="例如：主机场 A"></div>
-          <div class="fld"><label>类型</label>
-            <div class="row">
-              <label class="inline"><input type="radio" name="srckind" value="url" checked> 远程 URL</label>
-              <label class="inline"><input type="radio" name="srckind" value="text"> 订阅文本</label>
+          <!-- Empty State -->
+          <el-empty v-else-if="!sources.length" description="还没有订阅源" :image-size="80">
+            <el-button type="primary" @click="openAddForm">添加订阅源</el-button>
+          </el-empty>
+
+          <!-- Add/Edit Form -->
+          <el-card v-if="showAddForm" shadow="never" style="background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:16px;animation:fadeIn 0.2s ease-out">
+              <template #header>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="font-weight:600">{{ editingId ? '编辑订阅源' : '添加订阅源' }}</span>
+                  <el-button size="small" @click="closeAddForm">取消</el-button>
+                </div>
+              </template>
+              <el-form label-position="top" size="default">
+                <el-row :gutter="16">
+                  <el-col :xs="24" :sm="12">
+                    <el-form-item label="名称（便于识别）">
+                      <el-input v-model="srcForm.name" placeholder="例如：主机场 A" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :xs="24" :sm="12">
+                    <el-form-item label="类型">
+                      <el-radio-group v-model="srcForm.kind">
+                        <el-radio-button value="url">远程 URL</el-radio-button>
+                        <el-radio-button value="text">订阅文本</el-radio-button>
+                      </el-radio-group>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+                <el-form-item v-if="srcForm.kind === 'url'" label="订阅 URL（保存后点「刷新」抓取）">
+                  <el-input v-model="srcForm.url" placeholder="https://example.com/sub?token=…" />
+                </el-form-item>
+                <el-form-item v-else label="订阅内容（vmess:// vless:// ss:// trojan:// 等）">
+                  <el-input v-model="srcForm.text" type="textarea" :rows="5" placeholder="粘贴订阅内容…" />
+                </el-form-item>
+                <el-row :gutter="16">
+                  <el-col :xs="24" :sm="12">
+                    <el-form-item label="抓取 User-Agent（留空 = 内置 Clash UA）">
+                      <el-input v-model="srcForm.ua" placeholder="clash.meta/v1.19.23" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :xs="24" :sm="12">
+                    <el-form-item label="抓取超时（ms，留空 = 30000）">
+                      <el-input-number v-model="srcForm.timeout" :min="100" :max="300000" placeholder="30000" style="width:100%" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+                <el-form-item>
+                  <template #label>
+                    附加请求头（每行 <code>Name: Value</code>）
+                  </template>
+                  <el-input v-model="srcForm.headers" type="textarea" :rows="2" placeholder="Authorization: Bearer xxx" />
+                </el-form-item>
+                <div style="display:flex;align-items:center;gap:12px">
+                  <el-button type="primary" :loading="savingSource" @click="saveSource">保存</el-button>
+                  <span class="muted" style="font-size:12px">{{ srcFormHint }}</span>
+                </div>
+              </el-form>
+            </el-card>
+
+          <!-- Subscription List -->
+          <div v-for="s in sources" :key="s.id" class="sub-item">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+              <el-checkbox :model-value="s.enabled" :disabled="togglingId === s.id" @change="(v) => toggleEnabled(s, v)" label="启用" size="small" />
+              <span style="font-weight:600;font-size:14px">{{ s.name }}</span>
+              <el-tag :type="s.kind === 'url' ? '' : 'warning'" size="small" effect="dark" round>
+                {{ s.kind === 'url' ? 'URL' : '文本' }}
+              </el-tag>
+              <span style="flex:1"></span>
+              <el-button size="small" :loading="refreshingIds.get(s.id)" @click="refreshOne(s.id)">
+                <el-icon><Refresh /></el-icon>
+              </el-button>
+              <el-button size="small" @click="previewSource(s.id)">预览</el-button>
+              <el-button size="small" @click="openEditForm(s.id)">编辑</el-button>
+              <el-button size="small" type="danger" plain @click="deleteSource(s.id)">删除</el-button>
+            </div>
+            <!-- Status line -->
+            <div :style="{ fontSize: '12px', marginTop: '4px', color: getStatusColor(s) }">
+              {{ getStatusText(s) }}
+            </div>
+            <!-- Usage -->
+            <div v-if="getUsageText(s)" style="font-size:12px;margin-top:2px;color:#64748b">
+              {{ getUsageText(s) }}
+            </div>
+            <!-- Preview nodes -->
+            <div v-if="getPreview(s.id)" style="margin-top:8px">
+              <div style="font-size:12px;color:#94a3b8;margin-bottom:6px">
+                {{ getPreview(s.id).nodeCount }} 个节点
+                <template v-if="getPreview(s.id)._protoStr"> · {{ getPreview(s.id)._protoStr }}</template>
+              </div>
+              <el-table v-if="getPreview(s.id).nodes && getPreview(s.id).nodes.length" :data="getPreview(s.id).nodes"
+                size="small" max-height="280" border style="border-radius:8px">
+                <el-table-column width="40">
+                  <template #header>
+                    <el-checkbox :model-value="isAllChecked(s)" @change="(v) => toggleCheckAll(s, v)" size="small" />
+                  </template>
+                  <template #default="{ row }">
+                    <el-checkbox :model-value="!isNodeExcluded(s, row.tag)" @change="(v) => toggleNodeCheck(s, row.tag, v)" size="small" />
+                  </template>
+                </el-table-column>
+                <el-table-column prop="tag" label="名称" min-width="120" />
+                <el-table-column prop="type" label="类型" width="100">
+                  <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.type }}</code></template>
+                </el-table-column>
+                <el-table-column prop="server" label="服务器" min-width="120">
+                  <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.server || '-' }}</code></template>
+                </el-table-column>
+              </el-table>
+              <div style="margin-top:6px;display:flex;align-items:center;gap:12px">
+                <el-button size="small" type="primary" plain @click="saveNodeSelection(s)">保存节点选择</el-button>
+                <span class="muted" style="font-size:12px">取消勾选的节点将不会出现在导出配置中。</span>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="fld" id="urlWrap" style="margin-top:8px"><label>订阅 URL（机场订阅链接，保存后点「刷新」抓取）</label><input type="text" id="srcUrl" placeholder="https://example.com/sub?token=…"></div>
-        <div class="fld" id="textWrap" style="margin-top:8px; display:none"><label>订阅内容（vmess:// vless:// ss:// trojan:// hysteria2:// … 或 YAML/JSON 节点列表）</label><textarea id="srcText" style="min-height:120px"></textarea></div>
-        <div class="grid2" style="margin-top:8px">
-          <div class="fld"><label>抓取 User-Agent（留空 = 内置 Clash UA；被面板拦截时自动回退一次）</label><input type="text" id="srcUa" placeholder="clash.meta/v1.19.23"></div>
-          <div class="fld"><label>抓取超时（ms，留空 = 30000）</label><input type="number" id="srcTimeout" min="100" max="300000" placeholder="30000"></div>
-        </div>
-        <div class="fld" style="margin-top:8px">
-          <label>附加请求头（每行 <span class="mono">Name: Value</span>，用于带 token 的订阅）</label>
-          <textarea id="srcHeaders" style="min-height:50px"></textarea>
-        </div>
-        <div class="row" style="margin-top:10px">
-          <button id="btnSrcSave">保存</button>
-          <span class="muted" id="srcSaveHint" style="font-size:12px">保存后会自动解析一次，显示节点概况。</span>
-        </div>
-      </div>
 
-      <div id="subEmpty" class="muted" style="margin-top:12px">还没有订阅源。点击「添加订阅源」，保存后到「导出」页生成 sing-box 配置。</div>
-      <div id="subList"></div>
-      <div class="muted" style="font-size:12px; margin-top:10px">勾选「启用」的订阅会合并进同一份配置——导出页和订阅地址取的都是这一份；跨订阅重名节点会自动改名（见导出时的提示）。</div>
-    </div>
-  </section>
-
-  <!-- ============ ② 规则 ============ -->
-  <section id="tab-rules" class="wsec">
-    <div class="card">
-      <b>分流规则（内置 ACL4SSR）</b>
-      <label class="scene" data-acl="acl4ssr-default">
-        <input type="radio" name="acl" value="acl4ssr-default"><b>ACL4SSR 默认</b>
-        <span>去广告、自动测速，含国外媒体、电报、微软和苹果分流。</span>
-      </label>
-      <label class="scene" data-acl="acl4ssr-full">
-        <input type="radio" name="acl" value="acl4ssr-full"><b>ACL4SSR 全分组</b>
-        <span>最完整分组：流媒体、AI、游戏、音乐，并按节点名自动分出地区组（完整 GFW 列表）。</span>
-      </label>
-      <label class="scene" data-acl="acl4ssr-mini">
-        <input type="radio" name="acl" value="acl4ssr-mini"><b>ACL4SSR 精简</b>
-        <span>只保留节点选择、自动选择、全球直连与拦截，策略组最少、规则最省。</span>
-      </label>
-      <label class="scene" data-acl="none">
-        <input type="radio" name="acl" value="none"><b>不使用（默认分域模板）</b>
-        <span>用内置的国内直连 / 局域网 / 私有地址模板，不引入 ACL4SSR 规则。</span>
-      </label>
-      <div class="muted" style="font-size:12px; margin-top:8px">
-        规则文本随页面内置，无需机场提供规则链接；其中 <span class="mono">GEOIP,CN</span> 直连使用 sing-box 远程 geoip-cn 规则集。
-      </div>
-      <div class="muted" id="rulesSaveHint" style="font-size:12px; margin-top:8px"></div>
-    </div>
-  </section>
-
-  <!-- ============ ③ 导出 ============ -->
-  <section id="tab-export" class="wsec">
-    <div class="card">
-      <div id="exportSummary" class="muted">把启用的订阅合并，按所选场景生成一份完整的 sing-box 配置。</div>
-      <div class="row" style="margin-top:10px">
-        <button id="btnGenerate">生成配置</button>
-      </div>
-      <div id="genStatus" style="min-height:20px; margin-top:10px; font-size:13px"></div>
-    </div>
-
-    <div id="result" class="card" style="display:none">
-      <div id="warnBox"></div>
-      <div class="tabs" id="outtabs">
-        <button data-p="node" class="active">节点表格</button>
-        <button data-p="map">节点地图</button>
-        <button data-p="cfg">完整配置 JSON</button>
-      </div>
-      <div class="panel active" id="p-node"></div>
-      <div class="panel" id="p-map">
-        <div class="map-container" id="mapContainer" style="height:320px">
-          <canvas id="worldMap" width="800" height="400"></canvas>
-          <div class="map-legend">
-            <span><span class="dot" style="background:#6fcf97"></span>快(&lt;200ms)</span>
-            <span><span class="dot" style="background:#ffd479"></span>中(200-500ms)</span>
-            <span><span class="dot" style="background:#ef7d7d"></span>慢(&gt;500ms)</span>
-            <span><span class="dot" style="background:#7c8a99"></span>超时</span>
-            <span><span class="dot" style="background:#2f7de1"></span>未测试</span>
+          <div class="muted" style="font-size:12px;margin-top:12px">
+            勾选「启用」的订阅会合并进同一份配置——导出页和订阅地址取的都是这一份；跨订阅重名节点会自动改名。
           </div>
-        </div>
-      </div>
-      <div class="panel" id="p-cfg"><pre id="cfgText"></pre></div>
-      <div class="row" style="margin-top:12px">
-        <button class="secondary small" id="btnCopy">复制完整配置</button>
-        <button class="secondary small" id="btnDownload">下载 singbox-config.json</button>
-        <button class="secondary small" id="btnPing">延迟测试</button>
-        <span id="pingStatus" class="muted" style="font-size:12px"></span>
-      </div>
-    </div>
+        </el-card>
+      </el-tab-pane>
 
-    <div class="card" id="exportSubCard" style="display:none">
-      <div class="row" style="justify-content:space-between">
-        <b>订阅地址</b>
-        <span class="tag">一条链接，客户端自动跟进</span>
-      </div>
-      <div class="muted" style="font-size:12px; margin-top:4px">
-        把这个地址填进客户端一次即可：之后你在「订阅」页点「刷新」，客户端再来拉取时拿到的就是最新节点。
-        默认按客户端的 User-Agent 自动判断格式，同一个地址可以同时喂给 sing-box 和 Clash；
-        也可以在上面固定成某一个客户端，固定后走 <span class="mono">?target=</span>，优先级高于 User-Agent。
-        规则方案取自「规则」页当前选定的内容。
-      </div>
-      <div class="grid2" style="margin-top:10px">
-        <div class="fld">
-          <label>对外地址（填了才在别的设备上可用；留空则用当前浏览器地址）</label>
-          <input type="text" id="publicUrl" placeholder="http://150.158.78.150" spellcheck="false">
-        </div>
-        <div class="fld">
-          <label>客户端类型</label>
-          <select id="exportTarget"></select>
-        </div>
-      </div>
-      <div class="muted" id="publicUrlHint" style="font-size:12px; margin-top:6px"></div>
-      <div class="row" style="margin-top:8px">
-        <input type="text" id="exportSubUrl" readonly style="flex:1; min-width:240px">
-        <button class="secondary small" id="btnCopyExportSubUrl">复制</button>
-        <button class="secondary small" id="btnQrExportSubUrl">QR 码</button>
-        <button class="secondary small" id="btnRotateGlobal">轮换密钥</button>
-      </div>
-      <div class="muted" id="exportSubHint" style="font-size:12px; margin-top:6px"></div>
-    </div>
+      <!-- ============ ② 规则 ============ -->
+      <el-tab-pane label="② 规则" name="rules">
+        <el-card>
+          <template #header>
+            <span style="font-weight:600;font-size:15px">分流规则（内置 ACL4SSR）</span>
+          </template>
 
-    <div class="card" id="lanCard" style="display:none">
-      <div class="row" style="justify-content:space-between">
-        <b>局域网分享</b>
-        <span class="tag">同一 Wi-Fi 下的设备可导入</span>
-      </div>
-      <div class="muted" style="font-size:12px; margin-top:4px">
-        以下地址可在局域网内其他设备上使用，导入对应客户端即可同步订阅。
-      </div>
-      <div id="lanUrls" style="margin-top:8px"></div>
-    </div>
+          <div v-for="r in ruleOptions" :key="r.value"
+            class="scene-card" :class="{ selected: acl === r.value }"
+            @click="selectRule(r.value)" style="position:relative">
+            <el-radio :model-value="acl" :value="r.value" @change="selectRule(r.value)" @click.stop>
+              <b>{{ r.label }}</b>
+            </el-radio>
+            <div style="margin-left:24px;margin-top:2px"><span>{{ r.desc }}</span></div>
+          </div>
 
-    <details>
-      <summary>如何使用这份配置</summary>
-      <div class="card inset">
-        生成产物是一份完整的 <span class="mono">sing-box</span> 配置 JSON。
-        <ul style="margin:8px 0">
-          <li><b>GUI 客户端</b>：把下载的 <span class="mono">singbox-config.json</span> 作为配置文件导入。</li>
-          <li><b>命令行</b>：保存为 <span class="mono">config.json</span> 后运行 <span class="mono">sing-box run -c config.json</span>。</li>
-          <li>配置按客户端形态生成：开 TUN 接管并带 DNS 骨架，需给 sing-box 相应的系统权限（与 Tower 生成的一致）。</li>
-          <li>ACL4SSR 会生成 <span class="mono">🚀 节点选择 / ♻️ 自动选择 / 各地区组</span> 等策略组，可在带 clash_api 的客户端面板里手动切换。</li>
-          <li>国内 IP 直连依赖 sing-box 启动时拉取 <span class="mono">geoip-cn</span> 规则集；不联网的部署可改用「不使用（默认分域模板）」。</li>
-        </ul>
-        订阅与凭据保存在服务端数据文件（<span class="mono" id="dataPathHint">singbox-web.data.json</span>）里，
-        解析与生成也都在你自己的服务或本机完成。该文件等同于一份凭据清单，不要放进代码仓库或共享目录。
-        <br><br>
-        订阅地址本身是一条能力链接：<b>任何拿到它的人都能取到你的全部节点</b>。
-        <span class="mono">apiToken</span> 只保护 <span class="mono">/api/*</span>，
-        <b>并不保护 <span class="mono">/sub/&lt;token&gt;</span></b>。
-        需要对外提供时，请在前面套一层 HTTPS 反向代理（本服务自身只监听明文 HTTP），把「对外地址」填成那层代理的地址；
-        想收回已经发出去的链接，用上面的「轮换密钥」，旧地址立刻失效。
-      </div>
-    </details>
-  </section>
-</div>
+          <div class="muted" style="font-size:12px;margin-top:12px">
+            规则文本随页面内置，无需机场提供规则链接；其中 <code class="mono">GEOIP,CN</code> 直连使用 sing-box 远程 geoip-cn 规则集。
+          </div>
+          <div v-if="rulesHint" :class="rulesHintType === 'ok' ? 'status-ok' : 'status-err'" style="font-size:12px;margin-top:6px">
+            {{ rulesHint }}
+          </div>
+        </el-card>
+      </el-tab-pane>
 
-<!-- QR Code Modal -->
-<div class="qr-overlay" id="qrOverlay">
-  <div class="qr-modal">
-    <b>扫码导入</b>
-    <canvas id="qrCanvas"></canvas>
-    <div class="qr-url" id="qrUrl"></div>
-    <button class="secondary small" id="qrClose" style="margin-top:10px">关闭</button>
+      <!-- ============ ③ 导出 ============ -->
+      <el-tab-pane label="③ 导出" name="export">
+        <!-- Generate -->
+        <el-card>
+          <div v-if="enabledSubs.length === 0" style="color:#f87171;font-size:13px">
+            还没有参与导出的订阅。请到「订阅」页添加并勾选要合并的订阅源。
+          </div>
+          <div v-else class="muted" style="font-size:13px">
+            将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），按「{{ aclName }}」生成完整 sing-box 配置。
+          </div>
+          <div style="margin-top:12px;display:flex;align-items:center;gap:12px">
+            <el-button type="primary" :loading="generating" :disabled="!enabledSubs.length" @click="generate">
+              <el-icon><Cpu /></el-icon> 生成配置
+            </el-button>
+            <span v-if="genStatus" :class="genStatusType === 'ok' ? 'status-ok' : genStatusType === 'err' ? 'status-err' : 'muted'" style="font-size:13px">
+              {{ genStatus }}
+            </span>
+          </div>
+        </el-card>
+
+        <!-- Result -->
+        <el-card v-if="last" style="margin-top:16px">
+          <!-- Warnings -->
+          <el-alert v-if="allWarnings.length" type="warning" :closable="false" show-icon style="margin-bottom:12px;border-radius:8px">
+            <template #title>注意</template>
+            <template #default>
+              <div v-for="(w,i) in allWarnings" :key="i" style="font-size:12px;margin-top:2px">· {{ w }}</div>
+            </template>
+          </el-alert>
+
+          <!-- Output Tabs -->
+          <el-tabs v-model="activeOutTab">
+            <el-tab-pane label="节点表格" name="node">
+              <el-table :data="filteredNodes" size="small" max-height="480" border stripe style="border-radius:8px">
+                <el-table-column prop="type" label="类型" width="100">
+                  <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.type }}</code></template>
+                </el-table-column>
+                <el-table-column prop="tag" label="标签" min-width="140" />
+                <el-table-column prop="server" label="服务器" min-width="120">
+                  <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.server || '-' }}</code></template>
+                </el-table-column>
+                <el-table-column prop="port" label="端口" width="80">
+                  <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.port || '-' }}</code></template>
+                </el-table-column>
+                <el-table-column label="类别" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="row.kind === 'endpoint' ? 'warning' : ''" size="small" effect="dark" round>{{ row.kind }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column v-if="hasPing" label="延迟" width="110">
+                  <template #default="{ row }">
+                    <span class="latency-cell" :style="{ color: getLatencyColor(row) }">
+                      <span class="dot" :style="{ background: getLatencyColor(row) }"></span>
+                      {{ getLatencyText(row) }}
+                    </span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="节点地图" name="map">
+              <div class="map-box" style="height:340px">
+                <canvas ref="worldMapCanvas" width="800" height="400"></canvas>
+                <div class="map-legend">
+                  <span><span class="dot" style="background:#34d399"></span>快(&lt;200ms)</span>
+                  <span><span class="dot" style="background:#fbbf24"></span>中(200-500ms)</span>
+                  <span><span class="dot" style="background:#f87171"></span>慢(&gt;500ms)</span>
+                  <span><span class="dot" style="background:#64748b"></span>超时</span>
+                  <span><span class="dot" style="background:#3b82f6"></span>未测试</span>
+                </div>
+              </div>
+            </el-tab-pane>
+            <el-tab-pane label="完整配置 JSON" name="cfg">
+              <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;overflow:auto;max-height:520px;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-all;color:#334155">{{ cfgJson }}</pre>
+            </el-tab-pane>
+          </el-tabs>
+
+          <!-- Actions -->
+          <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <el-button size="small" @click="copyConfig"><el-icon><DocumentCopy /></el-icon> 复制完整配置</el-button>
+            <el-button size="small" @click="downloadConfig"><el-icon><Download /></el-icon> 下载 JSON</el-button>
+            <el-button size="small" :loading="pingRunning" @click="pingNodes">
+              <el-icon><Connection /></el-icon> 延迟测试
+            </el-button>
+            <span v-if="pingStatus" :class="pingStatusType === 'ok' ? 'status-ok' : pingStatusType === 'err' ? 'status-err' : 'muted'" style="font-size:12px">
+              {{ pingStatus }}
+            </span>
+          </div>
+        </el-card>
+
+        <!-- Subscription Address -->
+        <el-card v-if="globalSubUrl" style="margin-top:16px">
+          <template #header>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-weight:600;font-size:15px">订阅地址</span>
+              <el-tag size="small" effect="dark" round>一条链接，客户端自动跟进</el-tag>
+            </div>
+          </template>
+          <div class="muted" style="font-size:12px;line-height:1.6">
+            把这个地址填进客户端一次即可：之后你在「订阅」页点「刷新」，客户端再来拉取时拿到的就是最新节点。
+            默认按客户端的 User-Agent 自动判断格式，也可以固定成某一个客户端。
+          </div>
+          <el-row :gutter="16" style="margin-top:12px">
+            <el-col :xs="24" :sm="12">
+              <el-form-item label="对外地址（留空用当前浏览器地址）" size="small">
+                <el-input v-model="publicUrlInput" placeholder="http://150.158.78.150" @input="onPublicUrlInput" @blur="flushPublicUrl" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12">
+              <el-form-item label="客户端类型" size="small">
+                <el-select v-model="exportTarget" @change="onTargetChange" style="width:100%">
+                  <el-option :value="''" label="自动识别客户端（按 User-Agent）" />
+                  <el-option v-for="t in targets" :key="t.id" :value="t.id" :label="t.label" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <div v-if="publicUrlHint" :class="publicUrlHintType === 'ok' ? 'status-ok' : publicUrlHintType === 'err' ? 'status-err' : 'muted'" style="font-size:12px;margin-bottom:8px">
+            {{ publicUrlHint }}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <el-input :model-value="fullSubUrl" readonly style="flex:1;min-width:240px" />
+            <el-button size="small" @click="copyText(fullSubUrl)"><el-icon><DocumentCopy /></el-icon></el-button>
+            <el-button size="small" @click="showQr(fullSubUrl)"><el-icon><Iphone /></el-icon> QR</el-button>
+            <el-button size="small" type="warning" plain @click="rotateToken"><el-icon><Key /></el-icon> 轮换密钥</el-button>
+          </div>
+          <div v-if="exportSubHint" class="muted" style="font-size:12px;margin-top:6px">{{ exportSubHint }}</div>
+        </el-card>
+
+        <!-- LAN Sharing -->
+        <el-card v-if="lanIps.length" style="margin-top:16px">
+          <template #header>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-weight:600;font-size:15px">局域网分享</span>
+              <el-tag size="small" effect="dark" round>同一 Wi-Fi 下的设备可导入</el-tag>
+            </div>
+          </template>
+          <div class="muted" style="font-size:12px;margin-bottom:8px">以下地址可在局域网内其他设备上使用。</div>
+          <div v-for="iface in lanIps" :key="iface.name" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px">
+            <code class="mono" style="flex:1;font-size:12px;word-break:break-all">{{ iface.name }}: {{ iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : '') }}</code>
+            <el-button size="small" @click="copyText(iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : ''))">复制</el-button>
+            <el-button size="small" @click="showQr(iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : ''))">QR</el-button>
+          </div>
+        </el-card>
+
+        <!-- Help -->
+        <el-collapse style="margin-top:16px">
+          <el-collapse-item title="如何使用这份配置" name="help">
+            <div style="font-size:13px;line-height:1.7;color:#64748b">
+              生成产物是一份完整的 <code class="mono">sing-box</code> 配置 JSON。
+              <ul style="margin:8px 0;padding-left:20px">
+                <li><b>GUI 客户端</b>：把下载的 <code class="mono">singbox-config.json</code> 作为配置文件导入。</li>
+                <li><b>命令行</b>：保存为 <code class="mono">config.json</code> 后运行 <code class="mono">sing-box run -c config.json</code>。</li>
+                <li>配置按客户端形态生成：开 TUN 接管并带 DNS 骨架，需给 sing-box 相应的系统权限。</li>
+                <li>ACL4SSR 会生成 🚀 节点选择 / ♻️ 自动选择 / 各地区组等策略组。</li>
+                <li>国内 IP 直连依赖 sing-box 启动时拉取 <code class="mono">geoip-cn</code> 规则集。</li>
+              </ul>
+              订阅与凭据保存在服务端数据文件（<code class="mono">{{ dataPath || 'singbox-web.data.json' }}</code>）里。
+              <b>任何拿到订阅地址的人都能取到你的全部节点</b>，需要对外请套 HTTPS 反向代理。
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </el-tab-pane>
+    </el-tabs>
   </div>
+
+  <!-- QR Dialog -->
+  <el-dialog v-model="qrVisible" title="扫码导入" width="360px" :close-on-click-modal="true" center>
+    <div class="qr-canvas-wrap" style="text-align:center">
+      <canvas ref="qrCanvas"></canvas>
+    </div>
+    <div style="font-size:11px;color:#64748b;word-break:break-all;text-align:center;max-height:60px;overflow:auto;margin-top:8px">
+      {{ qrUrl }}
+    </div>
+    <template #footer>
+      <el-button @click="qrVisible = false">关闭</el-button>
+    </template>
+  </el-dialog>
 </div>
 
 <script>
-(function () {
-  "use strict";
+var COUNTRY_MAP = {
+  "香港":{code:"HK",lat:22.3,lng:114.2},"台湾":{code:"TW",lat:23.7,lng:121.0},"日本":{code:"JP",lat:36.2,lng:138.3},
+  "韩国":{code:"KR",lat:35.9,lng:127.8},"新加坡":{code:"SG",lat:1.35,lng:103.8},"美国":{code:"US",lat:37.1,lng:-95.7},
+  "美西":{code:"US",lat:36.8,lng:-119.4},"美东":{code:"US",lat:40.7,lng:-74.0},"洛杉矶":{code:"US",lat:34.1,lng:-118.2},
+  "硅谷":{code:"US",lat:37.4,lng:-122.1},"圣何塞":{code:"US",lat:37.3,lng:-121.9},"英国":{code:"GB",lat:55.4,lng:-3.4},
+  "伦敦":{code:"GB",lat:51.5,lng:-0.1},"德国":{code:"DE",lat:51.2,lng:10.5},"法国":{code:"FR",lat:46.2,lng:2.2},
+  "巴黎":{code:"FR",lat:48.9,lng:2.3},"加拿大":{code:"CA",lat:56.1,lng:-106.3},"澳大利亚":{code:"AU",lat:-25.3,lng:133.8},
+  "澳洲":{code:"AU",lat:-25.3,lng:133.8},"悉尼":{code:"AU",lat:-33.9,lng:151.2},"印度":{code:"IN",lat:20.6,lng:79.0},
+  "巴西":{code:"BR",lat:-14.2,lng:-51.9},"俄罗斯":{code:"RU",lat:61.5,lng:105.3},"荷兰":{code:"NL",lat:52.1,lng:5.3},
+  "土耳其":{code:"TR",lat:38.9,lng:35.2},"泰国":{code:"TH",lat:15.9,lng:100.9},"越南":{code:"VN",lat:14.1,lng:108.3},
+  "马来西亚":{code:"MY",lat:4.2,lng:101.9},"印尼":{code:"ID",lat:-0.8,lng:113.9},"菲律宾":{code:"PH",lat:12.9,lng:121.8},
+  "澳门":{code:"MO",lat:22.2,lng:113.5},"阿根廷":{code:"AR",lat:-38.4,lng:-63.6},"智利":{code:"CL",lat:-35.7,lng:-71.5},
+  "墨西哥":{code:"MX",lat:23.6,lng:-102.6},"以色列":{code:"IL",lat:31.0,lng:34.9},"迪拜":{code:"AE",lat:23.4,lng:53.8},
+  "阿联酋":{code:"AE",lat:23.4,lng:53.8},"瑞士":{code:"CH",lat:46.8,lng:8.2},"瑞典":{code:"SE",lat:60.1,lng:18.6},
+  "芬兰":{code:"FI",lat:61.9,lng:25.7},"挪威":{code:"NO",lat:60.5,lng:8.5},"波兰":{code:"PL",lat:51.9,lng:19.1},
+  "意大利":{code:"IT",lat:41.9,lng:12.6},"西班牙":{code:"ES",lat:40.5,lng:-3.7},"葡萄牙":{code:"PT",lat:39.4,lng:-8.2},
+  "埃及":{code:"EG",lat:26.8,lng:30.8},"南非":{code:"ZA",lat:-30.6,lng:22.9},
+  "hong kong":{code:"HK",lat:22.3,lng:114.2},"japan":{code:"JP",lat:36.2,lng:138.3},"korea":{code:"KR",lat:35.9,lng:127.8},
+  "singapore":{code:"SG",lat:1.35,lng:103.8},"usa":{code:"US",lat:37.1,lng:-95.7},"united states":{code:"US",lat:37.1,lng:-95.7},
+  "uk":{code:"GB",lat:55.4,lng:-3.4},"london":{code:"GB",lat:51.5,lng:-0.1},"germany":{code:"DE",lat:51.2,lng:10.5},
+  "france":{code:"FR",lat:46.2,lng:2.2},"canada":{code:"CA",lat:56.1,lng:-106.3},"australia":{code:"AU",lat:-25.3,lng:133.8},
+  "india":{code:"IN",lat:20.6,lng:79.0},"brazil":{code:"BR",lat:-14.2,lng:-51.9},"russia":{code:"RU",lat:61.5,lng:105.3},
+  "netherlands":{code:"NL",lat:52.1,lng:5.3},"turkey":{code:"TR",lat:38.9,lng:35.2},"thailand":{code:"TH",lat:15.9,lng:100.9},
+  "taiwan":{code:"TW",lat:23.7,lng:121.0}
+};
+var CLIENT_PROTOCOLS = {
+  "sing-box":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls","snell","socks","http"],
+  "clash":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
+  "surge":["shadowsocks","vmess","vless","trojan","tuic","wireguard","snell","socks","http"],
+  "loon":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard","socks","http"],
+  "quantumultx":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","http"],
+  "shadowrocket":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
+  "stash":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
+  "surfboard":["shadowsocks","vmess","vless","trojan","tuic","wireguard","socks","http"],
+  "v2ray":["shadowsocks","vmess","vless","trojan"],
+  "egern":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard"],
+  "hiddify":["shadowsocks","vmess","vless","trojan","hysteria2","tuic","wireguard"],
+  "karing":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"],
+  "uri":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"]
+};
 
-  // Everything authoritative lives on the server. What is left in localStorage
-  // is the apiToken (a per-browser secret) and the three legacy keys, read once
-  // to migrate an install that predates the server-side store.
-  var STORE = {
-    shape: "sbx:shape",   // legacy: the run shape is gone; only purged now
-    acl: "sbx:acl",       // legacy: the rules choice now lives in settings
-    apiToken: "sbx:apiToken",
-    // Which client the export page's address is pinned to. Display-only: the
-    // server never reads it, the client's own ?target= decides the dialect. So
-    // it is a per-browser preference, not a stored setting.
-    exportTarget: "sbx:exportTarget",
-    legacySubs: "sbx:subs",
-    legacyEnabled: "sbx:enabledIds"
-  };
-  var ACL_NAME = {
-    "acl4ssr-default": "ACL4SSR 默认",
-    "acl4ssr-full": "ACL4SSR 全分组",
-    "acl4ssr-mini": "ACL4SSR 精简",
-    none: "默认分域模板"
-  };
+var STORE = { apiToken:"sbx:apiToken", exportTarget:"sbx:exportTarget", legacySubs:"sbx:subs", legacyEnabled:"sbx:enabledIds", shape:"sbx:shape", acl:"sbx:acl" };
+var ACL_NAME = { "acl4ssr-default":"ACL4SSR 默认", "acl4ssr-full":"ACL4SSR 全分组", "acl4ssr-mini":"ACL4SSR 精简", none:"默认分域模板" };
 
-  function $(id) { return document.getElementById(id); }
-  function load(key, fallback) {
-    try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
-    catch (e) { return fallback; }
-  }
-  function save(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage may be full/unavailable */ }
-  }
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
-  // Server mirror: sources, the target list and the global subscription URL.
-  var state = { sources: [], targets: [], globalSubUrl: "", publicUrl: "", dataPath: "", settings: {} };
-  // The pinned client for the export address, or "" for UA detection.
-  var exportTarget = load(STORE.exportTarget, "");
-  // Filled from the server's saved settings once loadSubs() resolves. These are
-  // the same values the subscription address is rendered from. The rule preset
-  // is the only thing the rules page chooses; the run shape (TUN tun-in, DNS
-  // skeleton, CN-direct) is Tower's default and not user-selectable.
-  var acl = "none";
-  var settingsReady = false;   // true once the saved settings have been applied
-  var pendingSave = false;     // a change made before that first apply
-  var saveTimer = null;
-  var editingId = null;   // id being edited in the add/edit form, or null
-  var last = null;        // last successful export result
-  var activeOutTab = "node";
-  var refreshing = {};    // source id -> true while its refresh is in flight
+function lsLoad(key, fb) { try { var v=localStorage.getItem(key); return v?JSON.parse(v):fb; } catch(e){return fb;} }
+function lsSave(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch(e){} }
+function detectCountry(name) {
+  if (!name) return null;
+  var lower = name.toLowerCase();
+  var keys = Object.keys(COUNTRY_MAP);
+  for (var i=0;i<keys.length;i++) { if (lower.indexOf(keys[i].toLowerCase())>=0) return COUNTRY_MAP[keys[i]]; }
+  return null;
+}
 
-  // One place for the apiToken (needed when the server sets one) and for
-  // turning a non-2xx answer into a thrown Error with a usable message.
-  async function api(method, path, body, isRetry) {
-    var init = { method: method, headers: {} };
-    if (body !== undefined) {
-      init.headers["content-type"] = "application/json";
-      init.body = JSON.stringify(body);
-    }
-    var token = load(STORE.apiToken, "");
-    if (token) init.headers["authorization"] = "Bearer " + token;
+var app = Vue.createApp({
+  setup: function() {
+    // === State ===
+    var activeTab = Vue.ref('subs');
+    var sources = Vue.ref([]);
+    var targets = Vue.ref([]);
+    var globalSubUrl = Vue.ref('');
+    var publicUrl = Vue.ref('');
+    var dataPath = Vue.ref('');
+    var settings = Vue.ref({});
+    var acl = Vue.ref('none');
+    var settingsReady = Vue.ref(false);
+    var pendingSave = Vue.ref(false);
+    var saveTimer = Vue.ref(null);
+    var publicUrlTimer = Vue.ref(null);
 
-    var resp = await fetch(path, init);
-    if (resp.status === 401 && !isRetry) {
-      var entered = window.prompt("该服务设置了 apiToken，请填写访问密钥：", token || "");
-      if (entered !== null) {
-        save(STORE.apiToken, entered.trim());
-        return api(method, path, body, true);
-      }
-    }
-    var json = null;
-    try { json = await resp.json(); } catch (e) { json = null; }
-    if (!resp.ok || !json || json.ok === false) {
-      throw new Error((json && json.error) || ("HTTP " + resp.status));
-    }
-    return json.data;
-  }
+    // Loading state
+    var pageLoading = Vue.ref(true);
 
-  function enabledSubs() { return state.sources.filter(function (s) { return s.enabled; }); }
-  function subById(id) {
-    return state.sources.find(function (s) { return s.id === id; }) || null;
-  }
-  // The rules page is the only source of truth for how a config is built, and
-  // the server owns that copy so that the export page and the address a client
-  // polls are rendered from the same values. Saving is debounced: typing in a
-  // field must not fire a request per keystroke.
-  function persistAll() {
-    if (!settingsReady) { pendingSave = true; return; }
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(flushSettings, 400);
-  }
-  async function flushSettings() {
-    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-    pendingSave = false;
-    try {
-      var data = await api("PUT", "/api/settings", collectOptions());
-      state.settings = (data && data.settings) || state.settings;
-      setStatus($("rulesSaveHint"), "已保存。", "ok");
-    } catch (e) {
-      setStatus($("rulesSaveHint"), "保存失败：" + (e && e.message ? e.message : e), "err");
-    }
-  }
-  function setStatus(el, msg, cls) { el.textContent = msg; el.className = cls || ""; }
+    // Preview data (separate from sources to avoid reactivity issues)
+    var previewMap = Vue.ref(new Map());
 
-  /* ---------------- segmented navigation ---------------- */
-  function showSeg(seg) {
-    [].forEach.call($("seg").querySelectorAll("button"), function (b) {
-      b.classList.toggle("active", b.getAttribute("data-seg") === seg);
-    });
-    ["subs", "rules", "export"].forEach(function (s) {
-      $("tab-" + s).classList.toggle("active", s === seg);
-    });
-    // Leaving the rules page is a natural commit point for a pending edit.
-    if (seg !== "rules" && saveTimer) flushSettings();
-    if (seg === "export") updateExport();
-  }
-  [].forEach.call($("seg").querySelectorAll("button"), function (b) {
-    b.addEventListener("click", function () { showSeg(b.getAttribute("data-seg")); });
-  });
+    // Add/Edit form
+    var showAddForm = Vue.ref(false);
+    var editingId = Vue.ref(null);
+    var savingSource = Vue.ref(false);
+    var srcFormHint = Vue.ref('保存后会自动解析一次，显示节点概况。');
+    var srcForm = Vue.reactive({ name:'', kind:'url', url:'', text:'', ua:'', timeout:null, headers:'' });
 
-  /* ---------------- ① subscriptions ---------------- */
-  function formatBytes(n) {
-    if (n == null) return "-";
-    var units = ["B", "KB", "MB", "GB", "TB"], v = Number(n), i = 0;
-    while (v >= 1024 && i < units.length - 1) { v /= 1024; i += 1; }
-    return (i === 0 ? v : v.toFixed(1)) + " " + units[i];
-  }
-  function relativeTime(iso) {
-    var t = Date.parse(iso || "");
-    if (!isFinite(t)) return null;
-    var secs = Math.round((Date.now() - t) / 1000);
-    if (secs < 60) return "刚刚";
-    if (secs < 3600) return Math.floor(secs / 60) + " 分钟前";
-    if (secs < 86400) return Math.floor(secs / 3600) + " 小时前";
-    return Math.floor(secs / 86400) + " 天前";
-  }
-  // Mirrors Tower's SubscriptionFactsRow.status: an error wins, then the last
-  // successful update, then "never refreshed" - so a failure is never hidden
-  // behind a stale-but-present timestamp.
-  function statusLine(s) {
-    if (s.lastError) {
-      return { text: "上次刷新失败：" + s.lastError.message, cls: "err" };
-    }
-    if (s.lastUpdatedAt) {
-      return {
-        text: s.nodeCount + " 个节点 · " + (relativeTime(s.lastUpdatedAt) || s.lastUpdatedAt) + "更新",
-        cls: ""
-      };
-    }
-    if (s.lastCheckedAt) {
-      return { text: "已检查，内容未变化（" + relativeTime(s.lastCheckedAt) + "）", cls: "" };
-    }
-    return { text: "尚未刷新", cls: "muted" };
-  }
-  function usageLine(s) {
-    var u = s.usageSummary;
-    if (!u) return null;
-    var parts = u.unlimited
-      ? ["已用 " + formatBytes(u.used) + " · 不限量"]
-      : ["已用 " + formatBytes(u.used) + " / " + formatBytes(u.total)];
-    if (u.daysLeft != null) parts.push(u.expired ? "已到期" : "剩余 " + u.daysLeft + " 天");
-    if (u.expireAt) parts.push(u.expireAt.slice(0, 10) + " 到期");
-    return parts.join(" · ");
-  }
-  function renderSubList() {
-    var empty = $("subEmpty"), list = $("subList");
-    empty.style.display = state.sources.length ? "none" : "block";
-    var html = "";
-    state.sources.forEach(function (s) {
-      var st = statusLine(s);
-      var usage = usageLine(s);
-      var busy = !!refreshing[s.id];
-      html +=
-        '<div class="src" data-id="' + esc(s.id) + '">' +
-          '<div class="row">' +
-            '<label class="inline" title="勾选后进入导出配置与订阅地址的合并集">' +
-              '<input type="checkbox" class="src-en"' + (s.enabled ? " checked" : "") + "> 启用" +
-            "</label>" +
-            '<span class="src-name">' + esc(s.name) + "</span>" +
-            '<span class="tag kind-' + esc(s.kind) + '">' + (s.kind === "url" ? "URL" : "文本") + "</span>" +
-            '<span style="flex:1"></span>' +
-            '<button class="secondary small" data-action="refresh"' + (busy ? " disabled" : "") + ">" +
-              (busy ? "刷新中…" : "刷新") + "</button>" +
-            '<button class="secondary small" data-action="preview">预览</button>' +
-            '<button class="secondary small" data-action="edit">编辑</button>' +
-            '<button class="danger small" data-action="del">删除</button>' +
-          "</div>" +
-          '<div class="src-preview' + (st.cls === "err" ? " err" : "") + '">' + esc(st.text) + "</div>" +
-          (usage ? '<div class="src-preview muted">' + esc(usage) + "</div>" : "") +
-          '<div class="src-preview muted"><span class="mono">' + esc(s.subUrl || "") + "</span>" +
-            ' <button class="secondary small" data-action="copysub">复制此源地址</button>' +
-            ' <button class="secondary small" data-action="qrsub">QR 码</button></div>' +
-          '<div class="src-nodes muted"></div>' +
-        "</div>";
-    });
-    list.innerHTML = html;
-  }
-  function nodeHost(id) {
-    var host = null;
-    [].forEach.call(document.querySelectorAll("#subList .src"), function (el) {
-      if (el.getAttribute("data-id") === id) host = el.querySelector(".src-nodes");
-    });
-    return host;
-  }
+    // Export
+    var exportTarget = Vue.ref(lsLoad(STORE.exportTarget, ''));
+    var last = Vue.ref(null);
+    var generating = Vue.ref(false);
+    var genStatus = Vue.ref('');
+    var genStatusType = Vue.ref('');
+    var activeOutTab = Vue.ref('node');
 
-  // The stable address a client is pointed at, shown on the export page beside
-  // the config it renders. No ?target= is appended: the dialect comes from the
-  // client's own User-Agent, which is what lets one address serve them all.
-  // Where the address should point. A configured 对外地址 wins because the
-  // browser's own host is whatever the admin happened to type - on the server
-  // itself that is localhost, which no phone can reach. Falling back to
-  // location.origin keeps a plain `npm run web` usable with no setup.
-  function subBase() {
-    return state.publicUrl || location.origin;
-  }
+    // Ping
+    var pingResults = Vue.reactive({});
+    var pingRunning = Vue.ref(false);
+    var pingStatus = Vue.ref('');
+    var pingStatusType = Vue.ref('');
 
-  var AUTO_TARGET_LABEL = "自动识别客户端（按 User-Agent）";
+    // Refresh
+    var refreshingIds = Vue.ref(new Map());
+    var refreshingAll = Vue.ref(false);
+    var togglingId = Vue.ref(null);
 
-  // Client protocol support matrix (referenced from Tower's ClientDescriptor).
-  // Used to filter unsupported protocols when exporting.
-  var CLIENT_PROTOCOLS = {
-    "sing-box": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls","snell","socks","http"],
-    "clash": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
-    "surge": ["shadowsocks","vmess","vless","trojan","tuic","wireguard","snell","socks","http"],
-    "loon": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard","socks","http"],
-    "quantumultx": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","http"],
-    "shadowrocket": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
-    "stash": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
-    "surfboard": ["shadowsocks","vmess","vless","trojan","tuic","wireguard","socks","http"],
-    "v2ray": ["shadowsocks","vmess","vless","trojan"],
-    "egern": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard"],
-    "hiddify": ["shadowsocks","vmess","vless","trojan","hysteria2","tuic","wireguard"],
-    "karing": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"],
-    "uri": ["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"]
-  };
-  function getClientProtocols(targetId) {
-    return CLIENT_PROTOCOLS[targetId] || null;
-  }
+    // QR
+    var qrVisible = Vue.ref(false);
+    var qrUrl = Vue.ref('');
 
-  // Rebuilt on every loadSubs(), so the selection has to be restored each time -
-  // and dropped when the server no longer offers it (allowedTargets can narrow
-  // the list), because copying a ?target= the server rejects yields a link that
-  // looks fine until a client polls it and gets a 400.
-  function renderTargetSelect() {
-    var sel = $("exportTarget");
-    if (!sel) return;
-    var options = ['<option value="">' + esc(AUTO_TARGET_LABEL) + "</option>"];
-    (state.targets || []).forEach(function (t) {
-      options.push('<option value="' + esc(t.id) + '">' + esc(t.label) + "</option>");
-    });
-    sel.innerHTML = options.join("");
-    var known = (state.targets || []).some(function (t) { return t.id === exportTarget; });
-    if (!known && exportTarget) {
-      exportTarget = "";
-      save(STORE.exportTarget, "");
-    }
-    sel.value = known ? exportTarget : "";
-    // Only speak up when there is nothing to pick; otherwise leave the hint to
-    // whoever wrote it last (a save result, a copy confirmation).
-    if (!known && (state.targets || []).length === 0) {
-      setStatus($("publicUrlHint"), "服务端未放行任何可固定的客户端，地址将按 User-Agent 自动识别。", "");
-    }
-  }
+    // Public URL
+    var publicUrlInput = Vue.ref('');
+    var publicUrlHint = Vue.ref('');
+    var publicUrlHintType = Vue.ref('');
+    var exportSubHint = Vue.ref('');
 
-  function renderExportSubCard() {
-    var card = $("exportSubCard");
-    if (!card) return;
-    if (!state.globalSubUrl) { card.style.display = "none"; return; }
-    card.style.display = "block";
-    var query = exportTarget ? "?target=" + encodeURIComponent(exportTarget) : "";
-    $("exportSubUrl").value = subBase() + state.globalSubUrl + query;
-    var path = state.dataPath || "singbox-web.data.json";
-    if ($("dataPathHint")) $("dataPathHint").textContent = path;
-  }
+    // LAN
+    var lanIps = Vue.ref([]);
 
-  async function loadLanInfo() {
-    try {
-      var data = await api("GET", "/api/lan");
-      var lanIps = (data && data.lanIps) || [];
-      var card = $("lanCard");
-      var urlsDiv = $("lanUrls");
-      if (!card || !urlsDiv) return;
-      if (lanIps.length === 0) { card.style.display = "none"; return; }
-      card.style.display = "block";
-      var query = exportTarget ? "?target=" + encodeURIComponent(exportTarget) : "";
-      var html = "";
-      lanIps.forEach(function (iface) {
-        var url = iface.url + state.globalSubUrl + query;
-        html += '<div class="row" style="margin-top:6px">' +
-          '<span class="mono" style="flex:1; font-size:12px">' + esc(iface.name) + ": " + esc(url) + '</span>' +
-          '<button class="secondary small" onclick="navigator.clipboard.writeText(\'' + esc(url) + '\')">复制</button>' +
-          '<button class="secondary small" onclick="showQr(\'' + esc(url) + '\')">QR 码</button>' +
-          '</div>';
-      });
-      urlsDiv.innerHTML = html;
-    } catch (e) {
-      // LAN detection failed silently; not critical
-    }
-  }
-
-  async function loadSubs() {
-    var data = await api("GET", "/api/subscriptions");
-    state.sources = data.sources || [];
-    state.targets = data.targets || [];
-    state.globalSubUrl = data.globalSubUrl || "";
-    state.publicUrl = data.publicUrl || "";
-    state.dataPath = data.dataPath || "";
-    state.settings = data.settings || {};
-    // Apply the saved settings exactly once. This runs again on every refresh,
-    // and re-applying would overwrite whatever the user has since changed with
-    // the server's older copy.
-    if (!settingsReady) {
-      applyOptionsToUI(state.settings);
-      settingsReady = true;
-      if (pendingSave) persistAll();
-    }
-    // Before renderExportSubCard(): the select settles exportTarget (it may
-    // clear a choice the server no longer offers), and the address is built
-    // from it.
-    renderTargetSelect();
-    renderExportSubCard();
-    renderSubList();
-    updateExport();
-    loadLanInfo();
-  }
-
-  // Push the server's saved settings into the rules page. Assigning .checked /
-  // .value fires no events, so this cannot echo back out as a save.
-  function applyOptionsToUI(opts) {
-    opts = opts || {};
-    acl = ACL_NAME[opts.aclPreset] ? opts.aclPreset : "none";
-    if ($("publicUrl")) $("publicUrl").value = state.publicUrl || "";
-    renderRules();
-    updateExport();
-  }
-
-  // One-time move of a pre-server subscription list out of localStorage.
-  function forgetLegacy() {
-    try {
-      localStorage.removeItem(STORE.legacySubs);
-      localStorage.removeItem(STORE.legacyEnabled);
-    } catch (e) { /* storage may be unavailable; harmless */ }
-  }
-  async function migrateLocalSources() {
-    var legacy = load(STORE.legacySubs, []);
-    if (!Array.isArray(legacy) || legacy.length === 0) return;
-    if (state.sources.length > 0) { forgetLegacy(); return; }
-    if (!window.confirm(
-      "检测到浏览器里还存着 " + legacy.length + " 个旧版订阅源。是否导入到服务端？"
-    )) return;
-
-    var legacyEnabled = load(STORE.legacyEnabled, []);
-    for (var i = 0; i < legacy.length; i += 1) {
-      var s = legacy[i];
-      try {
-        await api("POST", "/api/subscriptions", {
-          name: s.name,
-          kind: s.kind,
-          url: s.kind === "url" ? s.content : "",
-          content: s.kind === "text" ? s.content : null,
-          enabled: !legacyEnabled.length || legacyEnabled.indexOf(s.id) !== -1
-        });
-      } catch (e) {
-        window.alert("导入「" + s.name + "」失败：" + (e && e.message ? e.message : e));
-        return;
-      }
-    }
-    forgetLegacy();
-    await loadSubs();
-  }
-
-  // One-time move of the rules choice out of localStorage. The server's copy
-  // wins outright: a stale browser must never overwrite settings that another
-  // machine (or an earlier session) already saved.
-  function forgetLegacyPrefs() {
-    try {
-      localStorage.removeItem(STORE.shape);
-      localStorage.removeItem(STORE.acl);
-    } catch (e) { /* storage may be unavailable; harmless */ }
-  }
-  async function migrateLocalSettings() {
-    if (Object.keys(state.settings || {}).length > 0) { forgetLegacyPrefs(); return; }
-    if (pendingSave || saveTimer) return; // the user already changed something
-    var patch = {};
-    try {
-      // Read the raw entry: load() hands back a default for a browser that
-      // never set it, which would look like a deliberate choice.
-      var rawAcl = localStorage.getItem(STORE.acl);
-      if (rawAcl !== null) {
-        var a = JSON.parse(rawAcl);
-        if (ACL_NAME[a] && a !== "none") patch.aclPreset = a;
-      }
-    } catch (e) {
-      forgetLegacyPrefs();
-      return;
-    }
-    // A pre-Tower-fidelity browser may also carry a run shape. It has no
-    // successor, so drop it rather than migrating it.
-    if (patch.aclPreset === undefined) {
-      forgetLegacyPrefs();
-      return;
-    }
-    try {
-      var data = await api("PUT", "/api/settings", patch);
-      state.settings = (data && data.settings) || state.settings;
-      forgetLegacyPrefs();
-    } catch (e) {
-      // Keep the legacy keys so a later load can retry the move.
-    }
-  }
-
-  function kindChecked() {
-    var r = document.querySelector('input[name="srckind"]:checked');
-    return r && r.value === "url" ? "url" : "text";
-  }
-  function toggleAdd(kind) {
-    var urlMode = kind === "url";
-    $("urlWrap").style.display = urlMode ? "block" : "none";
-    $("textWrap").style.display = urlMode ? "none" : "block";
-  }
-  function openAddForm() {
-    editingId = null;
-    $("addTitle").textContent = "添加订阅源";
-    $("srcName").value = "";
-    $("srcUrl").value = "";
-    $("srcText").value = "";
-    $("srcUa").value = "";
-    $("srcTimeout").value = "";
-    $("srcHeaders").value = "";
-    document.querySelector('input[name="srckind"][value="url"]').checked = true;
-    toggleAdd("url");
-    $("addForm").style.display = "block";
-    $("srcSaveHint").textContent = "保存后会立刻抓取一次，显示节点概况。";
-  }
-  async function openEditForm(id) {
-    var s = subById(id);
-    if (!s) return;
-    // The list redacts the subscription token, so read the full record before
-    // putting it in a form the user may save back.
-    var full = s;
-    try {
-      var detail = await api("GET", "/api/subscriptions/" + encodeURIComponent(id));
-      full = detail.source || s;
-    } catch (e) {
-      window.alert("读取订阅源失败：" + (e && e.message ? e.message : e));
-      return;
-    }
-    editingId = id;
-    $("addTitle").textContent = "编辑订阅源";
-    $("srcName").value = full.name;
-    var urlMode = full.kind === "url";
-    $("srcUrl").value = urlMode ? (full.url || "") : "";
-    $("srcText").value = urlMode ? "" : (full.content || "");
-    var ro = full.requestOptions || {};
-    $("srcUa").value = ro.userAgent || "";
-    $("srcTimeout").value = ro.timeout || "";
-    $("srcHeaders").value = Object.keys(ro.headers || {}).map(function (name) {
-      return name + ": " + ro.headers[name];
-    }).join("\n");
-    document.querySelector('input[name="srckind"][value="' + esc(full.kind) + '"]').checked = true;
-    toggleAdd(full.kind);
-    $("addForm").style.display = "block";
-    $("srcSaveHint").textContent = "保存后会重新抓取一次，并刷新概况。";
-  }
-  function closeAddForm() {
-    $("addForm").style.display = "none";
-    editingId = null;
-  }
-  function currentSourceFields() {
-    var k = kindChecked();
-    return {
-      name: $("srcName").value.trim(),
-      kind: k,
-      content: (k === "url" ? $("srcUrl").value : $("srcText").value).trim(),
-    };
-  }
-  async function saveSource() {
-    var f = currentSourceFields();
-    if (!f.name) { $("srcSaveHint").textContent = "请填写名称。"; return; }
-    if (!f.content) {
-      $("srcSaveHint").textContent = "请填写" + (f.kind === "url" ? "订阅 URL" : "订阅内容") + "。";
-      return;
-    }
-    var headers = {};
-    $("srcHeaders").value.split(/\r?\n/).forEach(function (line) {
-      var idx = line.indexOf(":");
-      if (idx <= 0) return;
-      headers[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-    });
-    var timeout = parseInt($("srcTimeout").value, 10);
-    var body = {
-      name: f.name,
-      kind: f.kind,
-      url: f.kind === "url" ? f.content : "",
-      content: f.kind === "text" ? f.content : null,
-      requestOptions: {
-        userAgent: $("srcUa").value.trim() || null,
-        headers: headers,
-        timeout: Number.isInteger(timeout) && timeout > 0 ? timeout : null
-      }
-    };
-    var id = editingId;
-    try {
-      if (id) await api("PATCH", "/api/subscriptions/" + encodeURIComponent(id), body);
-      else {
-        var created = await api("POST", "/api/subscriptions", body);
-        id = created.source && created.source.id;
-      }
-    } catch (e) {
-      $("srcSaveHint").textContent = "保存失败：" + (e && e.message ? e.message : e);
-      return;
-    }
-    closeAddForm();
-    await loadSubs();
-    if (id) await refreshOne(id, true); // a new or edited source has no snapshot yet
-  }
-  async function deleteSource(id) {
-    var s = subById(id);
-    if (!s) return;
-    if (!window.confirm("删除订阅源「" + s.name + "」？")) return;
-    try {
-      await api("DELETE", "/api/subscriptions/" + encodeURIComponent(id));
-    } catch (e) {
-      window.alert("删除失败：" + (e && e.message ? e.message : e));
-      return;
-    }
-    await loadSubs();
-  }
-  async function previewSource(id) {
-    var host = nodeHost(id);
-    if (host) { host.textContent = "读取缓存…"; host.className = "src-nodes muted"; }
-    try {
-      // Cache-only: this never touches the network, so it is safe to click
-      // freely and cannot fail because a panel happens to be down.
-      var data = await api("GET", "/api/subscriptions/" + encodeURIComponent(id) + "/preview");
-      if (!host) return;
-      var s = subById(id);
-      var excluded = (s && s.excludedNodes) || [];
-      var excludedSet = {};
-      excluded.forEach(function (n) { excludedSet[n] = true; });
-      var nodes = data.nodes || [];
-      var proto = Object.keys(data.protocols || {}).sort().map(function (p) {
-        return p + " ×" + data.protocols[p];
-      });
-      var summary = data.nodeCount + " 个节点" + (proto.length ? " · " + proto.join(" · ") : "");
-      var html = '<div style="margin-top:6px">' + esc(summary) + '</div>';
-      if (nodes.length > 0) {
-        html += '<div style="margin-top:6px; max-height:300px; overflow:auto">' +
-          '<table><thead><tr><th style="width:30px"><input type="checkbox" class="node-check-all" data-src="' + esc(id) + '" checked></th>' +
-          '<th>名称</th><th>类型</th><th>服务器</th></tr></thead><tbody class="node-tbody" data-src="' + esc(id) + '">';
-        nodes.forEach(function (n, idx) {
-          var checked = !excludedSet[n.tag];
-          html += '<tr class="node-row" draggable="true" data-idx="' + idx + '" data-name="' + esc(n.tag) + '">' +
-            '<td><input type="checkbox" class="node-check" data-src="' + esc(id) + '" data-name="' + esc(n.tag) + '"' + (checked ? ' checked' : '') + '></td>' +
-            '<td>' + esc(n.tag) + '</td><td class="mono">' + esc(n.type) + '</td>' +
-            '<td class="mono">' + esc(n.server || '-') + '</td></tr>';
-        });
-        html += '</tbody></table></div>';
-        html += '<div class="row" style="margin-top:6px"><button class="secondary small" data-action="save-nodes" data-src="' + esc(id) + '">保存节点选择与排序</button>' +
-          '<span class="muted node-save-hint" style="font-size:12px">取消勾选的节点将不会出现在导出配置中。拖拽行可调整顺序。</span></div>';
-      }
-      host.innerHTML = html;
-      host.className = "src-nodes";
-    } catch (e) {
-      if (!host) return;
-      host.textContent = e && e.message ? e.message : String(e);
-      host.className = "src-nodes err";
-    }
-  }
-  async function refreshOne(id, quiet) {
-    refreshing[id] = true;
-    renderSubList();
-    var failure = null;
-    try {
-      var data = await api("POST", "/api/subscriptions/" + encodeURIComponent(id) + "/refresh");
-      if (data && data.ok === false && data.error) failure = data.error;
-    } catch (e) {
-      failure = { message: e && e.message ? e.message : String(e) };
-    }
-    delete refreshing[id];
-    try { await loadSubs(); } catch (e) { /* keep the last good render */ }
-    if (failure && !quiet) {
-      var s = subById(id);
-      window.alert("刷新「" + (s ? s.name : id) + "」失败：" + failure.message);
-    }
-  }
-  async function refreshAll() {
-    var ids = state.sources.map(function (s) { return s.id; });
-    if (ids.length === 0) return;
-    ids.forEach(function (id) { refreshing[id] = true; });
-    renderSubList();
-    var failed = [];
-    try {
-      var data = await api("POST", "/api/subscriptions/refresh", {});
-      failed = (data && data.failed) || [];
-    } catch (e) {
-      failed = [{ name: "全部订阅", error: { message: e && e.message ? e.message : String(e) } }];
-    }
-    refreshing = {};
-    try { await loadSubs(); } catch (e) { /* keep the last good render */ }
-    if (failed.length) {
-      window.alert("有 " + failed.length + " 个订阅刷新失败：\n" + failed.map(function (f) {
-        return "· " + f.name + "：" + (f.error && f.error.message);
-      }).join("\n"));
-    }
-  }
-  async function copySubUrl(text, hintEl) {
-    try {
-      await writeClipboard(text);
-      if (hintEl) hintEl.textContent = "已复制订阅地址。";
-    } catch (e) {
-      window.prompt("复制失败，请手动复制：", text);
-    }
-  }
-
-  /* QR code modal */
-  function showQr(text) {
-    if (!text) return;
-    $("qrUrl").textContent = text;
-    $("qrOverlay").classList.add("show");
-    var canvas = $("qrCanvas");
-    if (typeof QRCode !== "undefined" && QRCode.toCanvas) {
-      QRCode.toCanvas(canvas, text, { width: 256, margin: 2, color: { dark: "#d6dee6", light: "#171f29" } }, function (err) {
-        if (err) {
-          var ctx = canvas.getContext("2d");
-          canvas.width = 256; canvas.height = 256;
-          ctx.fillStyle = "#171f29"; ctx.fillRect(0, 0, 256, 256);
-          ctx.fillStyle = "#ef7d7d"; ctx.font = "14px sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText("QR 码生成失败", 128, 128);
-        }
-      });
-    }
-  }
-  function hideQr() { $("qrOverlay").classList.remove("show"); }
-  $("qrClose").addEventListener("click", hideQr);
-  $("qrOverlay").addEventListener("click", function (e) {
-    if (e.target === $("qrOverlay")) hideQr();
-  });
-
-  $("btnAddShow").addEventListener("click", openAddForm);
-  $("btnAddCancel").addEventListener("click", closeAddForm);
-  $("btnSrcSave").addEventListener("click", saveSource);
-  $("btnRefreshAll").addEventListener("click", refreshAll);
-  $("btnCopyExportSubUrl").addEventListener("click", function () {
-    copySubUrl($("exportSubUrl").value, $("exportSubHint"));
-  });
-  $("btnQrExportSubUrl").addEventListener("click", function () {
-    showQr($("exportSubUrl").value);
-  });
-  $("btnRotateGlobal").addEventListener("click", async function () {
-    if (!window.confirm("轮换密钥会让已经填进客户端的旧地址立刻失效，需要重新复制。继续？")) return;
-    try {
-      var data = await api("POST", "/api/settings/rotate-token");
-      state.globalSubUrl = data.subUrl;
-      renderExportSubCard();
-      $("exportSubHint").textContent = "已轮换，请把新地址重新填进客户端。";
-    } catch (e) {
-      window.alert("轮换失败：" + (e && e.message ? e.message : e));
-    }
-  });
-  // Picking a client only rewrites the address shown: the server renders from
-  // ?target= on the request, so nothing was saved and nothing generated became
-  // stale. That is why this neither PUTs nor calls invalidate().
-  $("exportTarget").addEventListener("change", function () {
-    exportTarget = $("exportTarget").value;
-    save(STORE.exportTarget, exportTarget);
-    renderExportSubCard();
-    if (exportTarget) {
-      var label = $("exportTarget").options[$("exportTarget").selectedIndex].text;
-      setStatus($("publicUrlHint"),
-        "地址已固定为 " + label + "，不再依赖客户端 User-Agent。", "");
-    } else {
-      setStatus($("publicUrlHint"), "已改为按客户端 User-Agent 自动识别。", "");
-    }
-  });
-
-  // The address is stored server-side so the value the export page shows is the
-  // one every browser (and a future device) sees. Debounced like the rules
-  // page, and flushed on hide for the same reason.
-  var publicUrlTimer = null;
-  function flushPublicUrl() {
-    if (publicUrlTimer) { clearTimeout(publicUrlTimer); publicUrlTimer = null; }
-    var typed = $("publicUrl").value.trim();
-    return api("PUT", "/api/settings", { publicUrl: typed }).then(function (data) {
-      // Write the server's normalised form back: it added the scheme and
-      // dropped any trailing slash, and the address is built from it.
-      state.publicUrl = data.publicUrl || "";
-      $("publicUrl").value = state.publicUrl;
-      renderExportSubCard();
-      setStatus($("publicUrlHint"),
-        state.publicUrl ? "已保存。" : "已清除，将使用当前浏览器地址。", "ok");
-    }).catch(function (e) {
-      // A 400 means the address is unusable. Keep what the user typed so they
-      // can fix it, and leave state.publicUrl on the last good value.
-      setStatus($("publicUrlHint"), "保存失败：" + (e && e.message ? e.message : e), "err");
-    });
-  }
-  $("publicUrl").addEventListener("input", function () {
-    if (!settingsReady) return;   // same guard as the rules page
-    if (publicUrlTimer) clearTimeout(publicUrlTimer);
-    publicUrlTimer = setTimeout(flushPublicUrl, 500);
-  });
-  $("publicUrl").addEventListener("blur", function () {
-    if (publicUrlTimer) flushPublicUrl();
-  });
-
-  [].forEach.call(document.querySelectorAll('input[name="srckind"]'), function (r) {
-    r.addEventListener("change", function () { toggleAdd(kindChecked()); });
-  });
-  $("subList").addEventListener("click", function (e) {
-    var t = e.target;
-    var act = t.getAttribute && t.getAttribute("data-action");
-    if (!act) {
-      // Handle check-all checkbox
-      if (t.classList && t.classList.contains("node-check-all")) {
-        var srcId = t.getAttribute("data-src");
-        var checked = t.checked;
-        var host = nodeHost(srcId);
-        if (host) {
-          [].forEach.call(host.querySelectorAll(".node-check"), function (cb) {
-            cb.checked = checked;
-          });
-        }
-        return;
-      }
-      // Handle save-nodes button
-      if (t.classList && t.classList.contains("node-check")) return; // individual checkbox, ignore click
-      return;
-    }
-    var item = t.closest ? t.closest(".src") : null;
-    var id = item ? item.getAttribute("data-id") : null;
-    if (id == null) return;
-    if (act === "refresh") refreshOne(id);
-    else if (act === "preview") previewSource(id);
-    else if (act === "edit") openEditForm(id);
-    else if (act === "del") deleteSource(id);
-    else if (act === "copysub") {
-      var s = subById(id);
-      if (s) copySubUrl(location.origin + s.subUrl);
-    }
-    else if (act === "qrsub") {
-      var s2 = subById(id);
-      if (s2) showQr(location.origin + s2.subUrl);
-    }
-    else if (act === "save-nodes") saveNodeSelection(id);
-  });
-  // Handle individual checkbox change for check-all sync
-  $("subList").addEventListener("change", function (e) {
-    var cb = e.target;
-    if (!cb.classList.contains("node-check")) return;
-    var srcId = cb.getAttribute("data-src");
-    var host = nodeHost(srcId);
-    if (!host) return;
-    var all = host.querySelectorAll(".node-check");
-    var checkedCount = 0;
-    [].forEach.call(all, function (c) { if (c.checked) checkedCount++; });
-    var checkAll = host.querySelector(".node-check-all");
-    if (checkAll) checkAll.checked = checkedCount === all.length;
-  });
-
-  // Drag-and-drop for node reordering
-  var dragSrcRow = null;
-  $("subList").addEventListener("dragstart", function (e) {
-    var row = e.target.closest ? e.target.closest(".node-row") : null;
-    if (!row) return;
-    dragSrcRow = row;
-    row.classList.add("dragging");
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", row.getAttribute("data-idx"));
-  });
-  $("subList").addEventListener("dragend", function (e) {
-    var row = e.target.closest ? e.target.closest(".node-row") : null;
-    if (row) row.classList.remove("dragging");
-    dragSrcRow = null;
-    // Clean up all drag-over styles
-    [].forEach.call(document.querySelectorAll(".node-row.drag-over"), function (r) {
-      r.classList.remove("drag-over");
-    });
-  });
-  $("subList").addEventListener("dragover", function (e) {
-    var row = e.target.closest ? e.target.closest(".node-row") : null;
-    if (!row || row === dragSrcRow) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  });
-  $("subList").addEventListener("dragenter", function (e) {
-    var row = e.target.closest ? e.target.closest(".node-row") : null;
-    if (!row || row === dragSrcRow) return;
-    row.classList.add("drag-over");
-  });
-  $("subList").addEventListener("dragleave", function (e) {
-    var row = e.target.closest ? e.target.closest(".node-row") : null;
-    if (row) row.classList.remove("drag-over");
-  });
-  $("subList").addEventListener("drop", function (e) {
-    e.preventDefault();
-    var targetRow = e.target.closest ? e.target.closest(".node-row") : null;
-    if (!targetRow || !dragSrcRow || targetRow === dragSrcRow) return;
-    targetRow.classList.remove("drag-over");
-    var tbody = targetRow.closest("tbody");
-    if (!tbody) return;
-    var rows = Array.from(tbody.querySelectorAll(".node-row"));
-    var fromIdx = rows.indexOf(dragSrcRow);
-    var toIdx = rows.indexOf(targetRow);
-    if (fromIdx < 0 || toIdx < 0) return;
-    // Reorder DOM
-    if (fromIdx < toIdx) {
-      tbody.insertBefore(dragSrcRow, targetRow.nextSibling);
-    } else {
-      tbody.insertBefore(dragSrcRow, targetRow);
-    }
-  });
-  async function saveNodeSelection(id) {
-    var host = nodeHost(id);
-    if (!host) return;
-    var excluded = [];
-    var order = [];
-    var tbody = host.querySelector(".node-tbody");
-    if (tbody) {
-      [].forEach.call(tbody.querySelectorAll(".node-row"), function (row) {
-        var name = row.getAttribute("data-name");
-        order.push(name);
-        var cb = row.querySelector(".node-check");
-        if (cb && !cb.checked) excluded.push(name);
-      });
-    } else {
-      [].forEach.call(host.querySelectorAll(".node-check"), function (cb) {
-        if (!cb.checked) excluded.push(cb.getAttribute("data-name"));
-      });
-    }
-    var hint = host.querySelector(".node-save-hint");
-    try {
-      await api("PATCH", "/api/subscriptions/" + encodeURIComponent(id), { excludedNodes: excluded, nodeOrder: order });
-      var s = subById(id);
-      if (s) { s.excludedNodes = excluded; s.nodeOrder = order; }
-      if (hint) hint.textContent = "已保存，排除 " + excluded.length + " 个节点，自定义排序 " + order.length + " 个。";
-    } catch (e) {
-      if (hint) hint.textContent = "保存失败：" + (e && e.message ? e.message : e);
-    }
-  }
-  $("subList").addEventListener("change", async function (e) {
-    var cb = e.target;
-    if (!cb.classList.contains("src-en")) return;
-    var item = cb.closest ? cb.closest(".src") : null;
-    if (!item) return;
-    var id = item.getAttribute("data-id");
-    var on = cb.checked;
-    // Optimistic: the checkbox is already showing the new state, so put it
-    // back if the server refuses.
-    try {
-      await api("PATCH", "/api/subscriptions/" + encodeURIComponent(id), { enabled: on });
-      var s = subById(id);
-      if (s) s.enabled = on;
-    } catch (err) {
-      cb.checked = !on;
-      window.alert("保存失败：" + (err && err.message ? err.message : err));
-    }
-    updateExport();
-  });
-
-  /* ---------------- ② rules ---------------- */
-  function aclName() { return ACL_NAME[acl] || acl; }
-  function markScene(name, value) {
-    [].forEach.call(document.querySelectorAll('input[name="' + name + '"]'), function (r) {
-      r.checked = r.value === value;
-      var card = r.closest ? r.closest(".scene") : null;
-      if (card) card.classList.toggle("sel", r.value === value);
-    });
-  }
-  function renderRules() {
-    markScene("acl", acl);
-  }
-  function invalidate() {
-    // Any rule change makes the last generated config stale; hide it so the
-    // user regenerates before copying/downloading.
-    $("result").style.display = "none";
-    last = null;
-    setStatus($("genStatus"), "", "");
-  }
-  function bindScene(name, apply) {
-    [].forEach.call(document.querySelectorAll('input[name="' + name + '"]'), function (r) {
-      r.addEventListener("change", function () {
-        if (!r.checked) return;
-        apply(r.value);
-        persistAll();
-        renderRules();
-        invalidate();
-        updateExport();
-      });
-    });
-  }
-  bindScene("acl", function (v) { acl = v; });
-
-  /* ---------------- options collection ---------------- */
-  // The rule preset is the whole of what this page chooses; the server's
-  // whitelist drops anything else, so there is nothing further to send.
-  function collectOptions() {
-    return { aclPreset: acl === "none" ? null : acl };
-  }
-
-  /* ---------------- ③ export ---------------- */
-  function updateExport() {
-    var es = enabledSubs();
-    var summary = $("exportSummary"), btn = $("btnGenerate");
-    if (es.length === 0) {
-      summary.innerHTML = '<span class="err">还没有参与导出的订阅。</span>请到「订阅」页添加并勾选要合并的订阅源。';
-      btn.disabled = true;
-    } else {
-      summary.textContent =
-        "将合并 " + es.length + " 个订阅源（" + es.map(function (s) { return s.name; }).join("、") +
-        "），按「" + aclName() + "」生成完整 sing-box 配置。";
-      btn.disabled = false;
-    }
-  }
-  // Latency results: { "server:port": delay_ms }. -1 = timeout/error.
-  var pingResults = {};
-  var pingRunning = false;
-
-  function latencyClass(delay) {
-    if (delay == null || delay < 0) return "latency-timeout";
-    if (delay < 200) return "latency-fast";
-    if (delay < 500) return "latency-mid";
-    return "latency-slow";
-  }
-  function latencyText(delay) {
-    if (delay == null) return "-";
-    if (delay < 0) return "超时";
-    return delay + " ms";
-  }
-  function latencyKey(server, port) { return (server || "") + ":" + (port || ""); }
-
-  function renderTable(nodes) {
-    var hasPing = Object.keys(pingResults).length > 0;
-    var cols = hasPing ? 6 : 5;
-    var html = "<table><thead><tr><th>类型</th><th>标签</th><th>服务器</th><th>端口</th><th>类别</th>";
-    if (hasPing) html += "<th>延迟</th>";
-    html += "</tr></thead><tbody>";
-    if (!nodes || nodes.length === 0) {
-      html += '<tr><td colspan="' + cols + '">无节点</td></tr>';
-    } else {
-      nodes.forEach(function (n) {
-        var key = latencyKey(n.server, n.port);
-        var delay = pingResults[key];
-        html += "<tr><td class=\"mono\">" + esc(n.type) + "</td><td>" + esc(n.tag) + "</td>" +
-          "<td class=\"mono\">" + esc(n.server || "-") + "</td><td class=\"mono\">" + esc(n.port || "-") + "</td>" +
-          '<td><span class="tag kind-' + (n.kind === "endpoint" ? "endpoint" : "outbound") + '">' + esc(n.kind) + "</span></td>";
-        if (hasPing) {
-          html += '<td class="latency ' + latencyClass(delay) + '">' + latencyText(delay) + '</td>';
-        }
-        html += "</tr>";
-      });
-    }
-    html += "</tbody></table>";
-    return html;
-  }
-
-  /* World Map - simplified Canvas-based dot map */
-  // Country detection from node names (Chinese + English)
-  var COUNTRY_MAP = {
-    "香港": { code: "HK", lat: 22.3, lng: 114.2 },
-    "台湾": { code: "TW", lat: 23.7, lng: 121.0 },
-    "日本": { code: "JP", lat: 36.2, lng: 138.3 },
-    "韩国": { code: "KR", lat: 35.9, lng: 127.8 },
-    "新加坡": { code: "SG", lat: 1.35, lng: 103.8 },
-    "美国": { code: "US", lat: 37.1, lng: -95.7 },
-    "美西": { code: "US", lat: 36.8, lng: -119.4 },
-    "美东": { code: "US", lat: 40.7, lng: -74.0 },
-    "洛杉矶": { code: "US", lat: 34.1, lng: -118.2 },
-    "硅谷": { code: "US", lat: 37.4, lng: -122.1 },
-    "圣何塞": { code: "US", lat: 37.3, lng: -121.9 },
-    "英国": { code: "GB", lat: 55.4, lng: -3.4 },
-    "伦敦": { code: "GB", lat: 51.5, lng: -0.1 },
-    "德国": { code: "DE", lat: 51.2, lng: 10.5 },
-    "法国": { code: "FR", lat: 46.2, lng: 2.2 },
-    "巴黎": { code: "FR", lat: 48.9, lng: 2.3 },
-    "加拿大": { code: "CA", lat: 56.1, lng: -106.3 },
-    "澳大利亚": { code: "AU", lat: -25.3, lng: 133.8 },
-    "澳洲": { code: "AU", lat: -25.3, lng: 133.8 },
-    "悉尼": { code: "AU", lat: -33.9, lng: 151.2 },
-    "印度": { code: "IN", lat: 20.6, lng: 79.0 },
-    "巴西": { code: "BR", lat: -14.2, lng: -51.9 },
-    "俄罗斯": { code: "RU", lat: 61.5, lng: 105.3 },
-    "荷兰": { code: "NL", lat: 52.1, lng: 5.3 },
-    "土耳其": { code: "TR", lat: 38.9, lng: 35.2 },
-    "泰国": { code: "TH", lat: 15.9, lng: 100.9 },
-    "越南": { code: "VN", lat: 14.1, lng: 108.3 },
-    "马来西亚": { code: "MY", lat: 4.2, lng: 101.9 },
-    "印尼": { code: "ID", lat: -0.8, lng: 113.9 },
-    "菲律宾": { code: "PH", lat: 12.9, lng: 121.8 },
-    "澳门": { code: "MO", lat: 22.2, lng: 113.5 },
-    "阿根廷": { code: "AR", lat: -38.4, lng: -63.6 },
-    "智利": { code: "CL", lat: -35.7, lng: -71.5 },
-    "墨西哥": { code: "MX", lat: 23.6, lng: -102.6 },
-    "以色列": { code: "IL", lat: 31.0, lng: 34.9 },
-    "迪拜": { code: "AE", lat: 23.4, lng: 53.8 },
-    "阿联酋": { code: "AE", lat: 23.4, lng: 53.8 },
-    "瑞士": { code: "CH", lat: 46.8, lng: 8.2 },
-    "瑞典": { code: "SE", lat: 60.1, lng: 18.6 },
-    "芬兰": { code: "FI", lat: 61.9, lng: 25.7 },
-    "挪威": { code: "NO", lat: 60.5, lng: 8.5 },
-    "波兰": { code: "PL", lat: 51.9, lng: 19.1 },
-    "意大利": { code: "IT", lat: 41.9, lng: 12.6 },
-    "西班牙": { code: "ES", lat: 40.5, lng: -3.7 },
-    "葡萄牙": { code: "PT", lat: 39.4, lng: -8.2 },
-    "埃及": { code: "EG", lat: 26.8, lng: 30.8 },
-    "南非": { code: "ZA", lat: -30.6, lng: 22.9 },
-    "hong kong": { code: "HK", lat: 22.3, lng: 114.2 },
-    "japan": { code: "JP", lat: 36.2, lng: 138.3 },
-    "korea": { code: "KR", lat: 35.9, lng: 127.8 },
-    "singapore": { code: "SG", lat: 1.35, lng: 103.8 },
-    "usa": { code: "US", lat: 37.1, lng: -95.7 },
-    "united states": { code: "US", lat: 37.1, lng: -95.7 },
-    "uk": { code: "GB", lat: 55.4, lng: -3.4 },
-    "london": { code: "GB", lat: 51.5, lng: -0.1 },
-    "germany": { code: "DE", lat: 51.2, lng: 10.5 },
-    "france": { code: "FR", lat: 46.2, lng: 2.2 },
-    "canada": { code: "CA", lat: 56.1, lng: -106.3 },
-    "australia": { code: "AU", lat: -25.3, lng: 133.8 },
-    "india": { code: "IN", lat: 20.6, lng: 79.0 },
-    "brazil": { code: "BR", lat: -14.2, lng: -51.9 },
-    "russia": { code: "RU", lat: 61.5, lng: 105.3 },
-    "netherlands": { code: "NL", lat: 52.1, lng: 5.3 },
-    "turkey": { code: "TR", lat: 38.9, lng: 35.2 },
-    "thailand": { code: "TH", lat: 15.9, lng: 100.9 },
-    "taiwan": { code: "TW", lat: 23.7, lng: 121.0 },
-  };
-
-  function detectCountry(name) {
-    if (!name) return null;
-    var lower = name.toLowerCase();
-    var keys = Object.keys(COUNTRY_MAP);
-    for (var i = 0; i < keys.length; i++) {
-      if (lower.indexOf(keys[i].toLowerCase()) >= 0) return COUNTRY_MAP[keys[i]];
-    }
-    return null;
-  }
-
-  // Simple world map drawing
-  var mapZoom = 1;
-  var mapPanX = 0;
-  var mapPanY = 0;
-  var mapDragging = false;
-  var mapLastX = 0;
-  var mapLastY = 0;
-
-  function drawWorldMap() {
-    var canvas = $("worldMap");
-    if (!canvas) return;
-    var ctx = canvas.getContext("2d");
-    var w = canvas.width;
-    var h = canvas.height;
-
-    ctx.fillStyle = "#0d141b";
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.save();
-    ctx.translate(w / 2 + mapPanX, h / 2 + mapPanY);
-    ctx.scale(mapZoom, mapZoom);
-    ctx.translate(-w / 2, -h / 2);
-
-    // Draw grid
-    ctx.strokeStyle = "#162030";
-    ctx.lineWidth = 0.5 / mapZoom;
-    function geoToX(lon) { return (lon + 180) / 360 * w; }
-    function geoToY(lat) { return (90 - lat) / 180 * h; }
-    for (var lat = -60; lat <= 80; lat += 20) {
-      ctx.beginPath(); ctx.moveTo(0, geoToY(lat)); ctx.lineTo(w, geoToY(lat)); ctx.stroke();
-    }
-    for (var lon = -180; lon <= 180; lon += 30) {
-      ctx.beginPath(); ctx.moveTo(geoToX(lon), 0); ctx.lineTo(geoToX(lon), h); ctx.stroke();
-    }
-
-    // Draw simplified continents
-    ctx.fillStyle = "#1e2d3d";
-    var continents = [
-      [[-170,72],[-170,15],[-50,15],[-50,72]],        // N. America
-      [[-82,15],[-82,-55],[-34,-55],[-34,15]],          // S. America
-      [[-10,72],[-10,36],[40,36],[40,72]],              // Europe
-      [[-18,37],[-18,-35],[52,-35],[52,37]],            // Africa
-      [[40,72],[40,0],[150,0],[150,72]],                // Asia
-      [[95,25],[95,-10],[155,-10],[155,25]],            // SE Asia
-      [[113,-10],[113,-44],[154,-44],[154,-10]],        // Australia
+    // Rules
+    var rulesHint = Vue.ref('');
+    var rulesHintType = Vue.ref('');
+    var ruleOptions = [
+      { value:'acl4ssr-default', label:'ACL4SSR 默认', desc:'去广告、自动测速，含国外媒体、电报、微软和苹果分流。' },
+      { value:'acl4ssr-full', label:'ACL4SSR 全分组', desc:'最完整分组：流媒体、AI、游戏、音乐，并按节点名自动分出地区组（完整 GFW 列表）。' },
+      { value:'acl4ssr-mini', label:'ACL4SSR 精简', desc:'只保留节点选择、自动选择、全球直连与拦截，策略组最少、规则最省。' },
+      { value:'none', label:'不使用（默认分域模板）', desc:'用内置的国内直连 / 局域网 / 私有地址模板，不引入 ACL4SSR 规则。' }
     ];
-    continents.forEach(function (coords) {
-      ctx.beginPath();
-      ctx.moveTo(geoToX(coords[0][0]), geoToY(coords[0][1]));
-      for (var i = 1; i < coords.length; i++) ctx.lineTo(geoToX(coords[i][0]), geoToY(coords[i][1]));
-      ctx.closePath(); ctx.fill();
+
+    // Map
+    var worldMapCanvas = Vue.ref(null);
+    var mapZoom = Vue.ref(1);
+    var mapPan = Vue.reactive({ x:0, y:0 });
+    var mapDragging = Vue.ref(false);
+    var mapLast = Vue.reactive({ x:0, y:0 });
+
+    // === Computed ===
+    var enabledSubs = Vue.computed(function() { return sources.value.filter(function(s){ return s.enabled; }); });
+    var aclName = Vue.computed(function() { return ACL_NAME[acl.value] || acl.value; });
+    var filteredNodes = Vue.computed(function() {
+      var nodes = (last.value && last.value.nodes) || [];
+      if (!exportTarget.value) return nodes;
+      var supported = CLIENT_PROTOCOLS[exportTarget.value];
+      if (!supported) return nodes;
+      var set = {}; supported.forEach(function(p){ set[p]=true; });
+      return nodes.filter(function(n){ return set[n.type]; });
+    });
+    var hasPing = Vue.computed(function() { return Object.keys(pingResults).length > 0; });
+    var cfgJson = Vue.computed(function() { return last.value ? JSON.stringify(last.value.output, null, 2) : ''; });
+    var fullSubUrl = Vue.computed(function() {
+      var base = publicUrl.value || location.origin;
+      var query = exportTarget.value ? '?target=' + encodeURIComponent(exportTarget.value) : '';
+      return base + globalSubUrl.value + query;
+    });
+    var allWarnings = Vue.computed(function() {
+      var warns = [];
+      if (last.value && last.value.warnings) {
+        last.value.warnings.forEach(function(w) { warns.push(w && w.message ? w.message : w); });
+      }
+      if (exportTarget.value && last.value && last.value.nodes) {
+        var supported = CLIENT_PROTOCOLS[exportTarget.value];
+        if (supported) {
+          var set = {}; supported.forEach(function(p){ set[p]=true; });
+          var removed = last.value.nodes.filter(function(n){ return !set[n.type]; }).length;
+          if (removed > 0) warns.push('客户端「' + exportTarget.value + '」不支持 ' + removed + ' 个节点的协议，已自动过滤。');
+        }
+      }
+      return warns;
     });
 
-    // Draw node markers
-    if (last && last.nodes) {
-      var nodeGroups = {};
-      last.nodes.forEach(function (n) {
-        var country = detectCountry(n.tag);
-        if (!country) return;
-        var key = country.code;
-        if (!nodeGroups[key]) nodeGroups[key] = { country: country, nodes: [], delay: null };
-        nodeGroups[key].nodes.push(n);
-        var pingKey = latencyKey(n.server, n.port);
-        if (pingResults[pingKey] != null) {
-          var d = pingResults[pingKey];
-          if (nodeGroups[key].delay == null || (d >= 0 && d < nodeGroups[key].delay)) {
-            nodeGroups[key].delay = d;
+    // === API ===
+    async function api(method, path, body, isRetry) {
+      console.log('[api]', method, path);
+      var init = { method: method, headers: {} };
+      if (body !== undefined) { init.headers['content-type']='application/json'; init.body=JSON.stringify(body); }
+      var token = lsLoad(STORE.apiToken, '');
+      if (token) init.headers['authorization'] = 'Bearer ' + token;
+      var resp;
+      try {
+        resp = await fetch(path, init);
+      } catch(e) {
+        console.error('[api] fetch error:', e);
+        throw new Error('网络请求失败：' + (e.message || e));
+      }
+      console.log('[api] response status:', resp.status);
+      if (resp.status === 401 && !isRetry) {
+        var entered = prompt('该服务设置了 apiToken，请填写访问密钥：', token || '');
+        if (entered !== null) { lsSave(STORE.apiToken, entered.trim()); return api(method, path, body, true); }
+        throw new Error('需要认证');
+      }
+      var json = null;
+      try { json = await resp.json(); } catch(e) { json = null; }
+      if (!resp.ok || !json || json.ok === false) throw new Error((json && json.error) || ('HTTP ' + resp.status));
+      return json.data;
+    }
+
+    // === Helpers ===
+    function formatBytes(n) {
+      if (n==null) return '-';
+      var u=['B','KB','MB','GB','TB'],v=Number(n),i=0;
+      while(v>=1024&&i<u.length-1){v/=1024;i++;}
+      return (i===0?v:v.toFixed(1))+' '+u[i];
+    }
+    function relativeTime(iso) {
+      var t=Date.parse(iso||''); if(!isFinite(t)) return null;
+      var s=Math.round((Date.now()-t)/1000);
+      if(s<60) return '刚刚'; if(s<3600) return Math.floor(s/60)+' 分钟前';
+      if(s<86400) return Math.floor(s/3600)+' 小时前'; return Math.floor(s/86400)+' 天前';
+    }
+    function subById(id) { return sources.value.find(function(s){return s.id===id;}) || null; }
+    function getSubUrl(s) { return s.subUrl ? (location.origin + s.subUrl) : ''; }
+    function getStatusText(s) {
+      if (s.lastError) return '上次刷新失败：' + (s.lastError.message || s.lastError);
+      if (s.lastUpdatedAt) return s.nodeCount + ' 个节点 · ' + (relativeTime(s.lastUpdatedAt) || s.lastUpdatedAt) + '更新';
+      if (s.lastCheckedAt) return '已检查，内容未变化（' + relativeTime(s.lastCheckedAt) + '）';
+      return '尚未刷新';
+    }
+    function getStatusColor(s) { return s.lastError ? '#f87171' : '#94a3b8'; }
+    function getUsageText(s) {
+      var u=s.usageSummary; if(!u) return '';
+      var parts = u.unlimited ? ['已用 '+formatBytes(u.used)+' · 不限量'] : ['已用 '+formatBytes(u.used)+' / '+formatBytes(u.total)];
+      if(u.daysLeft!=null) parts.push(u.expired?'已到期':'剩余 '+u.daysLeft+' 天');
+      if(u.expireAt) parts.push(u.expireAt.slice(0,10)+' 到期');
+      return parts.join(' · ');
+    }
+    function getPreview(id) { return previewMap.value.get(id) || null; }
+    function isNodeExcluded(s, tag) { return (s.excludedNodes||[]).indexOf(tag) !== -1; }
+    function isAllChecked(s) {
+      var p = getPreview(s.id);
+      if (!p || !p.nodes) return true;
+      return p.nodes.every(function(n){ return !isNodeExcluded(s, n.tag); });
+    }
+    function toggleNodeCheck(s, tag, checked) {
+      var excluded = [].concat(s.excludedNodes || []);
+      var idx = excluded.indexOf(tag);
+      if (checked && idx >= 0) excluded.splice(idx, 1);
+      if (!checked && idx < 0) excluded.push(tag);
+      s.excludedNodes = excluded;
+    }
+    function toggleCheckAll(s, checked) {
+      var p = getPreview(s.id);
+      if (!p || !p.nodes) return;
+      if (checked) { s.excludedNodes = []; }
+      else { s.excludedNodes = p.nodes.map(function(n){ return n.tag; }); }
+    }
+    function latencyKey(server, port) { return (server||'')+':'+(port||''); }
+    function getLatencyColor(row) {
+      var key = latencyKey(row.server, row.port);
+      var d = pingResults[key];
+      if (d==null) return '#3b82f6';
+      if (d<0) return '#64748b';
+      if (d<200) return '#34d399';
+      if (d<500) return '#fbbf24';
+      return '#f87171';
+    }
+    function getLatencyText(row) {
+      var key = latencyKey(row.server, row.port);
+      var d = pingResults[key];
+      if (d==null) return '-';
+      if (d<0) return '超时';
+      return d + ' ms';
+    }
+
+    // === Data Loading ===
+    async function loadSubs() {
+      try {
+        console.log('[loadSubs] starting API call...');
+        var data = await api('GET', '/api/subscriptions');
+        console.log('[loadSubs] API response:', data);
+        var list = data.sources || [];
+        console.log('[loadSubs] received', list.length, 'sources');
+        sources.value = list;
+        targets.value = data.targets || [];
+        globalSubUrl.value = data.globalSubUrl || '';
+        publicUrl.value = data.publicUrl || '';
+        dataPath.value = data.dataPath || '';
+        settings.value = data.settings || {};
+        if (!settingsReady.value) {
+          var opts = data.settings || {};
+          acl.value = ACL_NAME[opts.aclPreset] ? opts.aclPreset : 'none';
+          publicUrlInput.value = publicUrl.value;
+          settingsReady.value = true;
+          if (pendingSave.value) persistAll();
+        }
+        await loadLanInfo();
+      } catch(e) {
+        console.error('[loadSubs] error:', e);
+        throw e; // re-throw so caller can handle
+      } finally {
+        console.log('[loadSubs] finally block, setting pageLoading=false');
+        pageLoading.value = false;
+      }
+      // Validate exportTarget
+      var known = targets.value.some(function(t){ return t.id === exportTarget.value; });
+      if (!known && exportTarget.value) { exportTarget.value = ''; lsSave(STORE.exportTarget, ''); }
+    }
+
+    async function loadLanInfo() {
+      try {
+        var data = await api('GET', '/api/lan');
+        lanIps.value = (data && data.lanIps) || [];
+      } catch(e) { lanIps.value = []; }
+    }
+
+    // === Settings ===
+    function persistAll() {
+      if (!settingsReady.value) { pendingSave.value = true; return; }
+      if (saveTimer.value) clearTimeout(saveTimer.value);
+      saveTimer.value = setTimeout(flushSettings, 400);
+    }
+    async function flushSettings() {
+      if (saveTimer.value) { clearTimeout(saveTimer.value); saveTimer.value = null; }
+      pendingSave.value = false;
+      try {
+        var data = await api('PUT', '/api/settings', { aclPreset: acl.value === 'none' ? null : acl.value });
+        settings.value = (data && data.settings) || settings.value;
+        rulesHint.value = '已保存。'; rulesHintType.value = 'ok';
+      } catch(e) {
+        rulesHint.value = '保存失败：' + (e.message||e); rulesHintType.value = 'err';
+      }
+    }
+
+    // === Subscriptions ===
+    function openAddForm() {
+      editingId.value = null;
+      srcForm.name = ''; srcForm.kind = 'url'; srcForm.url = ''; srcForm.text = '';
+      srcForm.ua = ''; srcForm.timeout = null; srcForm.headers = '';
+      srcFormHint.value = '保存后会立刻抓取一次，显示节点概况。';
+      showAddForm.value = true;
+    }
+    async function openEditForm(id) {
+      var s = subById(id); if (!s) return;
+      var full = s;
+      try { var detail = await api('GET', '/api/subscriptions/'+encodeURIComponent(id)); full = detail.source || s; }
+      catch(e) { ElementPlus.ElMessage.error('读取订阅源失败：'+(e.message||e)); return; }
+      editingId.value = id;
+      srcForm.name = full.name;
+      srcForm.kind = full.kind;
+      srcForm.url = full.kind==='url' ? (full.url||'') : '';
+      srcForm.text = full.kind!=='url' ? (full.content||'') : '';
+      var ro = full.requestOptions || {};
+      srcForm.ua = ro.userAgent || '';
+      srcForm.timeout = ro.timeout || null;
+      srcForm.headers = Object.keys(ro.headers||{}).map(function(n){ return n+': '+ro.headers[n]; }).join('\n');
+      srcFormHint.value = '保存后会重新抓取一次，并刷新概况。';
+      showAddForm.value = true;
+    }
+    function closeAddForm() { showAddForm.value = false; editingId.value = null; }
+    async function saveSource() {
+      if (!srcForm.name.trim()) { srcFormHint.value = '请填写名称。'; return; }
+      var content = srcForm.kind==='url' ? srcForm.url : srcForm.text;
+      if (!content.trim()) { srcFormHint.value = '请填写'+(srcForm.kind==='url'?'订阅 URL':'订阅内容')+'。'; return; }
+      savingSource.value = true;
+      var headers = {};
+      (srcForm.headers||'').split(/\r?\n/).forEach(function(line) {
+        var idx = line.indexOf(':'); if (idx<=0) return;
+        headers[line.slice(0,idx).trim()] = line.slice(idx+1).trim();
+      });
+      var body = {
+        name: srcForm.name.trim(), kind: srcForm.kind,
+        url: srcForm.kind==='url' ? content.trim() : '',
+        content: srcForm.kind==='text' ? content.trim() : null,
+        requestOptions: { userAgent: srcForm.ua.trim()||null, headers: headers, timeout: srcForm.timeout||null }
+      };
+      var id = editingId.value;
+      try {
+        if (id) await api('PATCH', '/api/subscriptions/'+encodeURIComponent(id), body);
+        else { var created = await api('POST', '/api/subscriptions', body); id = created.source && created.source.id; }
+      } catch(e) { srcFormHint.value = '保存失败：'+(e.message||e); savingSource.value = false; return; }
+      savingSource.value = false;
+      closeAddForm();
+      await loadSubs();
+      if (id) await refreshOne(id, true);
+    }
+    async function deleteSource(id) {
+      var s = subById(id); if (!s) return;
+      try { await ElementPlus.ElMessageBox.confirm('删除订阅源「'+s.name+'」？', '确认删除', { type:'warning' }); }
+      catch(e) { return; }
+      try { await api('DELETE', '/api/subscriptions/'+encodeURIComponent(id)); } catch(e) { ElementPlus.ElMessage.error('删除失败：'+(e.message||e)); return; }
+      await loadSubs();
+    }
+    async function refreshOne(id, quiet) {
+      refreshingIds.value.set(id, true);
+      refreshingIds.value = new Map(refreshingIds.value); // trigger reactivity
+      var failure = null;
+      try {
+        var data = await api('POST', '/api/subscriptions/'+encodeURIComponent(id)+'/refresh');
+        if (data && data.ok===false && data.error) failure = data.error;
+      } catch(e) { failure = { message: e.message||String(e) }; }
+      refreshingIds.value.set(id, false);
+      refreshingIds.value = new Map(refreshingIds.value); // trigger reactivity
+      try { await loadSubs(); } catch(e) {}
+      if (failure && !quiet) {
+        var s = subById(id);
+        ElementPlus.ElMessage.error('刷新「'+(s?s.name:id)+'」失败：'+failure.message);
+      }
+    }
+    async function refreshAll() {
+      if (!sources.value.length) return;
+      refreshingAll.value = true;
+      var m = new Map();
+      sources.value.forEach(function(s){ m.set(s.id, true); });
+      refreshingIds.value = m;
+      var failed = [];
+      try {
+        var data = await api('POST', '/api/subscriptions/refresh', {});
+        failed = (data && data.failed) || [];
+      } catch(e) { failed = [{ name:'全部订阅', error:{ message:e.message||String(e) } }]; }
+      refreshingIds.value = new Map();
+      refreshingAll.value = false;
+      try { await loadSubs(); } catch(e) {}
+      if (failed.length) {
+        ElementPlus.ElMessage.error('有 '+failed.length+' 个订阅刷新失败');
+      }
+    }
+    async function toggleEnabled(s, val) {
+      togglingId.value = s.id;
+      try {
+        await api('PATCH', '/api/subscriptions/'+encodeURIComponent(s.id), { enabled: val });
+        s.enabled = val;
+      } catch(e) {
+        s.enabled = !val;
+        ElementPlus.ElMessage.error('保存失败：'+(e.message||e));
+      }
+      togglingId.value = null;
+    }
+    async function previewSource(id) {
+      var s = subById(id); if (!s) return;
+      try {
+        var data = await api('GET', '/api/subscriptions/'+encodeURIComponent(id)+'/preview');
+        var proto = Object.keys(data.protocols||{}).sort().map(function(p){ return p+' ×'+data.protocols[p]; });
+        var preview = { nodes: data.nodes||[], nodeCount: data.nodeCount||0, _protoStr: proto.join(' · ') };
+        var newMap = new Map(previewMap.value);
+        newMap.set(id, preview);
+        previewMap.value = newMap;
+      } catch(e) { ElementPlus.ElMessage.error('预览失败：'+(e.message||e)); }
+    }
+    async function saveNodeSelection(s) {
+      var excluded = [].concat(s.excludedNodes || []);
+      var p = getPreview(s.id);
+      var order = p && p.nodes ? p.nodes.map(function(n){ return n.tag; }) : [];
+      try {
+        await api('PATCH', '/api/subscriptions/'+encodeURIComponent(s.id), { excludedNodes: excluded, nodeOrder: order });
+        ElementPlus.ElMessage.success('已保存，排除 '+excluded.length+' 个节点');
+      } catch(e) { ElementPlus.ElMessage.error('保存失败：'+(e.message||e)); }
+    }
+
+    // === Rules ===
+    function selectRule(v) {
+      acl.value = v;
+      persistAll();
+      // Invalidate last result
+      last.value = null;
+      genStatus.value = '';
+    }
+    function onTabChange(tab) {
+      if (tab !== 'rules' && saveTimer.value) flushSettings();
+    }
+
+    // === Export ===
+    async function generate() {
+      if (!enabledSubs.value.length) return;
+      generating.value = true;
+      genStatus.value = '生成中…'; genStatusType.value = '';
+      try {
+        last.value = await api('POST', '/api/export', {
+          ids: enabledSubs.value.map(function(s){ return s.id; }),
+          out: 'config'
+        });
+        var removed = 0;
+        if (exportTarget.value && last.value.nodes) {
+          var supported = CLIENT_PROTOCOLS[exportTarget.value];
+          if (supported) {
+            var set = {}; supported.forEach(function(p){ set[p]=true; });
+            removed = last.value.nodes.filter(function(n){ return !set[n.type]; }).length;
           }
         }
-      });
-
-      Object.keys(nodeGroups).forEach(function (key) {
-        var group = nodeGroups[key];
-        var x = geoToX(group.country.lng);
-        var y = geoToY(group.country.lat);
-        var delay = group.delay;
-        var color;
-        if (delay == null) color = "#2f7de1";
-        else if (delay < 0) color = "#7c8a99";
-        else if (delay < 200) color = "#6fcf97";
-        else if (delay < 500) color = "#ffd479";
-        else color = "#ef7d7d";
-
-        var r = Math.min(12, 4 + group.nodes.length * 2) / mapZoom;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.globalAlpha = 0.8;
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 1 / mapZoom;
-        ctx.stroke();
-
-        ctx.fillStyle = "#d6dee6";
-        ctx.font = (11 / mapZoom) + "px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(group.country.code + " (" + group.nodes.length + ")", x, y - r - 4 / mapZoom);
-      });
-    }
-
-    ctx.restore();
-  }
-
-  // Map zoom/pan
-  (function () {
-    var c = $("worldMap");
-    if (!c) return;
-    c.addEventListener("wheel", function (e) {
-      e.preventDefault();
-      mapZoom = Math.max(0.5, Math.min(5, mapZoom * (e.deltaY > 0 ? 0.9 : 1.1)));
-      drawWorldMap();
-    });
-    c.addEventListener("mousedown", function (e) { mapDragging = true; mapLastX = e.clientX; mapLastY = e.clientY; });
-    document.addEventListener("mousemove", function (e) {
-      if (!mapDragging) return;
-      mapPanX += e.clientX - mapLastX; mapPanY += e.clientY - mapLastY;
-      mapLastX = e.clientX; mapLastY = e.clientY;
-      drawWorldMap();
-    });
-    document.addEventListener("mouseup", function () { mapDragging = false; });
-  })();
-
-  async function pingNodes() {
-    if (!last || !last.nodes || last.nodes.length === 0) return;
-    if (pingRunning) return;
-    pingRunning = true;
-    pingResults = {};
-    setStatus($("pingStatus"), "测试中…");
-    $("btnPing").disabled = true;
-    // Re-render table to show latency column header
-    $("p-node").innerHTML = renderTable(last.nodes);
-
-    var targets = [];
-    last.nodes.forEach(function (n) {
-      if (n.server && n.port) targets.push({ host: n.server, port: n.port });
-    });
-    try {
-      var data = await api("POST", "/api/ping", { targets: targets, timeout: 5000, concurrency: 32 });
-      var results = (data && data.results) || [];
-      results.forEach(function (r) {
-        if (r && r.host) pingResults[latencyKey(r.host, r.port)] = r.delay;
-      });
-      // Re-render with results
-      $("p-node").innerHTML = renderTable(last.nodes);
-      var fast = 0, mid = 0, slow = 0, fail = 0;
-      results.forEach(function (r) {
-        if (r.delay < 0) fail++;
-        else if (r.delay < 200) fast++;
-        else if (r.delay < 500) mid++;
-        else slow++;
-      });
-      setStatus($("pingStatus"), "完成：共 " + results.length + " 个，" +
-        fast + " 快/" + mid + " 中/" + slow + " 慢/" + fail + " 超时", "ok");
-    } catch (e) {
-      setStatus($("pingStatus"), "测试失败：" + (e && e.message ? e.message : e), "err");
-    } finally {
-      pingRunning = false;
-      $("btnPing").disabled = false;
-    }
-  }
-  async function generate() {
-    var es = enabledSubs();
-    if (es.length === 0) { setStatus($("genStatus"), "请先在「订阅」页勾选要导出的订阅。", "err"); return; }
-    var btn = $("btnGenerate");
-    btn.disabled = true;
-    setStatus($("genStatus"), "生成中…");
-    try {
-      // The server assembles from its own stored snapshots, so no subscription
-      // body or credential travels through the browser on this path.
-      // No options here: the server renders from the same saved settings the
-      // subscription address uses, so the two can never disagree.
-      last = await api("POST", "/api/export", {
-        ids: es.map(function (s) { return s.id; }),
-        out: "config"
-      });
-      renderResult();
-    } catch (e) {
-      setStatus($("genStatus"), "生成失败：" + (e && e.message ? e.message : e), "err");
-    } finally {
-      btn.disabled = false;
-    }
-  }
-  function renderResult() {
-    if (!last) return;
-    $("result").style.display = "block";
-
-    // Filter nodes by client protocol support if a target is selected
-    var filteredNodes = last.nodes || [];
-    var filterWarning = null;
-    if (exportTarget) {
-      var supported = getClientProtocols(exportTarget);
-      if (supported) {
-        var supportedSet = {};
-        supported.forEach(function (p) { supportedSet[p] = true; });
-        var before = filteredNodes.length;
-        filteredNodes = filteredNodes.filter(function (n) { return supportedSet[n.type]; });
-        var removed = before - filteredNodes.length;
-        if (removed > 0) {
-          filterWarning = "客户端「" + exportTarget + "」不支持 " + removed + " 个节点的协议，已自动过滤。";
-        }
+        genStatus.value = '完成：' + filteredNodes.value.length + ' 个节点' + (removed ? '（已过滤 '+removed+' 个不兼容节点）' : '') + '。';
+        genStatusType.value = 'ok';
+        if (activeOutTab.value === 'map') Vue.nextTick(drawWorldMap);
+      } catch(e) {
+        genStatus.value = '生成失败：'+(e.message||e); genStatusType.value = 'err';
       }
+      generating.value = false;
     }
-
-    $("p-node").innerHTML = renderTable(filteredNodes);
-    $("cfgText").textContent = JSON.stringify(last.output, null, 2);
-    var warns = last.warnings || [];
-    var box = $("warnBox");
-    var warnHtml = "";
-    if (filterWarning) {
-      warnHtml += '<div class="warn">· ' + esc(filterWarning) + '</div>';
+    async function copyConfig() {
+      if (!last.value) return;
+      try { await navigator.clipboard.writeText(cfgJson.value); ElementPlus.ElMessage.success('已复制'); }
+      catch(e) { ElementPlus.ElMessage.error('复制失败'); }
     }
-    if (warns.length) {
-      warnHtml += warns.map(function (w) {
-        return '<div class="warn">· ' + esc(w && w.message ? w.message : w) + "</div>";
-      }).join("");
+    function downloadConfig() {
+      if (!last.value) return;
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([cfgJson.value], { type:'application/json' }));
+      a.download = 'singbox-config.json';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 200);
     }
-    box.innerHTML = warnHtml ? '<div class="warn">注意：</div>' + warnHtml : "";
-    setStatus($("genStatus"),
-      "完成：" + filteredNodes.length + " 个节点" +
-      (filterWarning ? "（已过滤 " + ((last.nodes || []).length - filteredNodes.length) + " 个不兼容节点）" : "") + "。", "ok");
-    setOutTab(activeOutTab);
-  }
-  function setOutTab(p) {
-    activeOutTab = p;
-    [].forEach.call($("outtabs").querySelectorAll("button"), function (b) {
-      b.classList.toggle("active", b.getAttribute("data-p") === p);
-    });
-    ["node", "map", "cfg"].forEach(function (t) {
-      $("p-" + t).classList.toggle("active", t === p);
-    });
-    if (p === "map") drawWorldMap();
-  }
-  [].forEach.call($("outtabs").querySelectorAll("button"), function (b) {
-    b.addEventListener("click", function () { setOutTab(b.getAttribute("data-p")); });
-  });
-
-  $("btnGenerate").addEventListener("click", generate);
-  $("btnPing").addEventListener("click", pingNodes);
-
-  /* clipboard helpers: navigator.clipboard only in secure contexts */
-  function writeClipboard(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      return navigator.clipboard.writeText(text);
-    }
-    return new Promise(function (resolve, reject) {
-      var ta = document.createElement("textarea");
-      ta.value = text;
-      ta.setAttribute("readonly", "");
-      ta.style.cssText = "position:fixed;top:0;left:-9999px";
-      document.body.appendChild(ta);
-      ta.select();
+    async function pingNodes() {
+      if (!last.value || !last.value.nodes || !last.value.nodes.length) return;
+      if (pingRunning.value) return;
+      pingRunning.value = true;
+      Object.keys(pingResults).forEach(function(k){ delete pingResults[k]; });
+      pingStatus.value = '测试中…'; pingStatusType.value = '';
+      var targets = [];
+      last.value.nodes.forEach(function(n){ if(n.server&&n.port) targets.push({host:n.server,port:n.port}); });
       try {
-        if (document.execCommand("copy")) resolve();
-        else reject(new Error("execCommand('copy') 未成功"));
-      } catch (e) {
-        reject(e);
-      } finally {
-        document.body.removeChild(ta);
+        var data = await api('POST', '/api/ping', { targets: targets, timeout: 5000, concurrency: 32 });
+        var results = (data && data.results) || [];
+        results.forEach(function(r){ if(r&&r.host) pingResults[latencyKey(r.host,r.port)] = r.delay; });
+        var fast=0,mid=0,slow=0,fail=0;
+        results.forEach(function(r){ if(r.delay<0)fail++; else if(r.delay<200)fast++; else if(r.delay<500)mid++; else slow++; });
+        pingStatus.value = '完成：共 '+results.length+' 个，'+fast+' 快/'+mid+' 中/'+slow+' 慢/'+fail+' 超时';
+        pingStatusType.value = 'ok';
+      } catch(e) { pingStatus.value = '测试失败：'+(e.message||e); pingStatusType.value = 'err'; }
+      pingRunning.value = false;
+    }
+
+    // === Public URL ===
+    function onPublicUrlInput() {
+      if (!settingsReady.value) return;
+      if (publicUrlTimer.value) clearTimeout(publicUrlTimer.value);
+      publicUrlTimer.value = setTimeout(flushPublicUrl, 500);
+    }
+    async function flushPublicUrl() {
+      if (publicUrlTimer.value) { clearTimeout(publicUrlTimer.value); publicUrlTimer.value = null; }
+      var typed = publicUrlInput.value.trim();
+      try {
+        var data = await api('PUT', '/api/settings', { publicUrl: typed });
+        publicUrl.value = data.publicUrl || '';
+        publicUrlInput.value = publicUrl.value;
+        publicUrlHint.value = publicUrl.value ? '已保存。' : '已清除，将使用当前浏览器地址。';
+        publicUrlHintType.value = 'ok';
+      } catch(e) {
+        publicUrlHint.value = '保存失败：'+(e.message||e); publicUrlHintType.value = 'err';
       }
+    }
+    function onTargetChange() {
+      lsSave(STORE.exportTarget, exportTarget.value);
+      if (exportTarget.value) {
+        var t = targets.value.find(function(t){ return t.id===exportTarget.value; });
+        publicUrlHint.value = '地址已固定为 '+(t?t.label:exportTarget.value)+'，不再依赖客户端 User-Agent。';
+      } else {
+        publicUrlHint.value = '已改为按客户端 User-Agent 自动识别。';
+      }
+      publicUrlHintType.value = '';
+    }
+    async function rotateToken() {
+      try { await ElementPlus.ElMessageBox.confirm('轮换密钥会让旧地址立刻失效，需要重新复制。继续？', '轮换密钥', { type:'warning' }); }
+      catch(e) { return; }
+      try {
+        var data = await api('POST', '/api/settings/rotate-token');
+        globalSubUrl.value = data.subUrl;
+        exportSubHint.value = '已轮换，请把新地址重新填进客户端。';
+      } catch(e) { ElementPlus.ElMessage.error('轮换失败：'+(e.message||e)); }
+    }
+
+    // === QR ===
+    function showQr(text) {
+      if (!text) return;
+      qrUrl.value = text;
+      qrVisible.value = true;
+      Vue.nextTick(function() {
+        var canvas = worldMapCanvas.value; // use ref
+        var qrCanvas = document.querySelector('.qr-canvas-wrap canvas');
+        if (!qrCanvas) return;
+        if (typeof QRCode !== 'undefined' && QRCode.toCanvas) {
+          QRCode.toCanvas(qrCanvas, text, { width: 256, margin: 2, color: { dark:'#1e293b', light:'#ffffff' } }, function(err) {
+            if (err) {
+              var ctx = qrCanvas.getContext('2d');
+              qrCanvas.width = 256; qrCanvas.height = 256;
+              ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,256,256);
+              ctx.fillStyle = '#ef4444'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+              ctx.fillText('QR 码生成失败', 128, 128);
+            }
+          });
+        }
+      });
+    }
+
+    // === Clipboard ===
+    async function copyText(text) {
+      try { await navigator.clipboard.writeText(text); ElementPlus.ElMessage.success('已复制'); }
+      catch(e) { ElementPlus.ElMessage.error('复制失败'); }
+    }
+
+    // === World Map ===
+    function drawWorldMap() {
+      var canvas = document.querySelector('.map-box canvas');
+      if (!canvas) return;
+      var ctx = canvas.getContext('2d');
+      var w = canvas.width, h = canvas.height;
+      var bgGrad = ctx.createLinearGradient(0,0,0,h);
+      bgGrad.addColorStop(0, '#e8eef5');
+      bgGrad.addColorStop(0.5, '#f1f5f9');
+      bgGrad.addColorStop(1, '#e8eef5');
+      ctx.fillStyle = bgGrad; ctx.fillRect(0,0,w,h);
+      ctx.save();
+      ctx.translate(w/2+mapPan.x, h/2+mapPan.y);
+      ctx.scale(mapZoom.value, mapZoom.value);
+      ctx.translate(-w/2, -h/2);
+      function geoToX(lon) { return (lon+180)/360*w; }
+      function geoToY(lat) { return (90-lat)/180*h; }
+      // Grid
+      ctx.strokeStyle = '#dde4ec'; ctx.lineWidth = 0.5/mapZoom.value;
+      for (var lat=-60;lat<=80;lat+=20) { ctx.beginPath(); ctx.moveTo(0,geoToY(lat)); ctx.lineTo(w,geoToY(lat)); ctx.stroke(); }
+      for (var lon=-180;lon<=180;lon+=30) { ctx.beginPath(); ctx.moveTo(geoToX(lon),0); ctx.lineTo(geoToX(lon),h); ctx.stroke(); }
+      // Continents
+      ctx.fillStyle = '#dbe2eb';
+      [[[-170,72],[-170,15],[-50,15],[-50,72]],[[-82,15],[-82,-55],[-34,-55],[-34,15]],[[-10,72],[-10,36],[40,36],[40,72]],
+       [[-18,37],[-18,-35],[52,-35],[52,37]],[[40,72],[40,0],[150,0],[150,72]],[[95,25],[95,-10],[155,-10],[155,25]],
+       [[113,-10],[113,-44],[154,-44],[154,-10]]].forEach(function(coords) {
+        ctx.beginPath(); ctx.moveTo(geoToX(coords[0][0]),geoToY(coords[0][1]));
+        for(var i=1;i<coords.length;i++) ctx.lineTo(geoToX(coords[i][0]),geoToY(coords[i][1]));
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = '#c8d3e0'; ctx.lineWidth = 0.8/mapZoom.value; ctx.stroke();
+      });
+      // Nodes
+      if (last.value && last.value.nodes) {
+        var groups = {};
+        last.value.nodes.forEach(function(n) {
+          var country = detectCountry(n.tag); if (!country) return;
+          var key = country.code;
+          if (!groups[key]) groups[key] = { country:country, nodes:[], delay:null };
+          groups[key].nodes.push(n);
+          var pk = latencyKey(n.server, n.port);
+          if (pingResults[pk] != null) {
+            var d = pingResults[pk];
+            if (groups[key].delay==null || (d>=0 && d<groups[key].delay)) groups[key].delay = d;
+          }
+        });
+        Object.keys(groups).forEach(function(key) {
+          var g = groups[key]; var x=geoToX(g.country.lng), y=geoToY(g.country.lat);
+          var color; var d=g.delay;
+          if(d==null)color='#3b82f6'; else if(d<0)color='#64748b'; else if(d<200)color='#34d399'; else if(d<500)color='#fbbf24'; else color='#f87171';
+          var r = Math.min(12, 4+g.nodes.length*2)/mapZoom.value;
+          // Shadow
+          ctx.beginPath(); ctx.arc(x,y+1/mapZoom.value,r+1/mapZoom.value,0,Math.PI*2);
+          ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fill();
+          // Marker
+          ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+          ctx.fillStyle = color; ctx.fill();
+          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2/mapZoom.value; ctx.stroke();
+          ctx.font = 'bold '+(11/mapZoom.value)+'px system-ui, sans-serif'; ctx.textAlign = 'center';
+          // Label shadow for readability
+          ctx.fillStyle = 'rgba(255,255,255,0.8)';
+          ctx.fillText(g.country.code+' ('+g.nodes.length+')', x+0.5/mapZoom.value, y-r-3.5/mapZoom.value);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillText(g.country.code+' ('+g.nodes.length+')', x, y-r-4/mapZoom.value);
+        });
+      }
+      ctx.restore();
+    }
+
+    // Map events
+    Vue.onMounted(function() {
+      var c = document.querySelector('.map-box canvas');
+      if (!c) return;
+      c.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        mapZoom.value = Math.max(0.5, Math.min(5, mapZoom.value * (e.deltaY>0?0.9:1.1)));
+        drawWorldMap();
+      });
+      c.addEventListener('mousedown', function(e) { mapDragging.value=true; mapLast.x=e.clientX; mapLast.y=e.clientY; });
+      document.addEventListener('mousemove', function(e) {
+        if (!mapDragging.value) return;
+        mapPan.x += e.clientX-mapLast.x; mapPan.y += e.clientY-mapLast.y;
+        mapLast.x=e.clientX; mapLast.y=e.clientY; drawWorldMap();
+      });
+      document.addEventListener('mouseup', function() { mapDragging.value=false; });
+
+      // Visibility change flush
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState !== 'hidden') return;
+        if (saveTimer.value) flushSettings();
+        if (publicUrlTimer.value) flushPublicUrl();
+      });
+
+      // Init
+      console.log('[init] onMounted fired');
+      loadSubs().then(function() {
+        console.log('[init] loadSubs resolved');
+        // Migrate legacy settings
+        if (Object.keys(settings.value||{}).length === 0) {
+          try {
+            var rawAcl = localStorage.getItem(STORE.acl);
+            if (rawAcl !== null) {
+              var a = JSON.parse(rawAcl);
+              if (ACL_NAME[a] && a !== 'none') {
+                api('PUT', '/api/settings', { aclPreset: a }).then(function(d) {
+                  settings.value = (d && d.settings) || settings.value;
+                  acl.value = a;
+                });
+              }
+            }
+          } catch(e) {}
+          try { localStorage.removeItem(STORE.shape); localStorage.removeItem(STORE.acl); } catch(e) {}
+        }
+        // Migrate legacy sources
+        var legacy = lsLoad(STORE.legacySubs, []);
+        if (Array.isArray(legacy) && legacy.length > 0 && sources.value.length === 0) {
+          ElementPlus.ElMessageBox.confirm('检测到 '+legacy.length+' 个旧版订阅源，是否导入？', '迁移数据').then(async function() {
+            var enabled = lsLoad(STORE.legacyEnabled, []);
+            for (var i=0;i<legacy.length;i++) {
+              var s = legacy[i];
+              try {
+                await api('POST', '/api/subscriptions', {
+                  name:s.name, kind:s.kind,
+                  url:s.kind==='url'?s.content:'',
+                  content:s.kind==='text'?s.content:null,
+                  enabled:!enabled.length||enabled.indexOf(s.id)!==-1
+                });
+              } catch(e) {}
+            }
+            try { localStorage.removeItem(STORE.legacySubs); localStorage.removeItem(STORE.legacyEnabled); } catch(e) {}
+            await loadSubs();
+          }).catch(function(){});
+        }
+      }).catch(function(e) {
+        pageLoading.value = false;
+        ElementPlus.ElMessage.error('读取服务端订阅库失败：'+(e.message||e));
+      });
     });
+
+    return {
+      activeTab, sources, targets, globalSubUrl, publicUrl, dataPath, settings, acl,
+      showAddForm, editingId, savingSource, srcFormHint, srcForm,
+      exportTarget, last, generating, genStatus, genStatusType, activeOutTab,
+      pingResults, pingRunning, pingStatus, pingStatusType,
+      pageLoading, previewMap, getPreview,
+      refreshingIds, refreshingAll, togglingId,
+      qrVisible, qrUrl, worldMapCanvas,
+      publicUrlInput, publicUrlHint, publicUrlHintType, exportSubHint,
+      lanIps, rulesHint, rulesHintType, ruleOptions,
+      enabledSubs, aclName, filteredNodes, hasPing, cfgJson, fullSubUrl, allWarnings,
+      onTabChange, openAddForm, openEditForm, closeAddForm, saveSource, deleteSource,
+      refreshOne, refreshAll, toggleEnabled, previewSource, saveNodeSelection,
+      isNodeExcluded, isAllChecked, toggleNodeCheck, toggleCheckAll,
+      selectRule, generate, copyConfig, downloadConfig, pingNodes,
+      onPublicUrlInput, flushPublicUrl, onTargetChange, rotateToken,
+      showQr, copyText, getSubUrl, getStatusText, getStatusColor, getUsageText,
+      getLatencyColor, getLatencyText
+    };
   }
-  function currentConfigText() {
-    if (!last) return "";
-    return JSON.stringify(last.output, null, 2);
-  }
-  $("btnCopy").addEventListener("click", async function () {
-    if (!last) return;
-    try {
-      await writeClipboard(currentConfigText());
-      setStatus($("genStatus"), "完整配置已复制到剪贴板。", "ok");
-    } catch (e) {
-      setStatus($("genStatus"), "复制失败，请改用「下载」导出。", "err");
+});
+app.use(ElementPlus);
+// Register icons (with error handling)
+try {
+  var icons = ElementPlusIconsVue || {};
+  Object.keys(icons).forEach(function(key) {
+    if (key !== 'default' && typeof icons[key] === 'object') {
+      app.component(key, icons[key]);
     }
   });
-  $("btnDownload").addEventListener("click", function () {
-    if (!last) return;
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([currentConfigText()], { type: "application/json" }));
-    a.download = "singbox-config.json";
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 200);
-  });
-
-  /* ---------------- init ---------------- */
-  // A pending edit must not be lost when the tab is closed or backgrounded.
-  document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState !== "hidden") return;
-    if (saveTimer) flushSettings();
-    if (publicUrlTimer) flushPublicUrl();
-  });
-  renderRules();
-  renderSubList();
-  updateExport();
-  setOutTab("node");
-  showSeg("subs");
-  loadSubs()
-    .then(migrateLocalSettings)
-    .then(migrateLocalSources)
-    .catch(function (e) {
-      var empty = $("subEmpty");
-      empty.textContent = "读取服务端订阅库失败：" + (e && e.message ? e.message : e);
-      empty.style.display = "block";
-    });
-})();
+} catch(e) { console.warn('Icon registration failed:', e); }
+app.mount('#app');
 </script>
 </body>
 </html>
