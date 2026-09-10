@@ -40,6 +40,23 @@ describe("singbox-kit web API", function () {
         // is covered below, but the UI no longer calls it.
         expect(html).to.include("/api/subscriptions");
         expect(html).to.include("/api/export");
+        // The rules page saves its choices to the server; both the export page
+        // and the address a client polls are rendered from that saved copy.
+        expect(html).to.include("/api/settings");
+        // The address moved off the subscriptions page to the export page.
+        expect(html).to.not.include("subTargetSel");
+    });
+
+    it("references no element the page fails to define", async function () {
+        // A listener left behind for a removed element makes $() return null,
+        // and the resulting throw aborts the whole IIFE: every later listener
+        // and the init block silently never run, leaving an inert page. Cheap
+        // to check here, and easy to miss when moving markup between sections.
+        const html = await (await fetch(base + "/")).text();
+        const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+        const refs = [...html.matchAll(/\$\("([^"]+)"\)/g)].map((m) => m[1]);
+        const missing = refs.filter((ref) => !ids.has(ref));
+        expect(missing, "$() 引用了页面里不存在的 id").to.deep.equal([]);
     });
 
     it("returns 404 for unknown static paths", async function () {

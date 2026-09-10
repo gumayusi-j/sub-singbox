@@ -399,14 +399,18 @@ export function createStore(options) {
             return removed;
         },
 
+        // A null value removes the key rather than storing a null. Callers use
+        // null to mean "the user cleared this field"; without this the null
+        // would linger in the data file and read back as if it were a value.
         setDefaultOptions(patch) {
             return mutate((live) => {
-                live.settings.defaultOptions = Object.assign(
-                    {},
-                    live.settings.defaultOptions,
-                    patch || {},
-                );
-                return live.settings.defaultOptions;
+                const next = Object.assign({}, live.settings.defaultOptions);
+                for (const key of Object.keys(patch || {})) {
+                    if (patch[key] === null) delete next[key];
+                    else next[key] = patch[key];
+                }
+                live.settings.defaultOptions = next;
+                return next;
             });
         },
 

@@ -88,6 +88,9 @@ function normalizeOptions(options) {
         addAutoGroup: options.addAutoGroup,
         foldRules: options.foldRules === true,
         rules: Array.isArray(options.rules) ? options.rules : undefined,
+        includeUnsupportedProxy:
+            options.includeUnsupportedProxy === true ||
+            options.includeUnsupportedProxy === "true",
     };
 }
 
@@ -159,7 +162,7 @@ export function renderSubscription(store, resolved, options) {
     try {
         if (target.mode === "singbox") {
             const parsed = mergeParsed(
-                parsedNodes.map((nodes) => fromNodes(nodes)),
+                parsedNodes.map((nodes) => fromNodes(nodes, normalized)),
                 warnings,
             );
             if (normalized.out === "outbounds") {

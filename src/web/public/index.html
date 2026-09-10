@@ -85,25 +85,6 @@
 
   <!-- ============ ① 订阅 ============ -->
   <section id="tab-subs" class="wsec active">
-    <div class="card" id="subUrlCard">
-      <div class="row" style="justify-content:space-between">
-        <b>订阅地址</b>
-        <span class="tag" id="subUrlScope">合并全部启用的订阅</span>
-      </div>
-      <div class="muted" style="font-size:12px; margin-top:4px">
-        把这个地址填进客户端（sing-box / Clash / Shadowrocket…）一次即可：之后每次在下面点「刷新」，
-        客户端再来拉取时拿到的就是最新节点。格式按客户端的 User-Agent 自动判断，也可以用
-        <span class="mono">?target=</span> 强制指定。
-      </div>
-      <div class="row" style="margin-top:8px">
-        <input type="text" id="globalSubUrl" readonly style="flex:1; min-width:240px">
-        <select id="subTargetSel" title="预览时使用的客户端格式"></select>
-        <button class="secondary small" id="btnCopySubUrl">复制</button>
-        <button class="secondary small" id="btnRotateGlobal">轮换密钥</button>
-      </div>
-      <div class="muted" id="subUrlHint" style="font-size:12px; margin-top:6px"></div>
-    </div>
-
     <div class="card">
       <div class="row" style="justify-content:space-between">
         <b>订阅源库</b>
@@ -145,7 +126,7 @@
 
       <div id="subEmpty" class="muted" style="margin-top:12px">还没有订阅源。点击「添加订阅源」，保存后到「导出」页生成 sing-box 配置。</div>
       <div id="subList"></div>
-      <div class="muted" style="font-size:12px; margin-top:10px">勾选「参与导出」的订阅会合并进同一份配置；跨订阅重名节点会自动改名（见导出时的提示）。</div>
+      <div class="muted" style="font-size:12px; margin-top:10px">勾选「启用」的订阅会合并进同一份配置——导出页和订阅地址取的都是这一份；跨订阅重名节点会自动改名（见导出时的提示）。</div>
     </div>
   </section>
 
@@ -205,6 +186,7 @@
           <textarea id="optRules" style="min-height:70px"></textarea>
         </div>
       </details>
+      <div class="muted" id="rulesSaveHint" style="font-size:12px; margin-top:8px"></div>
     </div>
   </section>
 
@@ -232,6 +214,24 @@
       </div>
     </div>
 
+    <div class="card" id="exportSubCard" style="display:none">
+      <div class="row" style="justify-content:space-between">
+        <b>订阅地址</b>
+        <span class="tag">一条链接，客户端自动跟进</span>
+      </div>
+      <div class="muted" style="font-size:12px; margin-top:4px">
+        把这个地址填进客户端（sing-box / Clash / Shadowrocket…）一次即可：之后你在「订阅」页点「刷新」，
+        客户端再来拉取时拿到的就是最新节点。格式按客户端的 User-Agent 自动判断，同一个地址可以同时喂给
+        sing-box 和 Clash，不需要手动指定。配置（规则 / 运行形态 / 高级参数）取自「规则」页当前选定的内容。
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input type="text" id="exportSubUrl" readonly style="flex:1; min-width:240px">
+        <button class="secondary small" id="btnCopyExportSubUrl">复制</button>
+        <button class="secondary small" id="btnRotateGlobal">轮换密钥</button>
+      </div>
+      <div class="muted" id="exportSubHint" style="font-size:12px; margin-top:6px"></div>
+    </div>
+
     <details>
       <summary>如何使用这份配置</summary>
       <div class="card inset">
@@ -255,11 +255,12 @@
 (function () {
   "use strict";
 
-  // Source records now live on the server; only UI preferences stay in the
-  // browser. The two legacy keys are read once to migrate an older install.
+  // Everything authoritative lives on the server. What is left in localStorage
+  // is the apiToken (a per-browser secret) and the three legacy keys, read once
+  // to migrate an install that predates the server-side store.
   var STORE = {
-    shape: "sbx:shape",
-    acl: "sbx:acl",
+    shape: "sbx:shape",   // legacy: the rules choice now lives in settings
+    acl: "sbx:acl",       // legacy: same
     apiToken: "sbx:apiToken",
     legacySubs: "sbx:subs",
     legacyEnabled: "sbx:enabledIds"
@@ -287,8 +288,13 @@
   }
   // Server mirror: sources, the target list and the global subscription URL.
   var state = { sources: [], targets: [], globalSubUrl: "", dataPath: "", settings: {} };
-  var shape = load(STORE.shape, "client");
-  var acl = load(STORE.acl, "acl4ssr-default");
+  // Filled from the server's saved settings once loadSubs() resolves. These are
+  // the same values the subscription address is rendered from.
+  var shape = "client";
+  var acl = "none";
+  var settingsReady = false;   // true once the saved settings have been applied
+  var pendingSave = false;     // a change made before that first apply
+  var saveTimer = null;
   var editingId = null;   // id being edited in the add/edit form, or null
   var last = null;        // last successful export result
   var activeOutTab = "node";
@@ -321,15 +327,30 @@
     return json.data;
   }
 
-  function persistPrefs() {
-    save(STORE.shape, shape);
-    save(STORE.acl, acl);
-  }
   function enabledSubs() { return state.sources.filter(function (s) { return s.enabled; }); }
   function subById(id) {
     return state.sources.find(function (s) { return s.id === id; }) || null;
   }
-  function persistAll() { persistPrefs(); }
+  // The rules page is the only source of truth for how a config is built, and
+  // the server owns that copy so that the export page and the address a client
+  // polls are rendered from the same values. Saving is debounced: typing in a
+  // field must not fire a request per keystroke.
+  function persistAll() {
+    if (!settingsReady) { pendingSave = true; return; }
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushSettings, 400);
+  }
+  async function flushSettings() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    pendingSave = false;
+    try {
+      var data = await api("PUT", "/api/settings", collectOptions());
+      state.settings = (data && data.settings) || state.settings;
+      setStatus($("rulesSaveHint"), "已保存。", "ok");
+    } catch (e) {
+      setStatus($("rulesSaveHint"), "保存失败：" + (e && e.message ? e.message : e), "err");
+    }
+  }
   function setStatus(el, msg, cls) { el.textContent = msg; el.className = cls || ""; }
 
   /* ---------------- segmented navigation ---------------- */
@@ -340,6 +361,8 @@
     ["subs", "rules", "export"].forEach(function (s) {
       $("tab-" + s).classList.toggle("active", s === seg);
     });
+    // Leaving the rules page is a natural commit point for a pending edit.
+    if (seg !== "rules" && saveTimer) flushSettings();
     if (seg === "export") updateExport();
   }
   [].forEach.call($("seg").querySelectorAll("button"), function (b) {
@@ -401,8 +424,8 @@
       html +=
         '<div class="src" data-id="' + esc(s.id) + '">' +
           '<div class="row">' +
-            '<label class="inline" title="勾选后参与「导出」合并">' +
-              '<input type="checkbox" class="src-en"' + (s.enabled ? " checked" : "") + "> 参与导出" +
+            '<label class="inline" title="勾选后进入导出配置与订阅地址的合并集">' +
+              '<input type="checkbox" class="src-en"' + (s.enabled ? " checked" : "") + "> 启用" +
             "</label>" +
             '<span class="src-name">' + esc(s.name) + "</span>" +
             '<span class="tag kind-' + esc(s.kind) + '">' + (s.kind === "url" ? "URL" : "文本") + "</span>" +
@@ -430,26 +453,17 @@
     return host;
   }
 
-  function renderSubUrlCard() {
-    var card = $("subUrlCard");
+  // The stable address a client is pointed at, shown on the export page beside
+  // the config it renders. No ?target= is appended: the dialect comes from the
+  // client's own User-Agent, which is what lets one address serve them all.
+  function renderExportSubCard() {
+    var card = $("exportSubCard");
+    if (!card) return;
     if (!state.globalSubUrl) { card.style.display = "none"; return; }
     card.style.display = "block";
-    var sel = $("subTargetSel");
-    if (sel.options.length !== state.targets.length) {
-      sel.innerHTML = state.targets.map(function (t) {
-        return '<option value="' + esc(t.id) + '">' + esc(t.label) + "</option>";
-      }).join("");
-    }
-    updateSubUrlText();
+    $("exportSubUrl").value = location.origin + state.globalSubUrl;
     var path = state.dataPath || "singbox-web.data.json";
-    $("subUrlHint").textContent = "数据文件：" + path;
     if ($("dataPathHint")) $("dataPathHint").textContent = path;
-  }
-  function updateSubUrlText() {
-    var target = $("subTargetSel").value;
-    $("globalSubUrl").value =
-      location.origin + state.globalSubUrl +
-      (target ? "?target=" + encodeURIComponent(target) : "");
   }
 
   async function loadSubs() {
@@ -459,8 +473,31 @@
     state.globalSubUrl = data.globalSubUrl || "";
     state.dataPath = data.dataPath || "";
     state.settings = data.settings || {};
-    renderSubUrlCard();
+    // Apply the saved settings exactly once. This runs again on every refresh,
+    // and re-applying would overwrite whatever the user has since changed with
+    // the server's older copy.
+    if (!settingsReady) {
+      applyOptionsToUI(state.settings);
+      settingsReady = true;
+      if (pendingSave) persistAll();
+    }
+    renderExportSubCard();
     renderSubList();
+    updateExport();
+  }
+
+  // Push the server's saved settings into the rules page. Assigning .checked /
+  // .value fires no events, so this cannot echo back out as a save.
+  function applyOptionsToUI(opts) {
+    opts = opts || {};
+    shape = SHAPE_NAME[opts.mode] ? opts.mode : "client";
+    acl = ACL_NAME[opts.aclPreset] ? opts.aclPreset : "none";
+    $("optMixed").checked = opts.addMixed === true;
+    $("optUnsup").checked = opts.includeUnsupportedProxy === true;
+    $("optPort").value = Number.isInteger(opts.inboundPort) ? opts.inboundPort : 1080;
+    $("optDns").value = typeof opts.remoteDns === "string" ? opts.remoteDns : "";
+    $("optRules").value = Array.isArray(opts.rules) ? opts.rules.join("\n") : "";
+    renderRules();
     updateExport();
   }
 
@@ -497,6 +534,49 @@
     }
     forgetLegacy();
     await loadSubs();
+  }
+
+  // One-time move of the rules choice out of localStorage. The server's copy
+  // wins outright: a stale browser must never overwrite settings that another
+  // machine (or an earlier session) already saved.
+  function forgetLegacyPrefs() {
+    try {
+      localStorage.removeItem(STORE.shape);
+      localStorage.removeItem(STORE.acl);
+    } catch (e) { /* storage may be unavailable; harmless */ }
+  }
+  async function migrateLocalSettings() {
+    if (Object.keys(state.settings || {}).length > 0) { forgetLegacyPrefs(); return; }
+    if (pendingSave || saveTimer) return; // the user already changed something
+    var patch = {};
+    try {
+      // Read the raw entries: load() hands back a default for a browser that
+      // never set them, which would look like a deliberate choice.
+      var rawShape = localStorage.getItem(STORE.shape);
+      var rawAcl = localStorage.getItem(STORE.acl);
+      if (rawShape !== null) {
+        var v = JSON.parse(rawShape);
+        if (SHAPE_NAME[v]) patch.mode = v;
+      }
+      if (rawAcl !== null) {
+        var a = JSON.parse(rawAcl);
+        if (ACL_NAME[a] && a !== "none") patch.aclPreset = a;
+      }
+    } catch (e) {
+      forgetLegacyPrefs();
+      return;
+    }
+    if (patch.mode === undefined && patch.aclPreset === undefined) {
+      forgetLegacyPrefs();
+      return;
+    }
+    try {
+      var data = await api("PUT", "/api/settings", patch);
+      state.settings = (data && data.settings) || state.settings;
+      forgetLegacyPrefs();
+    } catch (e) {
+      // Keep the legacy keys so a later load can retry the move.
+    }
   }
 
   function kindChecked() {
@@ -685,17 +765,16 @@
   $("btnAddCancel").addEventListener("click", closeAddForm);
   $("btnSrcSave").addEventListener("click", saveSource);
   $("btnRefreshAll").addEventListener("click", refreshAll);
-  $("subTargetSel").addEventListener("change", updateSubUrlText);
-  $("btnCopySubUrl").addEventListener("click", function () {
-    copySubUrl($("globalSubUrl").value, $("subUrlHint"));
+  $("btnCopyExportSubUrl").addEventListener("click", function () {
+    copySubUrl($("exportSubUrl").value, $("exportSubHint"));
   });
   $("btnRotateGlobal").addEventListener("click", async function () {
     if (!window.confirm("轮换密钥会让已经填进客户端的旧地址立刻失效，需要重新复制。继续？")) return;
     try {
       var data = await api("POST", "/api/settings/rotate-token");
       state.globalSubUrl = data.subUrl;
-      updateSubUrlText();
-      $("subUrlHint").textContent = "已轮换，请把新地址重新填进客户端。";
+      renderExportSubCard();
+      $("exportSubHint").textContent = "已轮换，请把新地址重新填进客户端。";
     } catch (e) {
       window.alert("轮换失败：" + (e && e.message ? e.message : e));
     }
@@ -775,23 +854,24 @@
   bindScene("acl", function (v) { acl = v; });
   bindScene("shape", function (v) { shape = v; });
   [].forEach.call(document.querySelectorAll("#adv input, #adv textarea, #adv select"), function (f) {
-    f.addEventListener("input", invalidate);
-    f.addEventListener("change", invalidate);
+    f.addEventListener("input", function () { invalidate(); persistAll(); });
+    f.addEventListener("change", function () { invalidate(); persistAll(); });
   });
 
   /* ---------------- options collection ---------------- */
+  // Always carries every key: the server merges shallowly, so a cleared field
+  // has to be sent as an explicit null for the stored value to go away.
   function collectOptions() {
-    var options = { mode: shape };
-    if (acl !== "none") options.aclPreset = acl;
-    if ($("optMixed").checked) options.addMixed = true;
-    if ($("optUnsup").checked) options.includeUnsupportedProxy = true;
     var port = parseInt($("optPort").value, 10);
-    if (Number.isInteger(port) && port > 0) options.inboundPort = port;
-    var dns = $("optDns").value.trim();
-    if (dns) options.remoteDns = dns;
-    var rules = $("optRules").value.trim();
-    if (rules) options.rules = rules;
-    return options;
+    return {
+      mode: shape,
+      aclPreset: acl === "none" ? null : acl,
+      addMixed: $("optMixed").checked,
+      includeUnsupportedProxy: $("optUnsup").checked,
+      inboundPort: Number.isInteger(port) && port > 0 ? port : null,
+      remoteDns: $("optDns").value.trim() || null,
+      rules: $("optRules").value.trim() || null
+    };
   }
 
   /* ---------------- ③ export ---------------- */
@@ -831,10 +911,11 @@
     try {
       // The server assembles from its own stored snapshots, so no subscription
       // body or credential travels through the browser on this path.
+      // No options here: the server renders from the same saved settings the
+      // subscription address uses, so the two can never disagree.
       last = await api("POST", "/api/export", {
         ids: es.map(function (s) { return s.id; }),
-        out: "config",
-        options: collectOptions()
+        out: "config"
       });
       renderResult();
     } catch (e) {
@@ -922,12 +1003,17 @@
   });
 
   /* ---------------- init ---------------- */
+  // A pending edit must not be lost when the tab is closed or backgrounded.
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden" && saveTimer) flushSettings();
+  });
   renderRules();
   renderSubList();
   updateExport();
   setOutTab("node");
   showSeg("subs");
   loadSubs()
+    .then(migrateLocalSettings)
     .then(migrateLocalSources)
     .catch(function (e) {
       var empty = $("subEmpty");

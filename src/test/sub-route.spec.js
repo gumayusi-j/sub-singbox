@@ -598,3 +598,137 @@ describe("/api/export — assembling from the store", function () {
         expect(json.data.output).to.contain("proxies:");
     });
 });
+
+describe("settings — one saved config, two readers", function () {
+    let ctx;
+    afterEach(async function () {
+        if (ctx) await ctx.close();
+        ctx = null;
+    });
+
+    function save(settings) {
+        return ctx.request("/api/settings", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(settings),
+        });
+    }
+    // The address a client is pointed at. No ?target=: the UA picks sing-box.
+    function pull(query) {
+        return ctx.request("/sub/" + ctx.globalToken + (query || ""), {
+            headers: { "user-agent": "sing-box/1.14.0" },
+        });
+    }
+    function tagsOf(text) {
+        return JSON.parse(text).outbounds.map((o) => o.tag);
+    }
+
+    it("persists only whitelisted keys", async function () {
+        ctx = await serve();
+        const { json, status } = await save({
+            mode: "proxy",
+            aclPreset: "acl4ssr-mini",
+            // `out` decides the response shape, so a stray "outbounds" saved
+            // here would strip every client's config down to a fragment.
+            out: "outbounds",
+            tun: false,
+            nonsense: "x",
+        });
+        expect(status).to.equal(200);
+        expect(json.data.settings.mode).to.equal("proxy");
+        expect(json.data.settings.aclPreset).to.equal("acl4ssr-mini");
+        expect(json.data.settings).to.not.have.property("out");
+        expect(json.data.settings).to.not.have.property("tun");
+        expect(json.data.settings).to.not.have.property("nonsense");
+    });
+
+    it("refuses values that would break a client's config", async function () {
+        ctx = await serve();
+        // remoteDns is written verbatim into every client config, so a bad
+        // value would 500 the address rather than merely look wrong.
+        const { json } = await save({
+            mode: "nonsense",
+            aclPreset: "not-a-preset",
+            inboundPort: 70000,
+            remoteDns: { evil: true },
+        });
+        expect(json.data.settings).to.not.have.property("mode");
+        expect(json.data.settings).to.not.have.property("aclPreset");
+        expect(json.data.settings).to.not.have.property("inboundPort");
+        expect(json.data.settings).to.not.have.property("remoteDns");
+    });
+
+    it("clears a field sent as null instead of storing an empty value", async function () {
+        ctx = await serve();
+        await save({ remoteDns: "tls://1.1.1.1" });
+        expect(ctx.store.getSettings().defaultOptions.remoteDns).to.equal("tls://1.1.1.1");
+
+        await save({ remoteDns: null });
+        expect(ctx.store.getSettings().defaultOptions).to.not.have.property("remoteDns");
+    });
+
+    it("renders the address from the saved settings, with the URL still winning", async function () {
+        ctx = await serve();
+        await save({ mode: "proxy" });
+
+        const saved = JSON.parse((await pull()).text);
+        expect(saved.inbounds.some((i) => i.type === "tun")).to.equal(false);
+
+        // An address handed out earlier keeps working, and ?mode= overrides.
+        const forced = JSON.parse((await pull("?mode=client")).text);
+        expect(forced.inbounds.some((i) => i.type === "tun")).to.equal(true);
+    });
+
+    it("applies a saved ACL preset to the address", async function () {
+        ctx = await serve();
+        await save({ aclPreset: "acl4ssr-mini" });
+        const tags = tagsOf((await pull()).text);
+        // The preset names its own groups rather than the bare default ones.
+        expect(tags.some((tag) => tag !== "proxy" && tag !== "auto")).to.equal(true);
+    });
+
+    it("leaves the output untouched while nothing is saved", async function () {
+        // Guard rail: empty settings must reproduce the pre-change behaviour.
+        ctx = await serve();
+        const config = JSON.parse((await pull()).text);
+        expect(config.outbounds.map((o) => o.tag)).to.include.members([
+            "香港 01",
+            "日本 02",
+        ]);
+        expect(config.route).to.be.an("object");
+    });
+
+    it("gives /api/export exactly what the address serves", async function () {
+        ctx = await serve();
+        await save({ aclPreset: "acl4ssr-mini", mode: "proxy" });
+
+        const viaAddress = JSON.parse((await pull()).text);
+        const exported = await ctx.request("/api/export", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ids: [ctx.source.id], out: "config" }),
+        });
+        expect(exported.status).to.equal(200);
+        // The whole point of the change: one saved config, two readers.
+        expect(exported.json.data.output).to.deep.equal(viaAddress);
+    });
+
+    it("turns a per-line rule list into the array the assembler wants", async function () {
+        ctx = await serve();
+        await save({ rules: "DOMAIN-SUFFIX,a.test,block\nDOMAIN-SUFFIX,b.test,direct\n" });
+        // The string used to be passed straight through and silently dropped.
+        expect(ctx.store.getSettings().defaultOptions.rules).to.deep.equal([
+            "DOMAIN-SUFFIX,a.test,block",
+            "DOMAIN-SUFFIX,b.test,direct",
+        ]);
+    });
+
+    it("carries addMixed and inboundPort through to the config", async function () {
+        ctx = await serve();
+        await save({ mode: "client", addMixed: true, inboundPort: 7890 });
+        const config = JSON.parse((await pull()).text);
+        const mixed = config.inbounds.filter((i) => i.type === "mixed");
+        expect(mixed.length).to.be.greaterThan(0);
+        expect(mixed.some((i) => i.listen_port === 7890)).to.equal(true);
+    });
+});
