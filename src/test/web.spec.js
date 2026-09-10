@@ -45,6 +45,13 @@ describe("singbox-kit web API", function () {
         expect(html).to.include("/api/settings");
         // The address moved off the subscriptions page to the export page.
         expect(html).to.not.include("subTargetSel");
+        // The export address carries an optional public base and a pinned
+        // client. The select ships empty on purpose - its options come from
+        // the server's target list, so a hardcoded one here would drift.
+        expect(html).to.include('id="publicUrl"');
+        expect(html).to.include('<select id="exportTarget"></select>');
+        // The feature was specified without one; this keeps it that way.
+        expect(html).to.not.include("二维码");
     });
 
     it("references no element the page fails to define", async function () {

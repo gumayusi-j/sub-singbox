@@ -22,8 +22,16 @@ function nodesJson(names) {
 
 const NODES = nodesJson(["香港 01", "日本 02"]);
 
+const DEFAULT_SUBSCRIPTION = {
+    defaultTarget: "sing-box",
+    unknownUaTarget: "reject",
+    allowedTargets: [],
+    cacheSeconds: 0,
+    exposeUsageHeader: true,
+};
+
 function baseConfig(dataPath, extra) {
-    return Object.assign(
+    const config = Object.assign(
         {
             listen: { host: "127.0.0.1", port: 0 },
             maxBodyBytes: 1048576,
@@ -31,16 +39,18 @@ function baseConfig(dataPath, extra) {
             remoteDns: "",
             dataPath,
             apiToken: "",
-            subscription: {
-                defaultTarget: "sing-box",
-                unknownUaTarget: "reject",
-                allowedTargets: [],
-                cacheSeconds: 0,
-                exposeUsageHeader: true,
-            },
         },
         extra || {},
     );
+    // Merged rather than replaced: an Object.assign of the whole config is
+    // shallow, so a caller naming one subscription option would otherwise drop
+    // the rest and quietly test something other than what it wrote.
+    config.subscription = Object.assign(
+        {},
+        DEFAULT_SUBSCRIPTION,
+        (extra && extra.subscription) || {},
+    );
+    return config;
 }
 
 function listen(server) {
@@ -625,6 +635,17 @@ describe("settings — one saved config, two readers", function () {
     function tagsOf(text) {
         return JSON.parse(text).outbounds.map((o) => o.tag);
     }
+    // The other reader of the saved settings, unwrapped to the config itself so
+    // it can be compared against what /sub/<token> serves.
+    function exportConfig() {
+        return ctx
+            .request("/api/export", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ ids: [ctx.source.id], out: "config" }),
+            })
+            .then((r) => r.json.data.output);
+    }
 
     it("persists the rule preset and nothing else", async function () {
         ctx = await serve();
@@ -644,9 +665,15 @@ describe("settings — one saved config, two readers", function () {
             out: "outbounds",
             tun: false,
             nonsense: "x",
+            // Accepted, but as a top-level setting rather than a render
+            // option. If it ever lands in `settings` the UI's "has the server
+            // stored anything" check starts firing on a display-only value -
+            // see the byte-equality test below for why that matters.
+            publicUrl: "http://150.158.78.150/",
         });
         expect(status).to.equal(200);
         expect(json.data.settings).to.deep.equal({ aclPreset: "acl4ssr-mini" });
+        expect(json.data.publicUrl).to.equal("http://150.158.78.150");
     });
 
     it("refuses a preset that does not exist", async function () {
@@ -662,6 +689,75 @@ describe("settings — one saved config, two readers", function () {
 
         await save({ aclPreset: null });
         expect(ctx.store.getSettings().defaultOptions).to.not.have.property("aclPreset");
+    });
+
+    it("a saved public URL changes nothing a client downloads", async function () {
+        ctx = await serve();
+        await save({ aclPreset: "acl4ssr-mini" });
+        const addressBefore = (await pull()).text;
+        const exportBefore = await exportConfig();
+
+        await save({ publicUrl: "http://150.158.78.150" });
+
+        // Byte-for-byte, on both readers. Stronger than asserting the key is
+        // absent from a whitelist: this covers every route into the renderer -
+        // renderOptionsFor's merge, /api/export's overrides, normalizeOptions.
+        expect((await pull()).text).to.equal(addressBefore);
+        expect(await exportConfig()).to.deep.equal(exportBefore);
+        expect(ctx.store.getSettings().defaultOptions).to.not.have.property("publicUrl");
+        expect(ctx.store.getSettings().publicUrl).to.equal("http://150.158.78.150");
+    });
+
+    it("normalises a public URL and refuses one it cannot use", async function () {
+        ctx = await serve();
+
+        // A bare host:port is what people type.
+        let { json } = await save({ publicUrl: "150.158.78.150" });
+        expect(json.data.publicUrl).to.equal("http://150.158.78.150");
+
+        // A path and a trailing slash are meaningless here - /sub/<token> is
+        // matched exactly - so only the origin survives.
+        ({ json } = await save({ publicUrl: "https://a.example/sub/" }));
+        expect(json.data.publicUrl).to.equal("https://a.example");
+
+        // Anything that would end up as a link in the page but is not http(s).
+        for (const bad of ["javascript:alert(1)", "data:text/html,x", "http://", "x".repeat(201)]) {
+            const resp = await save({ publicUrl: bad });
+            expect(resp.status, bad).to.equal(400);
+            expect(ctx.store.getSettings().publicUrl, bad).to.equal("https://a.example");
+        }
+
+        // Clearing it, the same way every other settings field is cleared.
+        ({ json } = await save({ publicUrl: null }));
+        expect(json.data.publicUrl).to.equal("");
+        expect(ctx.store.getSettings()).to.not.have.property("publicUrl");
+    });
+
+    it("offers the exportable clients, narrowed by allowedTargets", async function () {
+        ctx = await serve();
+        let ids = (await ctx.request("/api/subscriptions")).json.data.targets.map((t) => t.id);
+        expect(ids).to.include("sing-box");
+        expect(ids).to.include("clash");
+        // URI list is an output format, not a client anyone picks by name.
+        expect(ids).to.not.include("uri");
+
+        await ctx.close();
+        ctx = await serve({ config: { subscription: { allowedTargets: ["clash"] } } });
+        ids = (await ctx.request("/api/subscriptions")).json.data.targets.map((t) => t.id);
+        expect(ids).to.deep.equal(["clash"]);
+    });
+
+    it("keeps the 400 body listing every target, not just the exportable ones", async function () {
+        ctx = await serve({ config: { subscription: { allowedTargets: ["clash"] } } });
+        const resp = await ctx.request("/sub/" + ctx.token, {
+            headers: { "user-agent": "Unknown Client/1.0" },
+        });
+        expect(resp.status).to.equal(400);
+        // The body answers "what can this server serve", so narrowing it to the
+        // UI's subset would hide the answer to "why was mine rejected".
+        const ids = resp.json.targets.map((t) => t.id);
+        expect(ids).to.include("sing-box");
+        expect(ids).to.include("uri");
     });
 
     it("serves the client shape whatever was saved", async function () {

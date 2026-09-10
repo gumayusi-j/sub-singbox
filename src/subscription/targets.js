@@ -15,11 +15,13 @@
 // Every `produce` value here must be a key registered in
 // src/core/proxy-utils/producers/index.js. `mode: "singbox"` marks the one
 // target assembled into a full config rather than emitted as a node list; see
-// render.js.
+// render.js. `exportable: true` marks the entry as a client a user would pick
+// by name - see listExportTargets().
 export const TARGETS = [
     {
         id: "shadowrocket",
         label: "Shadowrocket",
+        exportable: true,
         produce: "shadowrocket",
         contentType: "text/plain; charset=utf-8",
         ua: /shadowrocket/i,
@@ -27,6 +29,7 @@ export const TARGETS = [
     {
         id: "quantumultx",
         label: "Quantumult X",
+        exportable: true,
         produce: "qx",
         contentType: "text/plain; charset=utf-8",
         ua: /quantumult\s?x|quantumultx|quanx/i,
@@ -34,6 +37,7 @@ export const TARGETS = [
     {
         id: "hiddify",
         label: "Hiddify",
+        exportable: true,
         produce: "sing-box",
         mode: "singbox",
         contentType: "application/json; charset=utf-8",
@@ -42,6 +46,7 @@ export const TARGETS = [
     {
         id: "sing-box",
         label: "sing-box",
+        exportable: true,
         produce: "sing-box",
         mode: "singbox",
         contentType: "application/json; charset=utf-8",
@@ -64,6 +69,7 @@ export const TARGETS = [
     {
         id: "clash",
         label: "Clash / mihomo",
+        exportable: true,
         produce: "clashmeta",
         contentType: "text/yaml; charset=utf-8",
         ua: /clash|mihomo|nikki|verge|flclash|mihomo\s*party/i,
@@ -71,6 +77,7 @@ export const TARGETS = [
     {
         id: "surfboard",
         label: "Surfboard",
+        exportable: true,
         produce: "surfboard",
         contentType: "text/plain; charset=utf-8",
         ua: /surfboard/i,
@@ -78,6 +85,7 @@ export const TARGETS = [
     {
         id: "surge",
         label: "Surge",
+        exportable: true,
         produce: "surge",
         contentType: "text/plain; charset=utf-8",
         ua: /surge/i,
@@ -85,6 +93,7 @@ export const TARGETS = [
     {
         id: "loon",
         label: "Loon",
+        exportable: true,
         // The producer registry only registers this one capitalised.
         produce: "Loon",
         contentType: "text/plain; charset=utf-8",
@@ -100,6 +109,7 @@ export const TARGETS = [
     {
         id: "egern",
         label: "Egern",
+        exportable: true,
         produce: "egern",
         contentType: "text/plain; charset=utf-8",
         ua: /egern/i,
@@ -152,10 +162,24 @@ export function findTarget(id) {
     return BY_ID.get(key) || BY_ID.get(ALIASES[key]) || null;
 }
 
-// The list a 400 response hands back so the caller can fix its URL, and what a
-// UI builds its dropdown from.
+// The list a 400 response hands back so the caller can fix its URL. Deliberately
+// every target, not the exportable subset: the point of the body is to tell a
+// caller what the server can actually serve, and narrowing it would hide the
+// answer to "why was my ?target= rejected".
 export function listTargets() {
     return TARGETS.map((t) => ({ id: t.id, label: t.label }));
+}
+
+// The subset the export page offers as a fixed ?target=. Narrower than
+// listTargets() on purpose: only the dialects a user would recognise as a
+// client they own, so the dropdown stays a choice between apps rather than a
+// list of output formats. A marker on each entry rather than a list of ids
+// here, so renaming a target moves the fact along with it.
+export function listExportTargets() {
+    return TARGETS.filter((t) => t.exportable === true).map((t) => ({
+        id: t.id,
+        label: t.label,
+    }));
 }
 
 export function contentTypeFor(target) {

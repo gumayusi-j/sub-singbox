@@ -216,6 +216,37 @@ describe("subscription store", function () {
         expect(store.getSettings().defaultOptions).to.deep.equal({ mode: "proxy" });
     });
 
+    it("stores a non-render setting beside globalToken, not in defaultOptions", async function () {
+        const { dataPath } = newStore();
+        const store = createStore({ dataPath });
+        store.setSettings({ publicUrl: "http://150.158.78.150" });
+
+        expect(store.getSettings().publicUrl).to.equal("http://150.158.78.150");
+        // The separation matters: the web UI reads "is defaultOptions non-empty"
+        // to decide whether to migrate a pre-server localStorage choice.
+        expect(store.getSettings().defaultOptions).to.deep.equal({});
+
+        await store.flush();
+        expect(createStore({ dataPath }).getSettings().publicUrl).to.equal(
+            "http://150.158.78.150",
+        );
+
+        // null clears, same convention as setDefaultOptions.
+        store.setSettings({ publicUrl: null });
+        expect(store.getSettings()).to.not.have.property("publicUrl");
+    });
+
+    it("refuses to let setSettings take over a field that has its own writer", function () {
+        const { dataPath } = newStore();
+        const store = createStore({ dataPath });
+        const token = store.getSettings().globalToken;
+
+        store.setSettings({ globalToken: "hijacked", defaultOptions: { aclPreset: "x" } });
+
+        expect(store.getSettings().globalToken).to.equal(token);
+        expect(store.getSettings().defaultOptions).to.deep.equal({});
+    });
+
     it("warns instead of silently clobbering when another writer touched the file", async function () {
         const { dataPath } = newStore();
         const messages = [];

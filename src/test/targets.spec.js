@@ -3,6 +3,7 @@ import {
     TARGETS,
     findTarget,
     listTargets,
+    listExportTargets,
     contentTypeFor,
     resolveTarget,
 } from "@/subscription/targets";
@@ -127,5 +128,29 @@ describe("subscription targets — table integrity", function () {
     it("marks sing-box as the only target assembled into a full config", function () {
         const configTargets = TARGETS.filter((t) => t.mode === "singbox").map((t) => t.id);
         expect(configTargets).to.deep.equal(["hiddify", "sing-box"]);
+    });
+
+    it("lists the clients the export page can pin an address to", function () {
+        const listed = listExportTargets();
+        expect(listed).to.have.length(9);
+        expect(listed[0]).to.have.keys(["id", "label"]);
+        // Membership, not order: the table's order is a UA-matching concern.
+        expect(listed.map((t) => t.id)).to.have.members([
+            "clash",
+            "surge",
+            "surfboard",
+            "shadowrocket",
+            "loon",
+            "quantumultx",
+            "sing-box",
+            "hiddify",
+            "egern",
+        ]);
+        // URI list is an output format rather than a client a user picks.
+        expect(listed.map((t) => t.id)).to.not.include("uri");
+        // Every id must still resolve, or the dropdown could hand out a 400.
+        for (const entry of listed) {
+            expect(findTarget(entry.id), entry.id).to.not.equal(null);
+        }
     });
 });

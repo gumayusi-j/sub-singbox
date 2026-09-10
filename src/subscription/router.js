@@ -13,7 +13,7 @@
 
 import { refreshMany, refreshSource } from "./refresh";
 import { renderSubscription, isNotModified } from "./render";
-import { resolveTarget, listTargets } from "./targets";
+import { resolveTarget, listTargets, listExportTargets } from "./targets";
 import { usageSummary } from "./usage";
 import { parseNodes } from "../kit/convert";
 import { findPreset } from "../kit/acl4ssr/build";
@@ -68,6 +68,51 @@ function sanitizeSettingsPatch(body) {
         patch.aclPreset = findPreset(raw.aclPreset) ? raw.aclPreset : null;
     }
     return patch;
+}
+
+// The address the export page shows a client link on. Display-only: it never
+// reaches the renderer, so it lives beside globalToken rather than inside the
+// render options (see the note in store.js).
+//
+// Returns undefined for "not this key / unusable value", null for "clear it",
+// and a normalised origin otherwise. The caller turns undefined into a 400
+// rather than storing a wrong address silently - the whole point of the field
+// is that someone will paste this into a client.
+const PUBLIC_URL_MAX = 200;
+
+export function sanitizePublicUrl(value) {
+    // null is the project-wide "clear this field" signal, not a bad value.
+    // Checked before the type test because typeof null is "object".
+    if (value === null) return null;
+    if (typeof value !== "string") return undefined;
+    const raw = value.trim();
+    if (raw === "") return null;
+    if (raw.length > PUBLIC_URL_MAX) return undefined;
+    // A bare host:port is what people actually type, so accept it.
+    const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : "http://" + raw;
+    let parsed;
+    try {
+        parsed = new URL(withScheme);
+    } catch (_e) {
+        return undefined;
+    }
+    // Anything but http(s) is refused rather than normalised: "javascript:" and
+    // "data:" parse fine and would end up as a link in the page.
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return undefined;
+    if (!parsed.hostname) return undefined;
+    // origin drops any trailing slash and path for free, so the frontend can
+    // concatenate without doing its own cleanup.
+    return parsed.origin;
+}
+
+// Settings that are not render options. Returns null when the body carries
+// none, false when the value is unusable, and a patch otherwise - the caller
+// answers 400 for false rather than storing nothing and looking like it worked.
+function sanitizeTopLevelSettings(body) {
+    const raw = body && typeof body === "object" ? body : {};
+    if (raw.publicUrl === undefined) return null;
+    const value = sanitizePublicUrl(raw.publicUrl);
+    return value === undefined ? false : { publicUrl: value };
 }
 
 function redactUrl(value) {
@@ -135,11 +180,21 @@ export function createSubscriptionRouter(options) {
 
     function collectionPayload() {
         const model = store.read();
+        // The dropdown offers the exportable subset, minus anything the
+        // deployment disallows. Without the intersection the UI could hand out
+        // a ?target= the server answers 400 to, which is a link that looks
+        // fine right up until a client polls it.
+        const allowed = (settings.allowedTargets || []).filter(
+            (id) => typeof id === "string",
+        );
         return {
             sources: model.sources.map((source) => summarize(source, false)),
             settings: model.settings.defaultOptions || {},
+            publicUrl: model.settings.publicUrl || "",
             globalSubUrl: SUB_ROOT + model.settings.globalToken,
-            targets: listTargets(),
+            targets: listExportTargets().filter(
+                (t) => allowed.length === 0 || allowed.indexOf(t.id) !== -1,
+            ),
             dataPath: store.dataPath,
         };
     }
@@ -441,8 +496,20 @@ export function createSubscriptionRouter(options) {
 
         if (pathname === "/api/settings" && (method === "PUT" || method === "POST")) {
             const body = (await readJsonBody()) || {};
+            const top = sanitizeTopLevelSettings(body);
+            if (top === false) {
+                sendJson(res, 400, {
+                    ok: false,
+                    error: "publicUrl must be an http(s) address",
+                });
+                return;
+            }
             const saved = store.setDefaultOptions(sanitizeSettingsPatch(body));
-            sendJson(res, 200, { ok: true, data: { settings: saved } });
+            const model = top ? store.setSettings(top) : store.getSettings();
+            sendJson(res, 200, {
+                ok: true,
+                data: { settings: saved, publicUrl: model.publicUrl || "" },
+            });
             return;
         }
 

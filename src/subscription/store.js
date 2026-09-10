@@ -72,6 +72,14 @@ function normalizeModel(raw) {
         if (isPlainObject(raw.settings.defaultOptions)) {
             model.settings.defaultOptions = deepClone(raw.settings.defaultOptions);
         }
+        // Display-only, deliberately NOT in defaultOptions: that bag is the
+        // renderer's input, while this is the address the export page shows.
+        // The web UI reads "is defaultOptions non-empty" to decide whether to
+        // migrate a pre-server localStorage choice, so a key here would make a
+        // user who only filled in an address silently lose that migration.
+        if (typeof raw.settings.publicUrl === "string") {
+            model.settings.publicUrl = raw.settings.publicUrl;
+        }
     }
     if (Array.isArray(raw.sources)) {
         model.sources = raw.sources.filter(isPlainObject).map(normalizeSource);
@@ -411,6 +419,25 @@ export function createStore(options) {
                 }
                 live.settings.defaultOptions = next;
                 return next;
+            });
+        },
+
+        // Settings that are not render options, i.e. everything under
+        // `settings` except defaultOptions. Same null-means-delete convention
+        // as setDefaultOptions above.
+        //
+        // globalToken and defaultOptions are refused rather than merely unused:
+        // each already has exactly one writer (rotateToken, setDefaultOptions),
+        // and a second one taking over silently is the kind of thing nobody
+        // finds until a token stops rotating.
+        setSettings(patch) {
+            return mutate((live) => {
+                for (const key of Object.keys(patch || {})) {
+                    if (key === "globalToken" || key === "defaultOptions") continue;
+                    if (patch[key] === null) delete live.settings[key];
+                    else live.settings[key] = patch[key];
+                }
+                return live.settings;
             });
         },
 

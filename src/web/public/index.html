@@ -15,7 +15,7 @@
   .inset { background: #141b24; margin-top: 10px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   label.inline { display: inline-flex; align-items: center; gap: 5px; margin-right: 10px; }
-  textarea, input[type="text"], input[type="number"] { width: 100%; background: #0d141b; color: inherit; border: 1px solid #2a3948; border-radius: 8px; padding: 8px 10px; font: inherit; }
+  textarea, input[type="text"], input[type="number"], select { width: 100%; background: #0d141b; color: inherit; border: 1px solid #2a3948; border-radius: 8px; padding: 8px 10px; font: inherit; }
   textarea { resize: vertical; min-height: 80px; font-family: ui-monospace, Consolas, monospace; }
   input[type="text"], input[type="number"] { padding: 7px 9px; }
   input[type="number"] { width: 130px; }
@@ -187,10 +187,22 @@
         <span class="tag">一条链接，客户端自动跟进</span>
       </div>
       <div class="muted" style="font-size:12px; margin-top:4px">
-        把这个地址填进客户端（sing-box / Clash / Shadowrocket…）一次即可：之后你在「订阅」页点「刷新」，
-        客户端再来拉取时拿到的就是最新节点。格式按客户端的 User-Agent 自动判断，同一个地址可以同时喂给
-        sing-box 和 Clash，不需要手动指定。规则方案取自「规则」页当前选定的内容。
+        把这个地址填进客户端一次即可：之后你在「订阅」页点「刷新」，客户端再来拉取时拿到的就是最新节点。
+        默认按客户端的 User-Agent 自动判断格式，同一个地址可以同时喂给 sing-box 和 Clash；
+        也可以在上面固定成某一个客户端，固定后走 <span class="mono">?target=</span>，优先级高于 User-Agent。
+        规则方案取自「规则」页当前选定的内容。
       </div>
+      <div class="grid2" style="margin-top:10px">
+        <div class="fld">
+          <label>对外地址（填了才在别的设备上可用；留空则用当前浏览器地址）</label>
+          <input type="text" id="publicUrl" placeholder="http://150.158.78.150" spellcheck="false">
+        </div>
+        <div class="fld">
+          <label>客户端类型</label>
+          <select id="exportTarget"></select>
+        </div>
+      </div>
+      <div class="muted" id="publicUrlHint" style="font-size:12px; margin-top:6px"></div>
       <div class="row" style="margin-top:8px">
         <input type="text" id="exportSubUrl" readonly style="flex:1; min-width:240px">
         <button class="secondary small" id="btnCopyExportSubUrl">复制</button>
@@ -211,8 +223,13 @@
           <li>国内 IP 直连依赖 sing-box 启动时拉取 <span class="mono">geoip-cn</span> 规则集；不联网的部署可改用「不使用（默认分域模板）」。</li>
         </ul>
         订阅与凭据保存在服务端数据文件（<span class="mono" id="dataPathHint">singbox-web.data.json</span>）里，
-        解析与生成也都在你自己的服务/本机完成。该文件等同于一份凭据清单，请勿把本服务暴露到公网；
-        需要公网访问时先设置 <span class="mono">apiToken</span>。
+        解析与生成也都在你自己的服务或本机完成。该文件等同于一份凭据清单，不要放进代码仓库或共享目录。
+        <br><br>
+        订阅地址本身是一条能力链接：<b>任何拿到它的人都能取到你的全部节点</b>。
+        <span class="mono">apiToken</span> 只保护 <span class="mono">/api/*</span>，
+        <b>并不保护 <span class="mono">/sub/&lt;token&gt;</span></b>。
+        需要对外提供时，请在前面套一层 HTTPS 反向代理（本服务自身只监听明文 HTTP），把「对外地址」填成那层代理的地址；
+        想收回已经发出去的链接，用上面的「轮换密钥」，旧地址立刻失效。
       </div>
     </details>
   </section>
@@ -229,6 +246,10 @@
     shape: "sbx:shape",   // legacy: the run shape is gone; only purged now
     acl: "sbx:acl",       // legacy: the rules choice now lives in settings
     apiToken: "sbx:apiToken",
+    // Which client the export page's address is pinned to. Display-only: the
+    // server never reads it, the client's own ?target= decides the dialect. So
+    // it is a per-browser preference, not a stored setting.
+    exportTarget: "sbx:exportTarget",
     legacySubs: "sbx:subs",
     legacyEnabled: "sbx:enabledIds"
   };
@@ -253,7 +274,9 @@
     });
   }
   // Server mirror: sources, the target list and the global subscription URL.
-  var state = { sources: [], targets: [], globalSubUrl: "", dataPath: "", settings: {} };
+  var state = { sources: [], targets: [], globalSubUrl: "", publicUrl: "", dataPath: "", settings: {} };
+  // The pinned client for the export address, or "" for UA detection.
+  var exportTarget = load(STORE.exportTarget, "");
   // Filled from the server's saved settings once loadSubs() resolves. These are
   // the same values the subscription address is rendered from. The rule preset
   // is the only thing the rules page chooses; the run shape (TUN tun-in, DNS
@@ -423,12 +446,48 @@
   // The stable address a client is pointed at, shown on the export page beside
   // the config it renders. No ?target= is appended: the dialect comes from the
   // client's own User-Agent, which is what lets one address serve them all.
+  // Where the address should point. A configured 对外地址 wins because the
+  // browser's own host is whatever the admin happened to type - on the server
+  // itself that is localhost, which no phone can reach. Falling back to
+  // location.origin keeps a plain `npm run web` usable with no setup.
+  function subBase() {
+    return state.publicUrl || location.origin;
+  }
+
+  var AUTO_TARGET_LABEL = "自动识别客户端（按 User-Agent）";
+
+  // Rebuilt on every loadSubs(), so the selection has to be restored each time -
+  // and dropped when the server no longer offers it (allowedTargets can narrow
+  // the list), because copying a ?target= the server rejects yields a link that
+  // looks fine until a client polls it and gets a 400.
+  function renderTargetSelect() {
+    var sel = $("exportTarget");
+    if (!sel) return;
+    var options = ['<option value="">' + esc(AUTO_TARGET_LABEL) + "</option>"];
+    (state.targets || []).forEach(function (t) {
+      options.push('<option value="' + esc(t.id) + '">' + esc(t.label) + "</option>");
+    });
+    sel.innerHTML = options.join("");
+    var known = (state.targets || []).some(function (t) { return t.id === exportTarget; });
+    if (!known && exportTarget) {
+      exportTarget = "";
+      save(STORE.exportTarget, "");
+    }
+    sel.value = known ? exportTarget : "";
+    // Only speak up when there is nothing to pick; otherwise leave the hint to
+    // whoever wrote it last (a save result, a copy confirmation).
+    if (!known && (state.targets || []).length === 0) {
+      setStatus($("publicUrlHint"), "服务端未放行任何可固定的客户端，地址将按 User-Agent 自动识别。", "");
+    }
+  }
+
   function renderExportSubCard() {
     var card = $("exportSubCard");
     if (!card) return;
     if (!state.globalSubUrl) { card.style.display = "none"; return; }
     card.style.display = "block";
-    $("exportSubUrl").value = location.origin + state.globalSubUrl;
+    var query = exportTarget ? "?target=" + encodeURIComponent(exportTarget) : "";
+    $("exportSubUrl").value = subBase() + state.globalSubUrl + query;
     var path = state.dataPath || "singbox-web.data.json";
     if ($("dataPathHint")) $("dataPathHint").textContent = path;
   }
@@ -438,6 +497,7 @@
     state.sources = data.sources || [];
     state.targets = data.targets || [];
     state.globalSubUrl = data.globalSubUrl || "";
+    state.publicUrl = data.publicUrl || "";
     state.dataPath = data.dataPath || "";
     state.settings = data.settings || {};
     // Apply the saved settings exactly once. This runs again on every refresh,
@@ -448,6 +508,10 @@
       settingsReady = true;
       if (pendingSave) persistAll();
     }
+    // Before renderExportSubCard(): the select settles exportTarget (it may
+    // clear a choice the server no longer offers), and the address is built
+    // from it.
+    renderTargetSelect();
     renderExportSubCard();
     renderSubList();
     updateExport();
@@ -458,6 +522,7 @@
   function applyOptionsToUI(opts) {
     opts = opts || {};
     acl = ACL_NAME[opts.aclPreset] ? opts.aclPreset : "none";
+    if ($("publicUrl")) $("publicUrl").value = state.publicUrl || "";
     renderRules();
     updateExport();
   }
@@ -737,6 +802,52 @@
       window.alert("轮换失败：" + (e && e.message ? e.message : e));
     }
   });
+  // Picking a client only rewrites the address shown: the server renders from
+  // ?target= on the request, so nothing was saved and nothing generated became
+  // stale. That is why this neither PUTs nor calls invalidate().
+  $("exportTarget").addEventListener("change", function () {
+    exportTarget = $("exportTarget").value;
+    save(STORE.exportTarget, exportTarget);
+    renderExportSubCard();
+    if (exportTarget) {
+      var label = $("exportTarget").options[$("exportTarget").selectedIndex].text;
+      setStatus($("publicUrlHint"),
+        "地址已固定为 " + label + "，不再依赖客户端 User-Agent。", "");
+    } else {
+      setStatus($("publicUrlHint"), "已改为按客户端 User-Agent 自动识别。", "");
+    }
+  });
+
+  // The address is stored server-side so the value the export page shows is the
+  // one every browser (and a future device) sees. Debounced like the rules
+  // page, and flushed on hide for the same reason.
+  var publicUrlTimer = null;
+  function flushPublicUrl() {
+    if (publicUrlTimer) { clearTimeout(publicUrlTimer); publicUrlTimer = null; }
+    var typed = $("publicUrl").value.trim();
+    return api("PUT", "/api/settings", { publicUrl: typed }).then(function (data) {
+      // Write the server's normalised form back: it added the scheme and
+      // dropped any trailing slash, and the address is built from it.
+      state.publicUrl = data.publicUrl || "";
+      $("publicUrl").value = state.publicUrl;
+      renderExportSubCard();
+      setStatus($("publicUrlHint"),
+        state.publicUrl ? "已保存。" : "已清除，将使用当前浏览器地址。", "ok");
+    }).catch(function (e) {
+      // A 400 means the address is unusable. Keep what the user typed so they
+      // can fix it, and leave state.publicUrl on the last good value.
+      setStatus($("publicUrlHint"), "保存失败：" + (e && e.message ? e.message : e), "err");
+    });
+  }
+  $("publicUrl").addEventListener("input", function () {
+    if (!settingsReady) return;   // same guard as the rules page
+    if (publicUrlTimer) clearTimeout(publicUrlTimer);
+    publicUrlTimer = setTimeout(flushPublicUrl, 500);
+  });
+  $("publicUrl").addEventListener("blur", function () {
+    if (publicUrlTimer) flushPublicUrl();
+  });
+
   [].forEach.call(document.querySelectorAll('input[name="srckind"]'), function (r) {
     r.addEventListener("change", function () { toggleAdd(kindChecked()); });
   });
@@ -947,7 +1058,9 @@
   /* ---------------- init ---------------- */
   // A pending edit must not be lost when the tab is closed or backgrounded.
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "hidden" && saveTimer) flushSettings();
+    if (document.visibilityState !== "hidden") return;
+    if (saveTimer) flushSettings();
+    if (publicUrlTimer) flushPublicUrl();
   });
   renderRules();
   renderSubList();
