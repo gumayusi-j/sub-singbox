@@ -2594,10 +2594,11 @@ var app = Vue.createApp({
       }
       generating.value = false;
     }
-    async function copyConfig() {
+    function copyConfig() {
       if (!last.value) return;
-      try { await navigator.clipboard.writeText(cfgJson.value); ElementPlus.ElMessage.success('已复制'); }
-      catch(e) { ElementPlus.ElMessage.error('复制失败'); }
+      // Same path as every other copy button. A second, private copy
+      // implementation is how the insecure-context bug survived in two places.
+      copyText(cfgJson.value);
     }
     function downloadConfig() {
       if (!last.value) return;
@@ -2689,9 +2690,43 @@ var app = Vue.createApp({
     }
 
     // === Clipboard ===
+    // navigator.clipboard only exists in a secure context, and this tool is
+    // meant to run on a plain-HTTP address - a LAN IP or a public one - which
+    // is exactly where it is undefined. Every copy button in the page therefore
+    // failed on the deployment the tool is built for, with nothing but
+    // "复制失败" to explain it.
+    //
+    // execCommand('copy') is deprecated but still implemented everywhere, and
+    // it has no secure-context requirement. It needs a real selection, hence
+    // the off-screen textarea: an element that is display:none cannot be
+    // selected, so it is positioned out of view instead.
+    function legacyCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      var ok = false;
+      try {
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        ok = document.execCommand('copy');
+      } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      return ok;
+    }
+
     async function copyText(text) {
-      try { await navigator.clipboard.writeText(text); ElementPlus.ElMessage.success('已复制'); }
-      catch(e) { ElementPlus.ElMessage.error('复制失败'); }
+      if (text == null || text === '') return;
+      var value = String(text);
+      if (navigator.clipboard && window.isSecureContext) {
+        try { await navigator.clipboard.writeText(value); ElementPlus.ElMessage.success('已复制'); return; }
+        catch (e) { /* permission denied or no focus: fall through */ }
+      }
+      if (legacyCopy(value)) ElementPlus.ElMessage.success('已复制');
+      else ElementPlus.ElMessage.error('复制失败：浏览器拒绝了剪贴板访问，请手动选中后复制。');
     }
 
     // === World Map ===
