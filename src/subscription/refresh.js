@@ -253,8 +253,13 @@ export async function refreshSource(store, id, deps) {
 //
 // `ids` empty/absent refreshes every enabled source. Results come back in the
 // caller's order regardless of which lane finished first.
+//
+// deps.onProgress — (event) => void, called after each source completes:
+//   { sourceId, sourceName, completed, total, status }
+//   status is 'ok', 'failed', or 'skipped'.
 export async function refreshMany(store, ids, deps) {
     deps = deps || {};
+    const onProgress = typeof deps.onProgress === "function" ? deps.onProgress : null;
     const all = store.list();
     const byId = new Map(all.map((s) => [s.id, s]));
     const requested = Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : [];
@@ -263,14 +268,31 @@ export async function refreshMany(store, ids, deps) {
             ? requested.map((id) => byId.get(id)).filter(Boolean)
             : all.filter((s) => s.enabled);
     const skipped = requested.filter((id) => !byId.has(id));
+    const total = selected.length;
+
+    if (onProgress) {
+        onProgress({ type: "start", total });
+    }
 
     const lanes = groupByHost(selected);
     const outcomes = new Map();
+    let completed = 0;
     await Promise.all(
         Array.from(lanes.values()).map(async (lane) => {
             // Serial within a host; the lanes themselves run concurrently.
             for (const source of lane) {
-                outcomes.set(source.id, await refreshSource(store, source.id, deps));
+                const outcome = await refreshSource(store, source.id, deps);
+                outcomes.set(source.id, outcome);
+                completed += 1;
+                if (onProgress) {
+                    onProgress({
+                        sourceId: source.id,
+                        sourceName: source.name,
+                        completed,
+                        total,
+                        status: outcome.ok ? "ok" : outcome.stale ? "skipped" : "failed",
+                    });
+                }
             }
         }),
     );

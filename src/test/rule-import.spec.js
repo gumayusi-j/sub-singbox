@@ -150,6 +150,33 @@ describe("rules/import", function () {
             expect(result.warnings.some((w) => /rule_set/.test(w.message))).to.equal(true);
         });
 
+        it("expands a remote provider when its content is in downloadedContent", function () {
+            const doc = [
+                "rule-providers:",
+                "  remote1:",
+                "    type: http",
+                "    behavior: domain",
+                "    url: https://example.com/rules.yaml",
+                "    interval: 86400",
+                "rules:",
+                "  - RULE-SET,remote1,Proxy",
+                "  - DOMAIN,direct.example,DIRECT",
+                "",
+            ].join("\n");
+            const downloadedContent = new Map();
+            downloadedContent.set("remote1", "+.cdn.example\ntracker.example");
+            const result = importRules(doc, { downloadedContent });
+            // The remote provider's content was expanded inline.
+            expect(result.rules.map((r) => [r.type, r.content, r.outbound])).to.deep.equal([
+                ["DOMAIN-SUFFIX", "cdn.example", "Proxy"],
+                ["DOMAIN", "tracker.example", "Proxy"],
+                ["DOMAIN", "direct.example", "direct"],
+            ]);
+            // No providers left to declare — the remote one was consumed.
+            expect(result.providers).to.have.length(0);
+            expect(result.stats.skipped).to.equal(0);
+        });
+
         it("refuses a RULE-SET naming an undeclared provider", function () {
             const result = importRules("rules:\n  - RULE-SET,ghost,Proxy\n");
             expect(result.rules).to.have.length(0);

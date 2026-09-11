@@ -19,6 +19,8 @@ import { parseNodes, downloadText } from "../kit/convert";
 import { findScheme, normalizeScheme, schemeFromImport, CUSTOM_PREFIX, MAX_SCHEMES } from "../kit/schemes";
 import { normalizeNodeFilter } from "../kit/nodes/filter";
 import { importRules } from "../kit/rules/import";
+import { downloadProviders } from "../kit/rules/fetch-providers";
+import { originalGitHubURL } from "../kit/mirror";
 import crypto from "crypto";
 
 // What the rules page shows after an import. The counts are the honest part -
@@ -52,6 +54,13 @@ function defaultSchemeName(imported, url) {
     if (imported.format === "mihomo") return "导入的 Clash 规则";
     if (imported.format === "surge") return "导入的 Surge 规则";
     return "导入的规则";
+}
+
+// Write a single SSE event to the response.  `event` is optional; when omitted
+// the message is a plain `data:` line.
+function sseWrite(res, data, event) {
+    if (event) res.write("event: " + event + "\n");
+    res.write("data: " + JSON.stringify(data) + "\n\n");
 }
 
 const API_ROOT = "/api/subscriptions";
@@ -436,6 +445,52 @@ export function createSubscriptionRouter(options) {
             return;
         }
 
+        // POST /api/subscriptions/refresh-stream — SSE variant of /refresh.
+        // Reports per-source progress so the frontend can show a progress card.
+        if (pathname === API_ROOT + "/refresh-stream" && method === "POST") {
+            const body = (await readJsonBody()) || {};
+            res.writeHead(200, {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-store",
+                "X-Accel-Buffering": "no",
+            });
+            function sse(data, event) { sseWrite(res, data, event); }
+
+            coordinator.resetCancelAll();
+            try {
+                const result = await refreshMany(store, body.ids, {
+                    fetchImpl,
+                    coordinator,
+                    now,
+                    onProgress(event) {
+                        sse(event);
+                    },
+                });
+                sse({
+                    type: "done",
+                    refreshed: result.results.length,
+                    failed: result.failed,
+                    skipped: result.skipped,
+                }, "done");
+            } catch (e) {
+                sse({
+                    type: "done",
+                    error: (e && e.message) ? e.message : String(e),
+                    failed: [],
+                    skipped: 0,
+                }, "done");
+            }
+            res.end();
+            return;
+        }
+
+        // POST /api/subscriptions/cancel-refresh — cancel in-flight refreshes.
+        if (pathname === API_ROOT + "/cancel-refresh" && method === "POST") {
+            coordinator.cancelAll();
+            sendJson(res, 200, { ok: true });
+            return;
+        }
+
         if (pathname.startsWith(API_ROOT + "/")) {
             const rest = pathname.slice(API_ROOT.length + 1);
             const slash = rest.indexOf("/");
@@ -660,6 +715,156 @@ export function createSubscriptionRouter(options) {
                 ok: true,
                 data: { scheme, report: importReport(imported), customSchemes: next },
             });
+            return;
+        }
+
+        // ---- /api/schemes/import-stream (SSE) ----------------------------------
+        // Streaming variant of /api/schemes/import.  Reports download, parse and
+        // ruleset-download phases as SSE events so the frontend can show a
+        // progress card.  Remote rule-providers are downloaded and expanded
+        // inline; the import fails if ANY download fails (Tower 1.0.15
+        // behaviour).
+        if (pathname === "/api/schemes/import-stream" && method === "POST") {
+            const body = (await readJsonBody()) || {};
+            let text = typeof body.input === "string" ? body.input : "";
+            const url = typeof body.url === "string" ? body.url.trim() : "";
+
+            // Start the SSE response.
+            res.writeHead(200, {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-store",
+                "X-Accel-Buffering": "no",
+            });
+
+            function sse(data, event) { sseWrite(res, data, event); }
+
+            try {
+                // Phase 1: download configuration (if URL).
+                sse({ stage: "configuration" }, "stage");
+
+                if (url !== "") {
+                    if (!/^https?:\/\//i.test(url)) {
+                        sse({ type: "error", error: "规则链接必须是 http(s) 地址" });
+                        res.end();
+                        return;
+                    }
+                    sse({ stage: "configuration", sources: [url] }, "stage");
+                    try {
+                        const downloaded = await downloadText(url, { fetchImpl });
+                        text = downloaded.text;
+                    } catch (e) {
+                        sse({
+                            type: "error",
+                            error: "规则下载失败：" + (e && e.message ? e.message : e),
+                            failures: [{ url, reason: e.message || String(e), retryable: false }],
+                        });
+                        res.end();
+                        return;
+                    }
+                }
+
+                if (text.trim() === "") {
+                    sse({ type: "error", error: "没有可导入的规则内容" });
+                    res.end();
+                    return;
+                }
+
+                // Phase 2: parse configuration.
+                sse({ stage: "parsing" }, "stage");
+                const imported = importRules(text);
+
+                // Phase 3: download remote rule-providers (mihomo only).
+                const remoteProviders = imported.providers.filter(
+                    (p) => p && p.type !== "inline" && typeof p.url === "string" && p.url !== "",
+                );
+
+                let downloadedContent = null;
+                if (remoteProviders.length > 0) {
+                    const total = remoteProviders.length;
+                    sse({ stage: "rules", total, completed: 0, sources: [] }, "stage");
+
+                    const result = await downloadProviders(remoteProviders, {
+                        fetchImpl,
+                        onProgress(event) {
+                            sse({
+                                type: "progress",
+                                stage: "rules",
+                                completed: event.completed,
+                                total: event.total,
+                                sources: event.sources,
+                            });
+                        },
+                    });
+
+                    if (result.failures.length > 0) {
+                        const failures = result.failures.map((f) => ({
+                            name: f.name,
+                            url: f.url,
+                            reason: f.reason,
+                            retryable: f.retryable,
+                        }));
+                        sse({
+                            type: "error",
+                            error: "部分规则集下载失败，导入未完成。",
+                            failures,
+                        });
+                        res.end();
+                        return;
+                    }
+
+                    downloadedContent = result.downloaded;
+                    // Re-import with the downloaded content available.
+                    const enrichedOptions = { downloadedContent };
+                    const reimported = importRules(text, enrichedOptions);
+                    // Merge: the reimport expanded the remote providers into rules.
+                    imported.rules = reimported.rules;
+                    imported.stats = reimported.stats;
+                    imported.providers = reimported.providers;
+                    imported.warnings = reimported.warnings;
+                }
+
+                // Build the scheme.
+                const name =
+                    typeof body.name === "string" && body.name.trim() !== ""
+                        ? body.name.trim()
+                        : defaultSchemeName(imported, url);
+                const scheme = schemeFromImport(imported, {
+                    id: CUSTOM_PREFIX + crypto.randomUUID().slice(0, 8),
+                    name,
+                    summary:
+                        imported.format === "mihomo"
+                            ? "导入自 Clash/Mihomo 配置"
+                            : imported.format === "surge"
+                              ? "导入自 Surge 配置"
+                              : "导入自规则文本",
+                });
+
+                if (scheme === null) {
+                    sse({
+                        type: "error",
+                        error: "这份配置里没有能转换成 sing-box 的规则",
+                        report: importReport(imported),
+                    });
+                    res.end();
+                    return;
+                }
+
+                const existing = (store.getSettings() || {}).customSchemes || [];
+                const next = existing.concat([scheme]).slice(-MAX_SCHEMES);
+                store.setSettings({ customSchemes: next });
+                sse({
+                    type: "done",
+                    scheme,
+                    report: importReport(imported),
+                    customSchemes: next,
+                });
+            } catch (e) {
+                sse({
+                    type: "error",
+                    error: (e && e.message) ? e.message : String(e),
+                });
+            }
+            res.end();
             return;
         }
 

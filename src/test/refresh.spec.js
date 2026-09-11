@@ -467,4 +467,34 @@ describe("subscription refresh — batch selection", function () {
         expect(result.skipped).to.deep.equal(["missing-id"]);
         expect(result.results).to.deep.equal([]);
     });
+
+    it("calls onProgress after each source completes", async function () {
+        const fetchImpl = createMockFetch({
+            "https://a.test/1": { status: 200, body: NODES_A },
+            "https://b.test/2": { status: 200, body: NODES_B },
+            "https://c.test/3": { status: 500, body: "boom" },
+        });
+        const ctx = setup({ fetchImpl });
+        ctx.store.addSource({ name: "A源", kind: "url", url: "https://a.test/1" });
+        ctx.store.addSource({ name: "B源", kind: "url", url: "https://b.test/2" });
+        ctx.store.addSource({ name: "C源", kind: "url", url: "https://c.test/3" });
+
+        const events = [];
+        ctx.deps.onProgress = (ev) => { events.push(ev); };
+        await refreshMany(ctx.store, [], ctx.deps);
+
+        // Should have 1 start event + 3 progress events.
+        expect(events.length).to.equal(4);
+        expect(events[0]).to.deep.equal({ type: "start", total: 3 });
+        // Each subsequent event has completed count.
+        for (let i = 1; i <= 3; i++) {
+            expect(events[i].completed).to.equal(i);
+            expect(events[i].total).to.equal(3);
+            expect(typeof events[i].sourceName).to.equal("string");
+        }
+        // One of them should be "failed".
+        const statuses = events.slice(1).map((e) => e.status);
+        expect(statuses).to.include("failed");
+        expect(statuses.filter((s) => s === "ok")).to.have.length(2);
+    });
 });

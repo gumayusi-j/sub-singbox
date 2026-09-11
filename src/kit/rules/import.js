@@ -371,7 +371,30 @@ function importRuleSet(result, parsed, providers, defaultOutbound, options) {
         });
         return;
     }
+
+    // When the caller has already downloaded the remote provider's content,
+    // expand it inline just like an inline provider — no deferred declaration
+    // needed.  `downloadedContent` is a Map<providerName, text> populated by
+    // the router after downloadProviders() succeeds.
+    const downloadedContent =
+        options && options.downloadedContent instanceof Map
+            ? options.downloadedContent
+            : null;
+
     if (provider.type !== "inline") {
+        // A remote provider whose content was downloaded gets expanded now.
+        if (downloadedContent && downloadedContent.has(name)) {
+            const content = downloadedContent.get(name);
+            const lines = content.split(/\r?\n/).map((l) => removingComment(l.trim())).filter(Boolean);
+            const normalized = normalizeResourceLines(lines, provider.behavior);
+            const policy = parsed.policy === null ? defaultOutbound : parsed.policy;
+            for (const line of normalized) {
+                addRule(result, inheritOptions(line, parsed.options), policy, options);
+            }
+            return;
+        }
+        // Still deferred: the scheme must declare it as a rule_set for
+        // the client to fetch at runtime.
         result.providers.push(provider);
         result.stats.skipped += 1;
         result.warnings.push({

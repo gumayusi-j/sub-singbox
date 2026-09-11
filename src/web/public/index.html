@@ -1168,6 +1168,41 @@ pre.code-block {
 .el-dialog__body { padding: 20px; color: var(--text); }
 .el-dialog__footer { padding: 12px 20px; border-top: 1px solid var(--stroke-soft); display: flex; justify-content: flex-end; gap: 8px; }
 
+/* Task progress/error card — used inside dialogs and as a standalone overlay. */
+.task-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.12);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  border-radius: var(--r-card);
+  animation: taskFadeIn 0.2s ease-out;
+}
+.task-card {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 28px 32px; max-width: 380px;
+}
+.task-card__icon { margin-bottom: 12px; }
+.task-card__title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.task-card__detail {
+  font-size: 12.5px; color: var(--text-2); line-height: 1.5;
+  max-height: 120px; overflow-y: auto; width: 100%;
+}
+.task-card__source { display: block; font-size: 12px; color: var(--text-3); }
+.task-card--error .task-card__title { color: var(--danger, #e74c3c); }
+.task-card--error .task-card__icon { font-size: 28px; }
+.task-card__failure { font-size: 12px; color: var(--text-2); margin: 3px 0; text-align: left; }
+.task-card__failure-name { font-weight: 600; }
+@keyframes taskFadeIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .task-overlay { animation: none; }
+}
+@media (prefers-contrast: more) {
+  .task-overlay { background: rgba(0,0,0,0.4); }
+}
+@media (prefers-reduced-transparency) {
+  .task-overlay { background: var(--bg, #fff); backdrop-filter: none; }
+}
+
 .el-form-item__label { color: var(--text-2); font-weight: 550; font-size: 12.5px; }
 .el-form-item { margin-bottom: 16px; }
 
@@ -1555,6 +1590,16 @@ pre.code-block {
             勾选为「启用」的订阅会合并进同一份配置——导出页和订阅地址取的都是这一份；跨订阅重名节点会自动改名。
           </p>
         </div>
+
+        <!-- Refresh progress overlay -->
+        <div v-if="refreshProgress.active" class="task-overlay">
+          <div class="task-card">
+            <div class="task-card__icon"><el-icon class="spin" style="font-size:28px;color:var(--accent)"><loading /></el-icon></div>
+            <div class="task-card__title">正在刷新订阅（{{ refreshProgress.completed }}/{{ refreshProgress.total }}）</div>
+            <div v-if="refreshProgress.sourceName" class="task-card__detail">{{ refreshProgress.sourceName }}</div>
+            <button class="btn btn-sm" type="button" style="margin-top:12px" @click="cancelRefresh">取消</button>
+          </div>
+        </div>
       </el-tab-pane>
 
       <!-- ---------- ② 规则 ---------- -->
@@ -1916,37 +1961,67 @@ pre.code-block {
              @close="closeImport" @update:model-value="closeImport"
              title="导入规则方案" width="620px"
              :close-on-click-modal="false" align-center>
-    <el-tabs v-model="importMode" class="seg seg-sm">
-      <el-tab-pane label="文本" name="text">
-        <el-input v-model="importForm.text" type="textarea" :rows="9"
-                  placeholder="粘贴 Clash / Mihomo 的 rules 列表、Surge 的 [Rule] 段，或一段规则行…" />
-      </el-tab-pane>
-      <el-tab-pane label="链接" name="url">
-        <el-input v-model="importForm.url" placeholder="https://example.com/rules.yaml" />
-      </el-tab-pane>
-      <el-tab-pane label="文件" name="file">
-        <input type="file" accept=".yaml,.yml,.json,.conf,.ini,.txt,.list"
-               @change="importFile($event.target)" />
-      </el-tab-pane>
-    </el-tabs>
-    <el-form label-position="top" style="margin-top:12px">
-      <el-form-item label="方案名称（留空则按来源命名）">
-        <el-input v-model="importForm.name" placeholder="例如：我的 Clash 规则" />
-      </el-form-item>
-    </el-form>
-    <p class="footnote" style="margin:0" v-if="importHint"
-       :class="importHintType === 'err' ? 'is-danger' : importHintType === 'ok' ? 'is-ok' : ''">{{ importHint }}</p>
-    <div v-if="importReport" class="footnote" style="margin:8px 0 0">
-      <div>来源格式 {{ importReport.format }} · 规则 {{ importReport.rules }} 条 · 跳过 {{ importReport.skipped }} 条 · 策略组 {{ importReport.groups }} 个</div>
-      <div v-if="importReport.final">兜底策略：{{ importReport.final }}</div>
-      <div v-for="(w, i) in importReport.warnings" :key="i">· {{ w.message }}</div>
+    <!-- Progress overlay: shown during import -->
+    <div v-if="importing" class="task-card">
+      <div class="task-card__icon"><el-icon class="spin" style="font-size:28px;color:var(--accent)"><loading /></el-icon></div>
+      <div class="task-card__title">
+        <template v-if="importProgress.stage === 'configuration'">正在下载配置…</template>
+        <template v-else-if="importProgress.stage === 'parsing'">正在解析配置…</template>
+        <template v-else-if="importProgress.stage === 'rules'">正在下载引用的规则（{{ importProgress.completed }}/{{ importProgress.total }}）</template>
+      </div>
+      <div v-if="importProgress.sources.length" class="task-card__detail">
+        <span v-for="s in importProgress.sources" :key="s" class="task-card__source">{{ s }}</span>
+      </div>
+      <button class="btn btn-sm" type="button" style="margin-top:12px" @click="cancelImport">取消</button>
     </div>
+    <!-- Error overlay: shown after a failed import -->
+    <div v-else-if="importError" class="task-card task-card--error">
+      <div class="task-card__icon"><span style="font-size:28px">⚠️</span></div>
+      <div class="task-card__title">{{ importError.error }}</div>
+      <div v-if="importError.failures && importError.failures.length" class="task-card__detail">
+        <div v-for="f in importError.failures" :key="f.url" class="task-card__failure">
+          <span class="task-card__failure-name">{{ f.name || f.url }}</span>：<span>{{ f.reason }}</span>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" type="button" style="margin-top:16px" @click="importError=null">确定</button>
+    </div>
+    <!-- Normal form -->
+    <template v-else>
+      <el-tabs v-model="importMode" class="seg seg-sm">
+        <el-tab-pane label="文本" name="text">
+          <el-input v-model="importForm.text" type="textarea" :rows="9"
+                    placeholder="粘贴 Clash / Mihomo 的 rules 列表、Surge 的 [Rule] 段，或一段规则行…" />
+        </el-tab-pane>
+        <el-tab-pane label="链接" name="url">
+          <el-input v-model="importForm.url" placeholder="https://example.com/rules.yaml" />
+        </el-tab-pane>
+        <el-tab-pane label="文件" name="file">
+          <input type="file" accept=".yaml,.yml,.json,.conf,.ini,.txt,.list"
+                 @change="importFile($event.target)" />
+        </el-tab-pane>
+      </el-tabs>
+      <el-form label-position="top" style="margin-top:12px">
+        <el-form-item label="方案名称（留空则按来源命名）">
+          <el-input v-model="importForm.name" placeholder="例如：我的 Clash 规则" />
+        </el-form-item>
+      </el-form>
+      <p class="footnote" style="margin:0" v-if="importHint"
+         :class="importHintType === 'err' ? 'is-danger' : importHintType === 'ok' ? 'is-ok' : ''">{{ importHint }}</p>
+      <div v-if="importReport" class="footnote" style="margin:8px 0 0">
+        <div>来源格式 {{ importReport.format }} · 规则 {{ importReport.rules }} 条 · 跳过 {{ importReport.skipped }} 条 · 策略组 {{ importReport.groups }} 个</div>
+        <div v-if="importReport.final">兜底策略：{{ importReport.final }}</div>
+        <div v-for="(w, i) in importReport.warnings" :key="i">· {{ w.message }}</div>
+      </div>
+    </template>
     <template #footer>
-      <button class="btn" type="button" @click="closeImport">关闭</button>
-      <button class="btn btn-primary" type="button" :disabled="importing" @click="submitImport">
-        <el-icon v-if="importing" class="spin"><loading /></el-icon>
-        {{ importing ? '导入中…' : '导入' }}
-      </button>
+      <template v-if="importing || importError"></template>
+      <template v-else>
+        <button class="btn" type="button" @click="closeImport">关闭</button>
+        <button class="btn btn-primary" type="button" :disabled="importing" @click="submitImport">
+          <el-icon v-if="importing" class="spin"><loading /></el-icon>
+          {{ importing ? '导入中…' : '导入' }}
+        </button>
+      </template>
     </template>
   </el-dialog>
 
@@ -2134,6 +2209,11 @@ var app = Vue.createApp({
     var importHint = Vue.ref('');
     var importHintType = Vue.ref('');
     var importReport = Vue.ref(null);
+    // Import progress (SSE)
+    var importProgress = Vue.reactive({ stage:'', completed:0, total:0, sources:[] });
+    var importError = Vue.ref(null);  // { error, failures?, report? }
+    var importCancelled = Vue.ref(false);
+    var refreshProgress = Vue.reactive({ active:false, completed:0, total:0, sourceName:'', cancelled:false });
     // Node-name filter and the IPv6 switch. Both are render options, so they
     // travel with the subscription link the client polls.
     var nodeFilterPattern = Vue.ref('');
@@ -2278,6 +2358,46 @@ var app = Vue.createApp({
       try { json = await resp.json(); } catch(e) { json = null; }
       if (!resp.ok || !json || json.ok === false) throw new Error((json && json.error) || ('HTTP ' + resp.status));
       return json.data;
+    }
+
+    // SSE streaming helper.  POSTs a JSON body to `path` and reads the response
+    // as Server-Sent Events, calling `onEvent(parsed)` for each `data:` line.
+    // Returns the last event (typically { type:'done', ... } or { type:'error', ... }).
+    // `onEvent` may return false to abort the stream early (e.g. on cancel).
+    async function sseFetch(path, body, onEvent) {
+      var token = lsLoad(STORE.apiToken, '');
+      var headers = { 'content-type': 'application/json' };
+      if (token) headers['authorization'] = 'Bearer ' + token;
+      var resp = await fetch(path, { method: 'POST', headers: headers, body: JSON.stringify(body) });
+      if (!resp.ok) {
+        var text = await resp.text().catch(function() { return ''; });
+        throw new Error(text || ('HTTP ' + resp.status));
+      }
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+      var last = null;
+      for (;;) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+        var lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i].trim();
+          if (line.startsWith('data: ')) {
+            var json = line.slice(6);
+            try {
+              last = JSON.parse(json);
+              if (onEvent(last) === false) {
+                reader.cancel();
+                return last;
+              }
+            } catch(e) { /* ignore malformed lines */ }
+          }
+        }
+      }
+      return last;
     }
 
     // === Helpers ===
@@ -2582,20 +2702,43 @@ var app = Vue.createApp({
     async function refreshAll() {
       if (!sources.value.length) return;
       refreshingAll.value = true;
+      refreshProgress.active = true; refreshProgress.completed = 0;
+      refreshProgress.total = sources.value.length; refreshProgress.sourceName = '';
+      refreshProgress.cancelled = false;
       var m = new Map();
       sources.value.forEach(function(s){ m.set(s.id, true); });
       refreshingIds.value = m;
       var failed = [];
       try {
-        var data = await api('POST', '/api/subscriptions/refresh', {});
-        failed = (data && data.failed) || [];
-      } catch(e) { failed = [{ name:'全部订阅', error:{ message:e.message||String(e) } }]; }
+        var data = await sseFetch('/api/subscriptions/refresh-stream', {}, function(ev) {
+          if (refreshProgress.cancelled) return false;
+          if (ev.type === 'start') { refreshProgress.total = ev.total; }
+          if (ev.completed != null) {
+            refreshProgress.completed = ev.completed;
+            refreshProgress.sourceName = ev.sourceName || '';
+          }
+        });
+        if (refreshProgress.cancelled) {
+          ElementPlus.ElMessage.info('刷新已取消');
+        } else {
+          failed = (data && data.failed) || [];
+        }
+      } catch(e) {
+        if (!refreshProgress.cancelled) {
+          failed = [{ name:'全部订阅', error:{ message:e.message||String(e) } }];
+        }
+      }
       refreshingIds.value = new Map();
       refreshingAll.value = false;
+      refreshProgress.active = false;
       try { await loadSubs(); } catch(e) {}
       if (failed.length) {
         ElementPlus.ElMessage.error('有 '+failed.length+' 个订阅刷新失败');
       }
+    }
+    function cancelRefresh() {
+      refreshProgress.cancelled = true;
+      api('POST', '/api/subscriptions/cancel-refresh').catch(function(){});
     }
     async function toggleEnabled(s, val) {
       togglingId.value = s.id;
@@ -2702,9 +2845,14 @@ var app = Vue.createApp({
       importMode.value = 'text';
       importHint.value = ''; importHintType.value = '';
       importReport.value = null;
+      importError.value = null; importCancelled.value = false;
+      importProgress.stage = ''; importProgress.completed = 0; importProgress.total = 0; importProgress.sources = [];
       showImport.value = true;
     }
-    function closeImport() { showImport.value = false; }
+    function closeImport() {
+      importCancelled.value = importing.value;
+      showImport.value = false;
+    }
     async function importFile(input) {
       var file = input && input.files && input.files[0];
       if (!file) return;
@@ -2729,18 +2877,38 @@ var app = Vue.createApp({
         if (!importForm.text.trim()) { importHint.value = '请粘贴规则内容或选择文件。'; importHintType.value = 'err'; return; }
         body.input = importForm.text;
       }
-      importing.value = true; importHint.value = '正在解析…'; importHintType.value = '';
+      importing.value = true; importHint.value = ''; importHintType.value = '';
+      importError.value = null; importReport.value = null; importCancelled.value = false;
+      importProgress.stage = 'configuration'; importProgress.completed = 0; importProgress.total = 0; importProgress.sources = [];
       try {
-        var data = await api('POST', '/api/schemes/import', body);
-        customSchemes.value = (data && data.customSchemes) || customSchemes.value;
-        importReport.value = (data && data.report) || null;
-        importHint.value = '导入成功，共 ' + importReport.value.rules + ' 条规则';
-        importHintType.value = 'ok';
-        ElementPlus.ElMessage.success('已导入「' + data.scheme.name + '」');
+        var result = await sseFetch('/api/schemes/import-stream', body, function(ev) {
+          if (importCancelled.value) return false;
+          if (ev.stage) { importProgress.stage = ev.stage; }
+          if (ev.type === 'progress' || ev.stage === 'rules') {
+            importProgress.completed = ev.completed || 0;
+            importProgress.total = ev.total || 0;
+            importProgress.sources = ev.sources || [];
+          }
+        });
+        if (importCancelled.value) {
+          importHint.value = '导入已取消'; importHintType.value = '';
+        } else if (result && result.type === 'done') {
+          customSchemes.value = result.customSchemes || customSchemes.value;
+          importReport.value = result.report || null;
+          importHint.value = '导入成功，共 ' + (result.report ? result.report.rules : 0) + ' 条规则';
+          importHintType.value = 'ok';
+          ElementPlus.ElMessage.success('已导入「' + result.scheme.name + '」');
+        } else if (result && result.type === 'error') {
+          importError.value = result;
+          importHint.value = ''; importHintType.value = 'err';
+          importReport.value = result.report || null;
+        }
       } catch(e) {
         importHint.value = (e.message||e); importHintType.value = 'err';
-        importReport.value = (e && e.report) || null;
       } finally { importing.value = false; }
+    }
+    function cancelImport() {
+      importCancelled.value = true;
     }
     async function deleteScheme(id, name) {
       try {
@@ -3120,6 +3288,8 @@ var app = Vue.createApp({
       lanIps, rulesHint, rulesHintType, ruleOptions, customSchemes,
       nodeFilterPattern, nodeFilterCase, nodeFilterState, ipv6Enabled,
       showImport, importMode, importForm, importing, importHint, importHintType, importReport,
+      importProgress, importError, importCancelled, cancelImport,
+      refreshProgress, cancelRefresh,
       openImport, closeImport, submitImport, importFile, deleteScheme,
       enabledSubs, aclName, filteredNodes, hasPing, cfgJson, fullSubUrl, allWarnings,
       stats, nextStep,

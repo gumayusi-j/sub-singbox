@@ -385,4 +385,42 @@ describe("singbox-kit web API", function () {
         expect(json.ok).to.equal(true);
         expect(json.data.output.outbounds.map((o) => o.tag)).to.include("proxy");
     });
+
+    it("has the SSE import-stream endpoint wired into the page", async function () {
+        const html = await (await fetch(base + "/")).text();
+        expect(html).to.include("/api/schemes/import-stream");
+        expect(html).to.include("sseFetch");
+        expect(html).to.include("importProgress");
+    });
+
+    it("has the SSE refresh-stream endpoint wired into the page", async function () {
+        const html = await (await fetch(base + "/")).text();
+        expect(html).to.include("/api/subscriptions/refresh-stream");
+        expect(html).to.include("refreshProgress");
+        expect(html).to.include("cancelRefresh");
+    });
+
+    it("has the task progress/error card UI", async function () {
+        const html = await (await fetch(base + "/")).text();
+        expect(html).to.include('class="task-card"');
+        expect(html).to.include("task-card__title");
+        expect(html).to.include("task-card--error");
+        expect(html).to.include("cancelImport");
+    });
+
+    it("streams SSE events from the import-stream endpoint", async function () {
+        const body = JSON.stringify({ input: "DOMAIN,example.com,Proxy\nMATCH,DIRECT" });
+        const resp = await fetch(base + "/api/schemes/import-stream", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body,
+        });
+        expect(resp.status).to.equal(200);
+        expect(resp.headers.get("content-type")).to.include("text/event-stream");
+        const text = await resp.text();
+        // Should contain stage and done events.
+        expect(text).to.include("stage");
+        expect(text).to.include('"done"');
+        expect(text).to.include('"scheme"');
+    });
 });
