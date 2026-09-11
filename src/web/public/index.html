@@ -417,7 +417,7 @@
           <!-- Subscription List -->
           <div v-for="s in sources" :key="s.id" class="sub-item">
             <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-              <el-checkbox :model-value="s.enabled" :disabled="togglingId === s.id" @change="(v) => toggleEnabled(s, v)" label="启用" size="small" />
+              <el-checkbox :model-value="s.enabled" :disabled="togglingId === s.id" @change="(v) => toggleEnabled(s, v)" label="启用" size="small"></el-checkbox>
               <span style="font-weight:600;font-size:14px">{{ s.name }}</span>
               <el-tag :type="s.kind === 'url' ? '' : 'warning'" size="small" effect="dark" round>
                 {{ s.kind === 'url' ? 'URL' : '文本' }}
@@ -543,7 +543,7 @@
                 <el-table-column prop="type" label="类型" width="100">
                   <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.type }}</code></template>
                 </el-table-column>
-                <el-table-column prop="tag" label="标签" min-width="140" />
+                <el-table-column prop="tag" label="标签" min-width="140"></el-table-column>
                 <el-table-column prop="server" label="服务器" min-width="120">
                   <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.server || '-' }}</code></template>
                 </el-table-column>
@@ -615,8 +615,9 @@
             </el-col>
             <el-col :xs="24" :sm="12">
               <el-form-item label="客户端类型" size="small">
-                <el-select v-model="exportTarget" @change="onTargetChange" style="width:100%">
-                  <el-option :value="''" label="自动识别客户端（按 User-Agent）" />
+                <el-select v-model="exportTarget" @change="onTargetChange" style="width:100%"
+                  placeholder="自动识别客户端（按 User-Agent）">
+                  <el-option :value="''" label="自动识别客户端（按 User-Agent）"></el-option>
                   <el-option v-for="t in targets" :key="t.id" :value="t.id" :label="t.label" />
                 </el-select>
               </el-form-item>
@@ -626,7 +627,7 @@
             {{ publicUrlHint }}
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-            <el-input :model-value="fullSubUrl" readonly style="flex:1;min-width:240px" />
+            <el-input :model-value="fullSubUrl" readonly style="flex:1;min-width:240px"></el-input>
             <el-button size="small" @click="copyText(fullSubUrl)"><el-icon><DocumentCopy /></el-icon></el-button>
             <el-button size="small" @click="showQr(fullSubUrl)"><el-icon><Iphone /></el-icon> QR</el-button>
             <el-button size="small" type="warning" plain @click="rotateToken"><el-icon><Key /></el-icon> 轮换密钥</el-button>

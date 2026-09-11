@@ -21,8 +21,12 @@ describe("singbox-kit web API", function () {
     });
 
     after(function (done) {
-        if (server) server.close(done);
-        else done();
+        if (!server) return done();
+        // fetch() keeps its sockets alive, and close() only calls back once
+        // every connection has ended - without this the hook sits until the
+        // keep-alive timeout expires and mocha fails it.
+        server.closeAllConnections();
+        server.close(done);
     });
 
     const sampleText = [
@@ -123,6 +127,38 @@ describe("singbox-kit web API", function () {
             const resp = await fetch(base + url);
             expect(resp.status, url + " 应能由服务端提供").to.equal(200);
         }
+    });
+
+    it("never lets a self-closing tag swallow its siblings", async function () {
+        // The page is compiled from the DOM: mount('#app') hands Vue that
+        // element's innerHTML, which the browser has already parsed. HTML
+        // ignores the "/" in "<el-input ... />" for non-void elements, so the
+        // tag stays open and every following sibling becomes its child. That
+        // is silent - it nested a subscription row inside its own checkbox
+        // (killing the flex spacer, so the row's buttons piled up next to the
+        // name) and made three buttons on the export page vanish into an
+        // el-input's slot. A self-closing tag is only safe before a closing
+        // tag, so require exactly that.
+        const html = await (await fetch(base + "/")).text();
+        const lines = html.split(/\r?\n/);
+        const offenders = [];
+        lines.forEach((line, i) => {
+            for (let at = line.indexOf("/>"); at !== -1; at = line.indexOf("/>", at + 1)) {
+                const open = line.lastIndexOf("<", at);
+                if (open === -1) continue;
+                const name = (line.slice(open + 1).match(/^[A-Za-z][\w-]*/) || [""])[0];
+                if (!name) continue;
+                let next = line.slice(at + 2).trim();
+                for (let j = i + 1; j < lines.length && !next; j++) next = lines[j].trim();
+                if (next.startsWith("<") && !next.startsWith("</")) {
+                    offenders.push(
+                        "第 " + (i + 1) + " 行 <" + name + "> 的兄弟节点 " + next.slice(0, 32),
+                    );
+                }
+            }
+        });
+        expect(offenders, "自闭合标签会把紧随其后的兄弟节点变成子节点")
+            .to.deep.equal([]);
     });
 
     it("returns 404 for unknown static paths", async function () {
