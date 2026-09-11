@@ -1660,7 +1660,7 @@ pre.code-block {
               <h2>生成配置</h2>
               <p v-if="enabledSubs.length">
                 将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），
-                按「{{ aclName }}」生成完整 sing-box 配置。
+                按「{{ aclName }}」生成{{ exportTarget ? targets.find(t => t.id === exportTarget)?.label || exportTarget : 'sing-box' }}配置。
               </p>
               <p v-else>
                 还没有订阅参与导出。到「订阅」页把要合并的订阅源点成<b>「启用」</b>即可。
