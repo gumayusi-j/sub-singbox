@@ -64,6 +64,20 @@ function appendTlsProfile(result, proxy) {
     if (tlsProfile) result.append(`,tls-profile=${tlsProfile}`);
 }
 
+// Loon's positional credential fields are quoted in its documented node
+// syntax. Escaping here also prevents commas inside credentials from
+// becoming extra fields.
+function loonQuoted(value) {
+    if (value == null) return '""';
+    const escaped = String(value)
+        .replace(/\r\n/g, ' ')
+        .replace(/\r/g, ' ')
+        .replace(/\n/g, ' ')
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"');
+    return `"${escaped}"`;
+}
+
 function appendAlpn(result, proxy) {
     const alpn = getLoonAlpn(proxy);
     if (alpn) result.append(`,alpn="${alpn}"`);
@@ -102,10 +116,9 @@ function appendShadowTLS(result, proxy) {
 
 function appendReality(result, proxy) {
     result.appendIfPresent(`,sni=${proxy.sni}`, 'sni');
-    result.appendIfPresent(
-        `,public-key="${proxy['reality-opts']['public-key']}"`,
-        'reality-opts.public-key',
-    );
+    if (proxy['reality-opts'] && proxy['reality-opts']['public-key']) {
+        result.append(`,public-key=${loonQuoted(proxy['reality-opts']['public-key'])}`);
+    }
     result.appendIfPresent(
         `,short-id=${proxy['reality-opts']['short-id']}`,
         'reality-opts.short-id',
@@ -441,7 +454,7 @@ function vmess(proxy) {
     }
 
     // tls
-    result.appendIfPresent(`,over-tls=${proxy.tls}`, 'tls');
+    result.append(`,over-tls=${proxy.tls || false}`);
 
     // tls verification
     result.appendIfPresent(
@@ -454,7 +467,15 @@ function vmess(proxy) {
     }
 
     if (isReality) {
-        appendReality(result, proxy);
+        // Reality: public-key and short-id before tls-name
+        if (proxy['reality-opts'] && proxy['reality-opts']['public-key']) {
+            result.append(`,public-key=${loonQuoted(proxy['reality-opts']['public-key'])}`);
+        }
+        result.appendIfPresent(
+            `,short-id=${proxy['reality-opts']['short-id']}`,
+            'reality-opts.short-id',
+        );
+        result.appendIfPresent(`,tls-name=${proxy.sni}`, 'sni');
     } else {
         // sni
         result.appendIfPresent(`,tls-name=${proxy.sni}`, 'sni');
@@ -547,7 +568,7 @@ function vless(proxy) {
     }
 
     // tls
-    result.appendIfPresent(`,over-tls=${proxy.tls}`, 'tls');
+    result.append(`,over-tls=${proxy.tls || false}`);
 
     // tls verification
     result.appendIfPresent(
@@ -563,7 +584,15 @@ function vless(proxy) {
         result.appendIfPresent(`,flow=${proxy.flow}`, 'flow');
     }
     if (isReality) {
-        appendReality(result, proxy);
+        // Reality: public-key and short-id before tls-name
+        if (proxy['reality-opts'] && proxy['reality-opts']['public-key']) {
+            result.append(`,public-key=${loonQuoted(proxy['reality-opts']['public-key'])}`);
+        }
+        result.appendIfPresent(
+            `,short-id=${proxy['reality-opts']['short-id']}`,
+            'reality-opts.short-id',
+        );
+        result.appendIfPresent(`,tls-name=${proxy.sni}`, 'sni');
     } else {
         // sni
         result.appendIfPresent(`,tls-name=${proxy.sni}`, 'sni');
@@ -788,8 +817,8 @@ function hysteria2(proxy) {
         result.append(`,salamander-password=${proxy['obfs-password']}`);
     }
 
-    // tfo
-    result.appendIfPresent(`,fast-open=${proxy.tfo}`, 'tfo');
+    // tfo - Hysteria2 defaults to fast-open=true per Tower
+    result.append(`,fast-open=${proxy.tfo !== undefined ? proxy.tfo : true}`);
 
     // block-quic
     if (proxy['block-quic'] === 'on') {

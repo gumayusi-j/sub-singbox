@@ -1,4 +1,5 @@
 import {
+    getWireGuardAddress,
     getWireGuardAddressWithCIDR,
     isPresent,
     normalizePluginMuxBooleanValue,
@@ -242,8 +243,8 @@ export default function ClashMeta_Producer() {
                     proxy['preshared-key'] =
                         proxy['preshared-key'] ?? proxy['pre-shared-key'];
                     proxy['pre-shared-key'] = proxy['preshared-key'];
-                    proxy.ip = getWireGuardAddressWithCIDR(proxy, 'ipv4');
-                    proxy.ipv6 = getWireGuardAddressWithCIDR(proxy, 'ipv6');
+                    proxy.ip = getWireGuardAddress(proxy, 'ipv4');
+                    proxy.ipv6 = getWireGuardAddress(proxy, 'ipv6');
                 } else if (proxy.type === 'snell' && proxy.version < 3) {
                     delete proxy.udp;
                 } else if (proxy.type === 'vless') {

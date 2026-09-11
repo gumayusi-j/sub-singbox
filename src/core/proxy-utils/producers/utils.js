@@ -184,6 +184,20 @@ export function getWireGuardAddressWithCIDR(proxy = {}, family = 'ipv4') {
     }`;
 }
 
+// Get WireGuard address without CIDR suffix (for Clash Meta compatibility)
+export function getWireGuardAddress(proxy = {}, family = 'ipv4') {
+    const config =
+        family === 'ipv6'
+            ? { addressKey: 'ipv6', cidrKey: 'ipv6-cidr', defaultCIDR: 128 }
+            : { addressKey: 'ip', cidrKey: 'ip-cidr', defaultCIDR: 32 };
+    const parsed = parseWireGuardInterfaceAddress(
+        proxy[config.addressKey],
+        family,
+    );
+    if (!parsed) return undefined;
+    return parsed.address;
+}
+
 export function produceProxyListOutput(list, type, opts = {}) {
     if (type === 'internal') return list;
 

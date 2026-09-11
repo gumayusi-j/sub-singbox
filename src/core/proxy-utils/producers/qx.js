@@ -70,10 +70,17 @@ export default function QX_Producer() {
     return {
         produce: (proxy, type, opts = {}) => {
             let result = produce(proxy, type, opts);
-            if (proxy.flow && proxy.flow !== 'xtls-rprx-vision') {
-                throw new Error(
-                    `Platform ${targetPlatform} does not support flow ${proxy.flow}`,
-                );
+            if (proxy.flow) {
+                // Map xtls-rprx-vision-udp443 to xtls-rprx-vision (Tower behavior)
+                const mappedFlow = proxy.flow === 'xtls-rprx-vision-udp443'
+                    ? 'xtls-rprx-vision'
+                    : proxy.flow;
+                if (mappedFlow !== 'xtls-rprx-vision') {
+                    throw new Error(
+                        `Platform ${targetPlatform} does not support flow ${proxy.flow}`,
+                    );
+                }
+                proxy.flow = mappedFlow;
             }
             if (proxy['reality-opts']) {
                 if (proxy['reality-opts']['public-key']) {
@@ -116,7 +123,7 @@ function shadowsocks(proxy) {
     const appendIfPresent = result.appendIfPresent.bind(result);
     const isSSOverTls = isShadowsocksOverTls(proxy);
     if (!proxy.cipher) {
-        proxy.cipher = 'none';
+        proxy.cipher = 'aes-256-gcm';
     }
     if (
         ![
@@ -297,11 +304,10 @@ function trojan(proxy) {
     append(`trojan=${proxy.server}:${proxy.port}`);
     append(`,password=${proxy.password}`);
 
-    // obfs ws
+    // obfs ws - Trojan is always TLS, so WS must be wss
     if (isPresent(proxy, 'network')) {
         if (proxy.network === 'ws') {
-            if (needTls(proxy)) append(`,obfs=wss`);
-            else append(`,obfs=ws`);
+            append(`,obfs=wss`);
             appendIfPresent(
                 `,obfs-uri=${proxy['ws-opts']?.path}`,
                 'ws-opts.path',
@@ -315,8 +321,8 @@ function trojan(proxy) {
         }
     }
 
-    // over tls
-    if (proxy.network !== 'ws' && needTls(proxy)) {
+    // over tls - Trojan is always TLS
+    if (proxy.network !== 'ws') {
         append(`,over-tls=true`);
     }
 
