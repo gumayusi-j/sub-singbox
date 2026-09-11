@@ -74,7 +74,10 @@ await build({
             },
         },
     ],
-    loader: { ".html": "text" }, // allow `import html from "./public/index.html"`
+    // `.html` allows `import html from "./public/index.html"`. `.svg` carries no
+    // default loader in esbuild, so the favicon import needs declaring too, and
+    // "text" rather than "file"/"dataurl" is what keeps the output one file.
+    loader: { ".html": "text", ".svg": "text" },
     logLevel: "warning",
 });
 

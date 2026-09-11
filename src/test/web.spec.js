@@ -161,6 +161,47 @@ describe("singbox-kit web API", function () {
             .to.deep.equal([]);
     });
 
+    it("keeps every icon tag resolvable by the in-DOM compiler", async function () {
+        // Icons are components, and this page is compiled from the DOM, which
+        // breaks them in two silent ways:
+        //
+        //   1. The browser lowercases tag names, so <ArrowDown> reaches the
+        //      compiler as <arrowdown>, which no longer matches the component
+        //      registered as "ArrowDown". Every multi-word icon rendered as an
+        //      empty <i class="el-icon"> wrapping a stray unknown tag.
+        //   2. A name that lowercases to a real HTML or SVG element is taken
+        //      for that element and never looked up as a component, so <Link>
+        //      became a literal <link> and <Filter> an SVG <filter>.
+        //
+        // So the rule is: write icon tags all-lowercase. Vue recovers a name by
+        // trying the tag, then its camelCase, then that capitalised, so
+        // <promotion> finds "Promotion" and <arrow-down> finds "ArrowDown" -
+        // but <arrowdown> finds nothing, because the capital D is already gone
+        // before the compiler ever sees it. Lowercase in the source is what
+        // makes "one word" and "several words" distinguishable at all, and it
+        // costs nothing: the browser lowercases the tag either way.
+        //
+        // That still leaves (2), which casing cannot fix, so the affected names
+        // are listed outright: the intersection of @element-plus/icons-vue@2.3.1's
+        // 294 icons with the HTML/SVG tag set, computed from the vendored bundle.
+        // Re-derive it if that file is upgraded. Inside :is the lookup skips tag
+        // parsing entirely, so <component :is="'Link'" /> is the escape hatch.
+        const NATIVE_COLLISIONS = ["filter", "link", "menu", "picture", "select", "switch", "view"];
+        const html = await (await fetch(base + "/")).text();
+        const offenders = [];
+        for (const block of html.matchAll(/<el-icon\b[^>]*>([\s\S]*?)<\/el-icon>/g)) {
+            for (const tag of block[1].matchAll(/<([a-zA-Z][\w-]*)/g)) {
+                const name = tag[1];
+                if (NATIVE_COLLISIONS.includes(name)) {
+                    offenders.push("<" + name + "> 撞上同名原生标签，只能写 :is");
+                } else if (name !== name.toLowerCase()) {
+                    offenders.push("<" + name + "> 不是全小写，DOM 模板里解析不回组件");
+                }
+            }
+        }
+        expect(offenders, "图标标签在 DOM 模板里必须能解析成组件").to.deep.equal([]);
+    });
+
     it("returns 404 for unknown static paths", async function () {
         const resp = await fetch(base + "/nope.css");
         expect(resp.status).to.equal(404);

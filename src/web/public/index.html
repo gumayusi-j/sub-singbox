@@ -1,12 +1,15 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>singbox-kit · 订阅 → 选择规则 → 导出 sing-box</title>
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1116" media="(prefers-color-scheme: dark)">
+<title>singbox-kit · 订阅 → 规则 → 导出 sing-box</title>
+<link rel="icon" href="/favicon.svg">
 <!--
   The front-end libraries are vendored under public/vendor/ and served from this
   origin. They used to come from cdn.jsdelivr.net, which made the whole page
@@ -22,6 +25,10 @@
     qrcode@1.5.1                     build/qrcode.min.js
   Each file is ~/npm/<package>/<path> on cdn.jsdelivr.net. Vue must stay first:
   Element Plus reads the global it installs.
+
+  Element Plus ships no dark theme in dist/index.css, so the dark palette below
+  is written out by hand against the same --el-* variable names. If the vendored
+  CSS is ever upgraded, re-check that variable list before trusting it.
 -->
 <!-- Vue 3 -->
 <script src="/vendor/vue.global.prod.js"></script>
@@ -33,655 +40,1784 @@
 <script src="/vendor/element-plus-icons.iife.min.js"></script>
 <!-- QR Code -->
 <script src="/vendor/qrcode.min.js"></script>
+<script>
+// Runs before first paint. Without it the page renders light, then flips to
+// dark once Vue mounts, which reads as a flash on every navigation.
+(function () {
+  try {
+    var stored = JSON.parse(localStorage.getItem('sbx:theme') || '"auto"');
+    var dark = stored === 'dark' ||
+      (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  } catch (e) { /* private mode: keep the light default */ }
+})();
+</script>
 <style>
-  :root {
-    color-scheme: light;
-    --el-color-primary: #3b82f6;
-    --el-color-primary-light-3: #5e9ff0;
-    --el-color-primary-light-5: #8bb8f5;
-    --el-color-primary-light-7: #aed1fa;
-    --el-color-primary-light-8: #cfe3fc;
-    --el-color-primary-light-9: #eff6ff;
-    --el-color-primary-dark-2: #2563eb;
-    --el-bg-color: #ffffff;
-    --el-bg-color-page: #f8fafc;
-    --el-bg-color-overlay: #ffffff;
-    --el-text-color-primary: #0f172a;
-    --el-text-color-regular: #334155;
-    --el-text-color-secondary: #64748b;
-    --el-text-color-placeholder: #94a3b8;
-    --el-border-color: #e2e8f0;
-    --el-border-color-light: #eef2f6;
-    --el-border-color-lighter: #f1f5f9;
-    --el-border-color-extra-light: #f8fafc;
-    --el-fill-color: #f1f5f9;
-    --el-fill-color-light: #f8fafc;
-    --el-fill-color-lighter: #fbfdff;
-    --el-fill-color-extra-light: #ffffff;
-    --el-fill-color-blank: #ffffff;
-    --el-mask-color: rgba(0,0,0,0.4);
-    --el-mask-color-extra-light: rgba(0,0,0,0.15);
-  }
+/* ==========================================================================
+   1. Tokens
+   Two palettes, one set of names. Every colour in this file comes from here,
+   including the ones the canvas map reads back at draw time, so the map cannot
+   drift from the rest of the page when the theme changes.
+   ========================================================================== */
+:root {
+  color-scheme: light;
 
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    margin: 0;
-    background: linear-gradient(135deg, #f0f4f8 0%, #e8eef5 50%, #f0f4f8 100%);
-    color: #0f172a;
-    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    -webkit-font-smoothing: antialiased;
-    min-height: 100vh;
-  }
+  --bg: #f4f5f7;
+  --bg-wash: rgba(47, 107, 255, 0.07);
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --surface-3: #eef0f4;
+  --stroke: rgba(15, 23, 42, 0.09);
+  --stroke-soft: rgba(15, 23, 42, 0.055);
+  --shadow-card: 0 3px 8px rgba(15, 23, 42, 0.035);
+  --shadow-lift: 0 6px 20px rgba(15, 23, 42, 0.07);
+  --shadow-pop: 0 16px 44px rgba(15, 23, 42, 0.16), 0 2px 8px rgba(15, 23, 42, 0.06);
 
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  --text: #14171f;
+  --text-2: #5b6472;
+  --text-3: #8b93a1;
 
-  .app-wrap { max-width: 1100px; margin: 0 auto; padding: 28px 24px 80px; }
-  .app-header {
-    margin-bottom: 24px;
-    padding: 28px 32px;
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
-    border-radius: 20px;
-    color: #fff;
-    box-shadow: 0 8px 32px rgba(59,130,246,0.25), 0 2px 8px rgba(59,130,246,0.15);
-  }
-  .app-header h1 { font-size: 24px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.02em; color: #fff; }
-  .app-header small { color: rgba(255,255,255,0.8); font-weight: 400; font-size: 14px; }
+  --accent: #2f6bff;
+  --accent-hover: #1f57e6;
+  --accent-soft: rgba(47, 107, 255, 0.10);
+  --accent-soft-2: rgba(47, 107, 255, 0.18);
+  --accent-ring: rgba(47, 107, 255, 0.18);
+  --on-accent: #ffffff;
 
-  /* Element Plus overrides */
-  .el-card {
-    --el-card-bg-color: #ffffff;
-    border: 1px solid #e8eef5;
-    border-radius: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
-  }
-  .el-card:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.03);
-    border-color: #d0d9e6;
-  }
-  .el-card__header {
-    border-bottom: 1px solid #f0f3f7;
-    padding: 16px 20px;
-  }
-  .el-card__body { padding: 20px; }
-  .el-tabs__header { margin: 0 0 20px; }
-  .el-tabs__item {
-    font-weight: 600;
-    font-size: 15px;
-    padding: 0 24px;
-    height: 48px;
-    line-height: 48px;
-  }
-  .el-tabs__item.is-active { color: #3b82f6; }
-  .el-tabs__active-bar { background: #3b82f6; height: 3px; border-radius: 2px; }
+  --ok: #16a34a;     --ok-soft: rgba(22, 163, 74, 0.11);
+  --warn: #c2740a;   --warn-soft: rgba(194, 116, 10, 0.12);
+  --danger: #dc2626; --danger-soft: rgba(220, 38, 38, 0.11);
+  --idle: #94a3b8;
+  --idle-soft: rgba(148, 163, 184, 0.16);
 
-  .el-table {
-    --el-table-bg-color: #ffffff;
-    --el-table-tr-bg-color: #ffffff;
-    --el-table-header-bg-color: #f8fafc;
-    --el-table-row-hover-bg-color: #f0f7ff;
-    --el-table-border-color: #f0f3f7;
-    border-radius: 12px;
-    overflow: hidden;
-    font-size: 13px;
-  }
-  .el-table th.el-table__cell {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #64748b;
-    font-weight: 700;
-    background: #f8fafc;
-    border-bottom: 2px solid #e8eef5;
-  }
-  .el-table td.el-table__cell { border-bottom: 1px solid #f5f7fa; }
+  /* Protocol identity. One hue per family so a node's type is readable from
+     colour alone, and the same hues carry into the map markers. */
+  --id-ss: #0e7490;      --id-ss-soft: rgba(14, 116, 144, 0.11);
+  --id-vmess: #4338ca;   --id-vmess-soft: rgba(67, 56, 202, 0.11);
+  --id-vless: #7c3aed;   --id-vless-soft: rgba(124, 58, 237, 0.11);
+  --id-trojan: #c2410c;  --id-trojan-soft: rgba(194, 65, 12, 0.11);
+  --id-hysteria: #be185d;--id-hysteria-soft: rgba(190, 24, 93, 0.11);
+  --id-tuic: #0f766e;    --id-tuic-soft: rgba(15, 118, 110, 0.11);
+  --id-other: #64748b;   --id-other-soft: rgba(100, 116, 139, 0.12);
 
-  .el-dialog {
-    --el-dialog-bg-color: #ffffff;
-    border: 1px solid #e8eef5;
-    border-radius: 20px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.12);
-  }
-  .el-dialog__header { border-bottom: 1px solid #f0f3f7; padding: 16px 20px; }
-  .el-dialog__title { font-weight: 600; font-size: 16px; }
+  --map-bg-1: #e9edf3;
+  --map-bg-2: #f5f7fa;
+  --map-grid: #dde3ec;
+  --map-land: #dbe2eb;
+  --map-land-stroke: #c8d3e0;
+  --map-label: #1e293b;
 
-  .el-input__wrapper {
-    background: #ffffff !important;
-    border-radius: 10px !important;
-    box-shadow: 0 0 0 1px #e2e8f0 inset !important;
-    transition: box-shadow 0.2s ease !important;
-  }
-  .el-input__wrapper:hover { box-shadow: 0 0 0 1px #cbd5e1 inset !important; }
-  .el-input__wrapper.is-focus {
-    box-shadow: 0 0 0 1px #3b82f6 inset, 0 0 0 3px rgba(59,130,246,0.12) inset !important;
-  }
-  .el-textarea__inner {
-    background: #ffffff !important;
-    border-radius: 10px !important;
-    border: 1px solid #e2e8f0 !important;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
-  }
-  .el-textarea__inner:focus {
-    border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important;
-  }
+  --r-card: 18px;
+  --r-card-sm: 14px;
+  --r-ctl: 10px;
+  --r-tile: 12px;
+  --r-pill: 999px;
 
-  .el-button { border-radius: 10px; font-weight: 500; transition: all 0.15s ease; }
-  .el-button--primary { box-shadow: 0 2px 8px rgba(59,130,246,0.2); }
-  .el-button--primary:hover { box-shadow: 0 4px 14px rgba(59,130,246,0.3); transform: translateY(-1px); }
-  .el-button:active { transform: scale(0.97); }
-  .el-button--small { border-radius: 8px; }
+  --press-in: 100ms;
+  --press-out: 160ms;
+  --select: 160ms;
+  --disclose: 280ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
-  .el-radio-button__inner {
-    background: #ffffff;
-    border-color: #e2e8f0;
-    font-weight: 500;
-    transition: all 0.15s ease;
-  }
-  .el-radio-button__original-radio:checked + .el-radio-button__inner {
-    background: #eff6ff;
-    border-color: #3b82f6;
-    color: #2563eb;
-    box-shadow: 0 0 0 1px #3b82f6;
-  }
-  .el-radio-button__inner:hover { color: #3b82f6; }
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+          "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+}
 
-  .el-tag { border-radius: 8px; font-weight: 500; }
-  .el-tag--dark { border: none; }
-  .el-alert { border-radius: 12px; }
-  .el-collapse { border: none; }
-  .el-collapse-item__header {
-    background: #f8fafc;
-    border-radius: 10px;
-    padding: 0 16px;
-    font-weight: 500;
-    color: #334155;
-    border: 1px solid #e8eef5;
-  }
-  .el-collapse-item__wrap { border: 1px solid #e8eef5; border-top: none; border-radius: 0 0 10px 10px; }
-  .el-collapse-item__content { padding: 16px; }
+html[data-theme="dark"] {
+  color-scheme: dark;
 
-  .el-checkbox__label { color: #334155; }
-  .el-form-item__label { color: #475569; font-weight: 500; font-size: 13px; }
-  .el-empty__description p { color: #94a3b8; }
+  --bg: #0f1116;
+  --bg-wash: rgba(109, 149, 255, 0.10);
+  --surface: #191c23;
+  --surface-2: #21252d;
+  --surface-3: #2a2f38;
+  --stroke: rgba(255, 255, 255, 0.09);
+  --stroke-soft: rgba(255, 255, 255, 0.055);
+  --shadow-card: 0 3px 8px rgba(0, 0, 0, 0.30);
+  --shadow-lift: 0 6px 20px rgba(0, 0, 0, 0.38);
+  --shadow-pop: 0 16px 44px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
 
-  /* Custom components */
-  .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; font-size: 0.9em; }
-  .muted { color: #94a3b8; }
-  .status-err { color: #ef4444; }
-  .status-ok { color: #10b981; }
+  --text: #f2f4f8;
+  --text-2: #a8b0be;
+  --text-3: #767e8c;
 
-  .sub-item {
-    padding: 16px 8px;
-    border-bottom: 1px solid #f0f3f7;
-    border-radius: 10px;
-    transition: background 0.15s ease;
-  }
-  .sub-item:last-child { border-bottom: none; }
-  .sub-item:hover { background: #f8fafc; }
+  --accent: #6d95ff;
+  --accent-hover: #8aa9ff;
+  --accent-soft: rgba(109, 149, 255, 0.16);
+  --accent-soft-2: rgba(109, 149, 255, 0.26);
+  --accent-ring: rgba(109, 149, 255, 0.28);
+  --on-accent: #0b1020;
 
-  .scene-card {
-    display: block;
-    border: 2px solid #e8eef5;
-    border-radius: 14px;
-    padding: 16px 20px;
-    margin-top: 12px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    background: #ffffff;
-  }
-  .scene-card:hover {
-    border-color: #93c5fd;
-    background: #fafcff;
-    box-shadow: 0 2px 12px rgba(59,130,246,0.08);
-  }
-  .scene-card.selected {
-    border-color: #3b82f6;
-    background: #eff6ff;
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.12), 0 2px 12px rgba(59,130,246,0.1);
-  }
-  .scene-card .el-radio { margin-right: 0; }
-  .scene-card b { display: block; font-size: 14px; margin-bottom: 3px; color: #0f172a; }
-  .scene-card span { color: #64748b; font-size: 13px; line-height: 1.6; }
+  --ok: #3ecf8e;     --ok-soft: rgba(62, 207, 142, 0.15);
+  --warn: #e8a33d;   --warn-soft: rgba(232, 163, 61, 0.15);
+  --danger: #f2606a; --danger-soft: rgba(242, 96, 106, 0.15);
+  --idle: #6f7889;
+  --idle-soft: rgba(111, 120, 137, 0.18);
 
-  /* Map */
-  .map-box {
-    position: relative;
-    border-radius: 14px;
-    overflow: hidden;
-    border: 1px solid #e2e8f0;
-    background: #f1f5f9;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.04);
-  }
-  .map-box canvas { display: block; width: 100%; cursor: grab; }
-  .map-box canvas:active { cursor: grabbing; }
-  .map-legend {
-    position: absolute; bottom: 12px; right: 12px;
-    background: rgba(255,255,255,0.95); backdrop-filter: blur(12px);
-    border: 1px solid #e2e8f0; border-radius: 10px;
-    padding: 10px 14px; font-size: 11px; color: #475569;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  }
-  .map-legend span { margin-left: 10px; }
-  .map-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 3px; vertical-align: -1px; }
+  --id-ss: #3ec6dd;      --id-ss-soft: rgba(62, 198, 221, 0.15);
+  --id-vmess: #9b93ff;   --id-vmess-soft: rgba(155, 147, 255, 0.15);
+  --id-vless: #b98cff;   --id-vless-soft: rgba(185, 140, 255, 0.15);
+  --id-trojan: #ff9257;  --id-trojan-soft: rgba(255, 146, 87, 0.15);
+  --id-hysteria: #ff77a9;--id-hysteria-soft: rgba(255, 119, 169, 0.15);
+  --id-tuic: #46c9b8;    --id-tuic-soft: rgba(70, 201, 184, 0.15);
+  --id-other: #97a1b2;   --id-other-soft: rgba(151, 161, 178, 0.16);
 
-  /* Latency dots */
-  .latency-cell { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; font-weight: 500; }
-  .latency-cell .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  --map-bg-1: #141821;
+  --map-bg-2: #1b1f28;
+  --map-grid: #262c37;
+  --map-land: #262c37;
+  --map-land-stroke: #333b48;
+  --map-label: #dfe5ee;
+}
 
-  /* QR canvas */
-  .qr-canvas-wrap canvas { border-radius: 12px; margin: 12px auto; display: block; }
+/* Element Plus variables, both themes. Element Plus expects the light-N ramps
+   to move *away* from the background: lighter in light mode, darker in dark
+   mode. Getting that backwards is what makes alerts and hover states glow. */
+:root {
+  --el-color-primary: var(--accent);
+  --el-color-primary-light-3: #6b93ff;
+  --el-color-primary-light-5: #97b1ff;
+  --el-color-primary-light-7: #c2d1ff;
+  --el-color-primary-light-8: #d8e1ff;
+  --el-color-primary-light-9: #edf1ff;
+  --el-color-primary-dark-2: #2656cc;
 
-  /* Node drag sort (preview table) */
-  .drag-handle {
-    cursor: grab;
-    color: #cbd5e1;
-    margin-right: 5px;
-    user-select: none;
-    font-size: 12px;
-    vertical-align: 1px;
+  --el-color-success: var(--ok);
+  --el-color-success-light-3: #5cbe7f;
+  --el-color-success-light-5: #8ad4aa;
+  --el-color-success-light-8: #d6f5e3;
+  --el-color-success-light-9: #ecfdf3;
+  --el-color-success-dark-2: #12833c;
+
+  --el-color-warning: var(--warn);
+  --el-color-warning-light-3: #d19b4b;
+  --el-color-warning-light-5: #eba857;
+  --el-color-warning-light-8: #fcead2;
+  --el-color-warning-light-9: #fef6ec;
+  --el-color-warning-dark-2: #b46305;
+
+  --el-color-danger: var(--danger);
+  --el-color-danger-light-3: #e56b6b;
+  --el-color-danger-light-5: #ee8f8f;
+  --el-color-danger-light-8: #fadada;
+  --el-color-danger-light-9: #fdeeee;
+  --el-color-danger-dark-2: #b01e1e;
+  --el-color-error: var(--danger);
+  --el-color-error-light-3: #e56b6b;
+  --el-color-error-light-5: #ee8f8f;
+  --el-color-error-light-8: #fadada;
+  --el-color-error-light-9: #fdeeee;
+  --el-color-error-dark-2: #b01e1e;
+
+  --el-color-info: #64748b;
+  --el-color-info-light-3: #8d99ab;
+  --el-color-info-light-5: #a9b4c4;
+  --el-color-info-light-8: #e2e8f0;
+  --el-color-info-light-9: #f1f5f9;
+  --el-color-info-dark-2: #4b5563;
+
+  --el-bg-color: var(--surface);
+  --el-bg-color-page: var(--bg);
+  --el-bg-color-overlay: var(--surface);
+  --el-text-color-primary: var(--text);
+  --el-text-color-regular: #334155;
+  --el-text-color-secondary: var(--text-2);
+  --el-text-color-placeholder: var(--text-3);
+  --el-text-color-disabled: var(--text-3);
+  --el-border-color: var(--stroke);
+  --el-border-color-light: var(--stroke-soft);
+  --el-border-color-lighter: var(--stroke-soft);
+  --el-border-color-extra-light: var(--stroke-soft);
+  --el-border-color-hover: var(--text-3);
+  --el-fill-color: var(--surface-3);
+  --el-fill-color-light: var(--surface-2);
+  --el-fill-color-lighter: var(--surface-2);
+  --el-fill-color-extra-light: var(--surface);
+  --el-fill-color-blank: var(--surface);
+  --el-fill-color-dark: var(--surface-3);
+  --el-fill-color-darker: var(--surface-3);
+  --el-disabled-bg-color: var(--surface-2);
+  --el-disabled-text-color: var(--text-3);
+  --el-disabled-border-color: var(--stroke-soft);
+  --el-mask-color: rgba(15, 23, 42, 0.42);
+  --el-mask-color-extra-light: rgba(15, 23, 42, 0.16);
+  --el-box-shadow: var(--shadow-pop);
+  --el-box-shadow-light: var(--shadow-card);
+  --el-border-radius-base: var(--r-ctl);
+  --el-font-size-base: 14px;
+}
+
+html[data-theme="dark"] {
+  --el-text-color-regular: #c7cedb;
+  --el-color-primary-light-3: #4d6fcc;
+  --el-color-primary-light-5: #3b5599;
+  --el-color-primary-light-7: #2a3c6b;
+  --el-color-primary-light-8: #233256;
+  --el-color-primary-light-9: #1b2540;
+  --el-color-primary-dark-2: #8aabff;
+
+  --el-color-success-light-3: #2f9e6d;
+  --el-color-success-light-5: #24774f;
+  --el-color-success-light-8: #1a3227;
+  --el-color-success-light-9: #16281f;
+  --el-color-success-dark-2: #63dda6;
+
+  --el-color-warning-light-3: #b57c2c;
+  --el-color-warning-light-5: #8a5d20;
+  --el-color-warning-light-8: #33281a;
+  --el-color-warning-light-9: #2a2118;
+  --el-color-warning-dark-2: #efb761;
+
+  --el-color-danger-light-3: #b8474f;
+  --el-color-danger-light-5: #8a353b;
+  --el-color-danger-light-8: #382022;
+  --el-color-danger-light-9: #2c1a1c;
+  --el-color-danger-dark-2: #f5848c;
+  --el-color-error-light-3: #b8474f;
+  --el-color-error-light-5: #8a353b;
+  --el-color-error-light-8: #382022;
+  --el-color-error-light-9: #2c1a1c;
+  --el-color-error-dark-2: #f5848c;
+
+  --el-color-info-light-3: #6c7686;
+  --el-color-info-light-5: #525a68;
+  --el-color-info-light-8: #262b35;
+  --el-color-info-light-9: #1e222a;
+  --el-color-info-dark-2: #a1abbc;
+
+  --el-mask-color: rgba(0, 0, 0, 0.72);
+  --el-mask-color-extra-light: rgba(0, 0, 0, 0.35);
+}
+
+/* ==========================================================================
+   2. Base
+   ========================================================================== */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+[v-cloak] { display: none; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  background-color: var(--bg);
+  /* One soft accent wash, top-left to bottom-right — the same move Tower's
+     TowerTheme.background makes. Two stops, no blobs. */
+  background-image: linear-gradient(150deg, var(--bg-wash) 0%, transparent 42%, var(--bg-wash) 100%);
+  background-attachment: fixed;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--stroke); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+button { font: inherit; color: inherit; }
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+.mono { font-family: var(--font-mono); font-size: 0.92em; }
+.muted { color: var(--text-3); }
+.spacer { flex: 1 1 auto; }
+.is-ok { color: var(--ok); }
+.is-warn { color: var(--warn); }
+.is-danger { color: var(--danger); }
+
+.shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ==========================================================================
+   3. Page head
+   The old banner was the loudest element on the page and carried the least: a
+   gradient block with the product name in it. A tool you open to do a job
+   should open on the job, so the head is a title and nothing else, and the card
+   below it is the first thing that says something.
+   ========================================================================== */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 4px 2px 0;
+}
+.page-head h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.page-head p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.page-head .head-actions { margin-left: auto; display: flex; gap: 8px; }
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background var(--select) var(--ease), color var(--select) var(--ease),
+              transform var(--press-out) var(--ease);
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.icon-btn:active { transform: scale(0.94); }
+
+/* ==========================================================================
+   4. Card
+   Tower's card recipe, transcribed: soft fill, a hairline stroke, and a shadow
+   you have to look for. Cards do not lift on hover — only the ones that are
+   themselves a control do, because only those are something you can press.
+   ========================================================================== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
+}
+
+.section { display: flex; flex-direction: column; gap: 12px; }
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
+}
+.section-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.section-head .count {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.section-head .head-actions { margin-left: auto; display: flex; gap: 8px; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+
+.footnote {
+  margin: 2px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-3);
+}
+.footnote code {
+  font-family: var(--font-mono);
+  font-size: 0.94em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+/* ==========================================================================
+   5. Buttons
+   The press language is Tower's: scale down on a fast curve, release on a
+   slower one. That is the whole vocabulary — no hover translate.
+   ========================================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--select) var(--ease), border-color var(--select) var(--ease),
+              color var(--select) var(--ease), transform var(--press-out) var(--ease);
+}
+.btn:hover { background: var(--surface-2); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--on-accent);
+}
+.btn-primary:hover { background: var(--accent-hover); }
+
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+.btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+
+.btn-sm { height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 8px; }
+.btn-lg { height: 42px; padding: 0 20px; font-size: 14.5px; border-radius: var(--r-tile); }
+.btn-icon { width: 30px; padding: 0; }
+.btn .el-icon { font-size: 15px; }
+
+.spin { animation: spin 0.9s linear infinite; display: inline-flex; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ==========================================================================
+   6. Chips and tiles
+   ========================================================================== */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.chip b { font-weight: 700; font-variant-numeric: tabular-nums; opacity: 0.75; }
+.chip-ghost { background: transparent; border: 1px solid var(--stroke); color: var(--text-3); }
+.chip-accent { background: var(--accent-soft); color: var(--accent); }
+.chip-danger { background: var(--danger-soft); color: var(--danger); }
+.chip-ok { background: var(--ok-soft); color: var(--ok); }
+.chip-warn { background: var(--warn-soft); color: var(--warn); }
+.chip-region {
+  background: transparent;
+  border: 1px solid var(--stroke);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  min-width: 34px;
+  justify-content: center;
+}
+
+/* Protocol chip: colour is the type, so the same six hues carry from the node
+   table to the map markers. */
+.chip-proto { background: var(--id-other-soft); color: var(--id-other); font-family: var(--font-mono); }
+.chip-proto.p-ss { background: var(--id-ss-soft); color: var(--id-ss); }
+.chip-proto.p-vmess { background: var(--id-vmess-soft); color: var(--id-vmess); }
+.chip-proto.p-vless { background: var(--id-vless-soft); color: var(--id-vless); }
+.chip-proto.p-trojan { background: var(--id-trojan-soft); color: var(--id-trojan); }
+.chip-proto.p-hysteria { background: var(--id-hysteria-soft); color: var(--id-hysteria); }
+.chip-proto.p-tuic { background: var(--id-tuic-soft); color: var(--id-tuic); }
+
+.tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-tile);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 18px;
+}
+.tile-lg { width: 48px; height: 48px; border-radius: 15px; }
+.tile-abbr { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
+.tile-f-ss { background: var(--id-ss-soft); color: var(--id-ss); }
+.tile-f-vmess { background: var(--id-vmess-soft); color: var(--id-vmess); }
+.tile-f-vless { background: var(--id-vless-soft); color: var(--id-vless); }
+.tile-f-trojan { background: var(--id-trojan-soft); color: var(--id-trojan); }
+.tile-f-hysteria { background: var(--id-hysteria-soft); color: var(--id-hysteria); }
+.tile-f-tuic { background: var(--id-tuic-soft); color: var(--id-tuic); }
+.tile-f-other { background: var(--id-other-soft); color: var(--id-other); }
+
+/* Tower's SelectionIndicator: a ring that fills and takes a checkmark. Used for
+   both "this subscription counts" and "this ruleset is the one", because they
+   are the same kind of decision and two different controls for it read as two
+   unrelated settings. */
+.check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  border: 1.5px solid var(--stroke);
+  border-radius: 50%;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  transition: background var(--select) var(--ease), border-color var(--select) var(--ease),
+              color var(--select) var(--ease), transform var(--press-out) var(--ease);
+}
+.check:hover { border-color: var(--text-3); }
+.check:active { transform: scale(0.9); }
+.check svg { width: 14px; height: 14px; display: block; }
+.check.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.check-lg { width: 30px; height: 30px; }
+.check-lg svg { width: 16px; height: 16px; }
+.check:disabled { opacity: 0.5; cursor: default; }
+
+/* ==========================================================================
+   7. Overview card
+   The page's one piece of chrome that earns its space: the numbers you would
+   otherwise have to open three tabs to reconstruct, each of them a shortcut to
+   the tab that explains it.
+   ========================================================================== */
+.overview { padding: 22px; display: flex; flex-direction: column; gap: 18px; }
+.overview-top { display: flex; align-items: flex-start; gap: 16px; }
+.overview-top h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.015em; }
+.overview-top p { margin: 4px 0 0; font-size: 13px; color: var(--text-2); max-width: 58ch; }
+.overview-top .tile { margin-left: auto; }
+
+.metrics { display: flex; align-items: stretch; gap: 4px; flex-wrap: wrap; }
+.metric {
+  flex: 1 1 92px;
+  min-width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-card-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--select) var(--ease), transform var(--press-out) var(--ease);
+}
+.metric:hover { background: var(--surface-2); }
+.metric:active { transform: scale(0.97); }
+.metric:disabled { cursor: default; opacity: 0.55; }
+.metric:disabled:hover { background: transparent; }
+.metric b {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.metric span { font-size: 11.5px; color: var(--text-3); font-weight: 500; }
+.metric-sep { width: 1px; align-self: stretch; margin: 6px; background: var(--stroke-soft); }
+
+.overview-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  border-top: 1px solid var(--stroke-soft);
+}
+.overview-foot .foot-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.overview-foot .foot-item b { color: var(--text-2); font-weight: 600; }
+.overview-foot .el-icon { font-size: 14px; }
+
+/* ==========================================================================
+   8. Segmented tabs
+   Element Plus still owns tab state and pane switching; this only redraws the
+   header as a segmented control. The sliding active bar is turned off because
+   the pill already marks the selection.
+   ========================================================================== */
+.seg .el-tabs__header { margin: 0; }
+/* Both wrappers clip by default, and the active pill's shadow falls outside the
+   item box, so it gets shaved off without this. */
+.seg .el-tabs__nav-wrap,
+.seg .el-tabs__nav-scroll { overflow: visible; }
+.seg .el-tabs__nav-wrap::after { display: none; }
+.seg .el-tabs__active-bar { display: none; }
+.seg .el-tabs__nav {
+  display: inline-flex;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--stroke-soft);
+  border-radius: 14px;
+  background: var(--surface-3);
+}
+.seg .el-tabs__item {
+  height: 34px;
+  line-height: 34px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-3);
+  transition: background var(--select) var(--ease), color var(--select) var(--ease);
+}
+.seg .el-tabs__item:hover { color: var(--text-2); }
+.seg .el-tabs__item.is-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-card);
+}
+.seg .el-tabs__content { overflow: visible; }
+.seg-label { display: inline-flex; align-items: center; gap: 7px; }
+.seg-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: var(--idle-soft);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+.seg .el-tabs__item.is-active .seg-step { background: var(--accent-soft); color: var(--accent); }
+.seg-sm .el-tabs__nav { background: var(--surface-2); }
+.seg-sm .el-tabs__item { height: 30px; line-height: 30px; padding: 0 12px; font-size: 12.5px; }
+
+/* ==========================================================================
+   9. Subscription card
+   The old row put a checkbox, a name, a tag and four same-weight buttons on one
+   line — the four buttons made none of them scannable, and the line wrapped
+   into noise on a phone. This splits the card into what you read (identity,
+   facts, usage) and what you press (one primary action, the rest behind an
+   overflow).
+   ========================================================================== */
+.source { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.source.is-off { opacity: 0.62; }
+.source.is-off:hover { opacity: 0.85; }
+.source-main { display: flex; align-items: center; gap: 12px; }
+
+.source-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.title-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.title-line .name {
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subline {
+  font-size: 11.5px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: transform var(--disclose) var(--ease), background var(--select) var(--ease);
+}
+.chev:hover { background: var(--surface-2); color: var(--text-2); }
+.chev.open { transform: rotate(180deg); }
+
+.facts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-3); }
+.facts b { font-weight: 650; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.fact-sep { width: 1px; height: 11px; background: var(--stroke); }
+
+.traffic-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.traffic-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ok);
+  transition: width var(--disclose) var(--ease);
+}
+.traffic-fill.is-warn { background: var(--warn); }
+.traffic-fill.is-danger { background: var(--danger); }
+
+.inline-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 8px 11px;
+  border-radius: var(--r-ctl);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.inline-alert .el-icon { font-size: 14px; margin-top: 2px; flex: none; }
+
+.source-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.source-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.source-body {
+  padding-top: 12px;
+  border-top: 1px solid var(--stroke-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.node-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.micro {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.node-count { font-size: 13px; font-weight: 650; }
+
+/* ==========================================================================
+   10. Rule picker
+   Was a card inside a card. Now a flat selectable card — the ring carries the
+   selection, the whole card is the target, and chips say what is inside instead
+   of leaving it to a sentence.
+   ========================================================================== */
+.pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  cursor: pointer;
+  transition: border-color var(--select) var(--ease), background var(--select) var(--ease),
+              box-shadow var(--select) var(--ease);
+}
+.pick:hover { border-color: var(--stroke); box-shadow: var(--shadow-lift); }
+.pick.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: none; }
+.pick-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pick-title { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 650; }
+.pick-desc { margin: 0; font-size: 13px; line-height: 1.65; color: var(--text-2); }
+.pick-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+
+/* ==========================================================================
+   11. Export
+   ========================================================================== */
+.action-card {
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.action-card h2 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+.action-card p { margin: 5px 0 0; font-size: 13px; color: var(--text-2); max-width: 62ch; }
+.action-info { flex: 1 1 320px; }
+
+.result-card { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.result-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.result-actions .footnote { margin: 0; }
+
+.filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.chip-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--select) var(--ease), border-color var(--select) var(--ease),
+              color var(--select) var(--ease);
+}
+.chip-filter b { font-variant-numeric: tabular-nums; opacity: 0.6; }
+.chip-filter:hover { border-color: var(--text-3); }
+.chip-filter.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.chip-filter.on b { opacity: 1; }
+
+/* The subscription address is the actual deliverable — everything else on this
+   page exists to produce it. It gets the accent treatment accordingly. */
+.sub-address {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-color: var(--accent-soft-2);
+  background: linear-gradient(180deg, var(--accent-soft) 0%, transparent 140px), var(--surface);
+}
+.sub-address .url-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sub-address .url-value {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.lan-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 9px 0;
+  border-top: 1px solid var(--stroke-soft);
+}
+.lan-row:first-of-type { border-top: 0; }
+.lan-row .lan-name { font-size: 12px; font-weight: 600; color: var(--text-2); flex: none; }
+.lan-row code {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
+}
+
+pre.code-block {
+  margin: 0;
+  padding: 16px;
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--r-card-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ==========================================================================
+   12. Empty, loading, map, QR
+   ========================================================================== */
+.empty {
+  padding: 44px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 30px;
+  margin-bottom: 4px;
+}
+.empty h3 { margin: 0; font-size: 16px; font-weight: 650; }
+.empty p { margin: 0; font-size: 13px; color: var(--text-2); max-width: 42ch; line-height: 1.7; }
+.empty .btn { margin-top: 6px; }
+
+.skel { gap: 12px; }
+.skel-line, .skel-box {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-2) 50%, var(--surface-3) 75%);
+  background-size: 220% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+.skel-lines { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+.skel-line { height: 11px; }
+@keyframes shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+
+.map-box {
+  position: relative;
+  border-radius: var(--r-card-sm);
+  overflow: hidden;
+  border: 1px solid var(--stroke-soft);
+  background: var(--map-bg-2);
+}
+.map-box canvas { display: block; width: 100%; cursor: grab; }
+.map-box canvas:active { cursor: grabbing; }
+.map-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px 0;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.map-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.map-legend .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+.qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.qr-wrap canvas {
+  border-radius: var(--r-card-sm);
+  border: 1px solid var(--stroke-soft);
+  background: #fff;
+  padding: 10px;
+}
+.qr-url {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+  word-break: break-all;
+  max-height: 64px;
+  overflow: auto;
+}
+
+/* ==========================================================================
+   13. Element Plus component overrides
+   ========================================================================== */
+.el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: var(--surface-2);
+  --el-table-row-hover-bg-color: var(--surface-2);
+  --el-table-border-color: var(--stroke-soft);
+  --el-table-header-text-color: var(--text-3);
+  --el-table-text-color: var(--text);
+  border-radius: var(--r-card-sm);
+  overflow: hidden;
+  font-size: 12.5px;
+}
+.el-table th.el-table__cell {
+  padding: 7px 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  background: var(--surface-2);
+}
+.el-table td.el-table__cell { padding: 7px 0; }
+/* Not a flex container on purpose. A column with no `#default` slot renders a
+   bare text node, and a text node inside a flex box becomes an anonymous flex
+   item — which drops the cell's ellipsis and stops long tags from wrapping.
+   Inline alignment gets the chips onto the text baseline instead. */
+.el-table .cell { line-height: 1.5; }
+.el-table .cell .chip { vertical-align: middle; margin-right: 6px; }
+.el-table .cell .drag-handle { vertical-align: middle; margin-right: 4px; }
+.el-table .cell .latency-cell,
+.el-table .cell .el-checkbox,
+.el-table .cell .mono { vertical-align: middle; }
+.el-table__inner-wrapper::before { display: none; }
+.el-table__empty-block { background: transparent; }
+.el-table__empty-text { color: var(--text-3); font-size: 12.5px; }
+
+.drag-handle {
+  flex: none;
+  cursor: grab;
+  color: var(--text-3);
+  opacity: 0.55;
+  user-select: none;
+  transition: opacity var(--select) var(--ease), color var(--select) var(--ease);
+}
+.drag-handle:hover { opacity: 1; color: var(--accent); }
+.drag-handle:active { cursor: grabbing; }
+.el-table tr.dragging td { opacity: 0.3; }
+.el-table tr.drop-target td { box-shadow: inset 0 2px 0 0 var(--accent); }
+
+.latency-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.latency-cell .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+
+.el-input__wrapper,
+.el-select__wrapper {
+  background: var(--surface) !important;
+  border-radius: var(--r-ctl) !important;
+  box-shadow: 0 0 0 1px var(--stroke) inset !important;
+  transition: box-shadow var(--select) var(--ease) !important;
+}
+.el-input__wrapper:hover,
+.el-select__wrapper:hover { box-shadow: 0 0 0 1px var(--text-3) inset !important; }
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--accent) inset, 0 0 0 3px var(--accent-ring) inset !important;
+}
+.el-textarea__inner {
+  background: var(--surface) !important;
+  border-radius: var(--r-ctl) !important;
+  border: 1px solid var(--stroke) !important;
+  color: var(--text) !important;
+  transition: border-color var(--select) var(--ease), box-shadow var(--select) var(--ease) !important;
+}
+.el-textarea__inner:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-ring) !important;
+}
+.el-input__inner { color: var(--text); }
+
+.el-button {
+  border-radius: var(--r-ctl);
+  font-weight: 550;
+  transition: background var(--select) var(--ease), border-color var(--select) var(--ease),
+              color var(--select) var(--ease), transform var(--press-out) var(--ease);
+}
+.el-button:active { transform: scale(0.97); }
+.el-button--small { border-radius: 8px; }
+
+.el-radio-group { gap: 6px; }
+.el-radio-button__inner {
+  border: 1px solid var(--stroke) !important;
+  border-radius: 8px !important;
+  background: var(--surface);
+  color: var(--text-2);
+  font-weight: 550;
+  transition: all var(--select) var(--ease);
+}
+.el-radio-button__inner:hover { color: var(--accent); border-color: var(--accent-soft-2) !important; }
+.el-radio-button__original-radio:checked + .el-radio-button__inner {
+  background: var(--accent-soft);
+  border-color: var(--accent) !important;
+  color: var(--accent);
+  box-shadow: none;
+}
+
+/* Width comes from each dialog's own `width` prop; forcing it here would also
+   stretch the 360px QR dialog. The narrow-screen rule below is the only place
+   that has to override, because a 560px dialog cannot fit a phone. */
+.el-dialog {
+  padding: 0;
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+.el-dialog__header { margin: 0; padding: 16px 20px; border-bottom: 1px solid var(--stroke-soft); }
+.el-dialog__title { font-size: 15px; font-weight: 650; color: var(--text); }
+.el-dialog__headerbtn { top: 12px; right: 12px; }
+.el-dialog__body { padding: 20px; color: var(--text); }
+.el-dialog__footer { padding: 12px 20px; border-top: 1px solid var(--stroke-soft); display: flex; justify-content: flex-end; gap: 8px; }
+.el-overlay { backdrop-filter: blur(2px); }
+
+.el-form-item__label { color: var(--text-2); font-weight: 550; font-size: 12.5px; }
+.el-form-item { margin-bottom: 16px; }
+
+.el-alert { padding: 11px 14px; border-radius: var(--r-card-sm); }
+.el-alert__title { font-size: 13px; font-weight: 600; }
+.el-alert .el-alert__description { color: var(--text-2); }
+
+.el-collapse, .el-collapse-item__header, .el-collapse-item__wrap {
+  border: 0;
+  background: transparent;
+}
+.el-collapse-item__header {
+  height: auto;
+  padding: 16px 20px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.el-collapse-item__arrow { color: var(--text-3); }
+.el-collapse-item__content { padding: 0 20px 18px; font-size: 13px; line-height: 1.75; color: var(--text-2); }
+.el-collapse-item__content ul { margin: 8px 0; padding-left: 20px; }
+.el-collapse-item__content li { margin: 3px 0; }
+.el-collapse-item__content code {
+  font-family: var(--font-mono);
+  font-size: 0.94em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.el-checkbox__label { color: var(--text-2); }
+.el-checkbox__inner { border-radius: 5px; background: var(--surface); border-color: var(--stroke); }
+
+.el-dropdown-menu { padding: 5px; }
+.el-dropdown-menu__item {
+  border-radius: 7px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.el-dropdown-menu__item:not(.is-disabled):hover { background: var(--surface-2); color: var(--text); }
+.el-dropdown-menu__item--divided { border-top-color: var(--stroke-soft); margin-top: 5px; }
+
+.el-message {
+  border-radius: var(--r-card-sm);
+  border: 1px solid var(--stroke);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  padding: 11px 16px;
+}
+.el-message__content { font-size: 13px; font-weight: 550; color: var(--text); }
+.el-message-box {
+  border-radius: var(--r-card);
+  border: 1px solid var(--stroke-soft);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  padding: 22px;
+}
+.el-message-box__title { font-size: 15px; font-weight: 650; color: var(--text); }
+.el-message-box__content { color: var(--text-2); font-size: 13.5px; }
+
+.el-select-dropdown, .el-popper.is-light, .el-popper.is-dark {
+  border-radius: var(--r-card-sm);
+  box-shadow: var(--shadow-pop);
+}
+.el-popper.is-light { background: var(--surface) !important; border: 1px solid var(--stroke) !important; }
+.el-popper.is-light .el-popper__arrow::before { background: var(--surface); border-color: var(--stroke); }
+.el-select-dropdown__item { color: var(--text-2); font-size: 13px; }
+.el-select-dropdown__item.is-hovering { background: var(--surface-2); }
+.el-select-dropdown__item.is-selected { color: var(--accent); }
+.el-select__placeholder { color: var(--text-3); }
+
+/* ==========================================================================
+   14. Motion, reduced motion, responsive
+   ========================================================================== */
+.fade-enter-active { animation: fadeIn 0.22s var(--ease); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+/* Tower gates every transition on the reduce-motion setting; the web equivalent
+   is this block. Killing the durations kills the shimmer too, so that one is
+   restated as a flat fill. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
-  .drag-handle:hover { color: #3b82f6; }
-  .drag-handle:active { cursor: grabbing; }
-  .el-table tr.dragging td { opacity: 0.35; }
-  .el-table tr.drop-target td { border-top: 2px solid #3b82f6; }
+  .skel-line, .skel-box { animation: none; background: var(--surface-3); }
+}
 
-  /* Pre/Code */
-  pre {
-    background: #f8fafc !important;
-    border: 1px solid #e8eef5 !important;
-    border-radius: 10px !important;
-    color: #334155;
-    font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  }
-  code {
-    background: #f1f5f9;
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-size: 0.9em;
-    color: #3b82f6;
-  }
+@media (max-width: 720px) {
+  .shell { padding: 20px 14px 72px; gap: 16px; }
+  .page-head h1 { font-size: 21px; }
+  .overview { padding: 18px; }
+  .overview-top h2 { font-size: 16px; }
+  .overview-top .tile-lg { width: 42px; height: 42px; border-radius: 13px; font-size: 16px; }
+  /* basis 0 rather than a percentage: a percentage basis packs two per line
+     and stretches the leftover one across the full width, which made three
+     metrics read as a 2 + 1 layout. */
+  .metrics { gap: 2px; }
+  .metric { flex: 1 1 0; min-width: 0; padding: 8px 10px; }
+  .metric b { font-size: 19px; }
+  .metric-sep { display: none; }
+  .seg .el-tabs__nav { width: 100%; }
+  .seg .el-tabs__item { flex: 1; padding: 0 8px; display: flex; justify-content: center; }
+  .source, .result-card, .sub-address, .action-card { padding: 14px; }
+  .el-dialog__body { padding: 16px; }
+  .el-dialog__footer { padding: 12px 16px; }
+  .el-dialog { width: calc(100vw - 24px) !important; }
+}
 
-  /* Animations */
-  .fade-enter-active { animation: fadeIn 0.25s ease-out; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* Responsive */
-  @media (max-width: 600px) {
-    .app-wrap { padding: 16px 14px 60px; }
-    .app-header { padding: 20px 20px; border-radius: 16px; }
-    .app-header h1 { font-size: 18px; }
-    .el-card { border-radius: 12px; }
-    .el-tabs__item { padding: 0 14px; font-size: 13px; }
-  }
+@media (max-width: 420px) {
+  .title-line .name { font-size: 14px; }
+  .metric b { font-size: 17px; }
+  .map-legend { gap: 8px; font-size: 10px; }
+}
 </style>
 </head>
 <body>
-<div id="app">
-  <div class="app-wrap">
-    <!-- Header -->
-    <div class="app-header">
-      <h1>singbox-kit <small>添加订阅 → 选择规则 → 导出 sing-box 配置</small> <span style="font-size:10px;opacity:0.5">v2</span></h1>
-    </div>
+<div id="app" v-cloak>
+  <div class="shell">
+    <!-- ============ Page head ============ -->
+    <header class="page-head">
+      <div>
+        <h1>singbox-kit</h1>
+        <p>订阅 → 规则 → 导出 sing-box 配置</p>
+      </div>
+      <div class="head-actions">
+        <button class="icon-btn" type="button" @click="toggleTheme"
+                :title="isDark ? '切换到浅色模式' : '切换到深色模式'"
+                :aria-label="isDark ? '切换到浅色模式' : '切换到深色模式'">
+          <!-- `:is` rather than an if/else pair of icon tags: the page is
+               compiled from the DOM, so a self-closing tag is only safe when
+               the very next thing is a closing tag. Two of them side by side
+               nest instead of pairing, and the second one disappears inside
+               the first. web.spec.js enforces this. -->
+          <el-icon><component :is="isDark ? 'Sunny' : 'Moon'" /></el-icon>
+        </button>
+      </div>
+    </header>
 
-    <!-- Main Tabs -->
-    <el-tabs v-model="activeTab" @tab-change="onTabChange">
-      <!-- ============ ① 订阅 ============ -->
-      <el-tab-pane label="① 订阅" name="subs">
-        <el-card>
-          <template #header>
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span style="font-weight:600;font-size:15px">订阅源库</span>
-              <div>
-                <el-button size="small" :loading="refreshingAll" @click="refreshAll">
-                  <el-icon><Refresh /></el-icon> 刷新全部
-                </el-button>
-                <el-button size="small" type="primary" @click="openAddForm">
-                  <el-icon><Plus /></el-icon> 添加订阅源
-                </el-button>
-              </div>
+    <!-- ============ Overview ============ -->
+    <section class="card overview" v-if="!pageLoading">
+      <div class="overview-top">
+        <div>
+          <h2>准备您的节点</h2>
+          <p>集中管理订阅源与节点，再转换成客户端可用的完整配置。</p>
+        </div>
+        <span class="tile tile-lg" aria-hidden="true"><el-icon><promotion /></el-icon></span>
+      </div>
+
+      <div class="metrics">
+        <button class="metric" type="button" @click="goTab('subs')" :disabled="!stats.sources">
+          <b>{{ stats.sources }}</b><span>订阅源</span>
+        </button>
+        <i class="metric-sep"></i>
+        <button class="metric" type="button" @click="goTab('subs')" :disabled="!stats.enabled">
+          <b>{{ stats.enabled }}</b><span>已启用</span>
+        </button>
+        <i class="metric-sep"></i>
+        <button class="metric" type="button" @click="goTab('export')" :disabled="!stats.nodes">
+          <b>{{ stats.nodes }}</b><span>节点</span>
+        </button>
+        <template v-if="stats.regions">
+          <i class="metric-sep"></i>
+          <button class="metric" type="button" @click="goTab('export')">
+            <b>{{ stats.regions }}</b><span>地区</span>
+          </button>
+        </template>
+      </div>
+
+      <div class="overview-foot">
+        <span class="foot-item"><el-icon><set-up /></el-icon> 规则 <b>{{ aclName }}</b></span>
+        <span class="spacer"></span>
+        <button class="btn btn-primary btn-sm" type="button" @click="goTab(nextStep.tab)">
+          {{ nextStep.label }} <el-icon><arrow-right /></el-icon>
+        </button>
+      </div>
+    </section>
+
+    <!-- ============ Main tabs ============ -->
+    <el-tabs v-model="activeTab" class="seg" @tab-change="onTabChange">
+      <!-- ---------- ① 订阅 ---------- -->
+      <el-tab-pane name="subs">
+        <template #label><span class="seg-label"><i class="seg-step">1</i>订阅</span></template>
+
+        <div class="section">
+          <div class="section-head">
+            <h2>订阅源</h2>
+            <span class="count" v-if="!pageLoading">{{ sources.length }}</span>
+            <div class="head-actions">
+              <button class="btn btn-ghost btn-sm" type="button"
+                      :disabled="refreshingAll || !sources.length" @click="refreshAll">
+                <el-icon :class="{ spin: refreshingAll }"><refresh /></el-icon> 刷新全部
+              </button>
+              <button class="btn btn-primary btn-sm" type="button" @click="openAddForm">
+                <el-icon><plus /></el-icon> 添加订阅源
+              </button>
             </div>
-          </template>
-
-          <!-- Loading State -->
-          <div v-if="pageLoading" style="text-align:center;padding:40px 0;color:#94a3b8">
-            <div style="width:24px;height:24px;border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto"></div>
-            <div style="margin-top:8px;font-size:13px">加载中…</div>
           </div>
 
-          <!-- Empty State -->
-          <el-empty v-else-if="!sources.length" description="还没有订阅源" :image-size="80">
-            <el-button type="primary" @click="openAddForm">添加订阅源</el-button>
-          </el-empty>
-
-          <!-- Add/Edit Form -->
-          <el-card v-if="showAddForm" shadow="never" style="background:#f8fafc;border:1px solid #e2e8f0;margin-bottom:16px;animation:fadeIn 0.2s ease-out">
-              <template #header>
-                <div style="display:flex;justify-content:space-between;align-items:center">
-                  <span style="font-weight:600">{{ editingId ? '编辑订阅源' : '添加订阅源' }}</span>
-                  <el-button size="small" @click="closeAddForm">取消</el-button>
-                </div>
-              </template>
-              <el-form label-position="top" size="default">
-                <el-row :gutter="16">
-                  <el-col :xs="24" :sm="12">
-                    <el-form-item label="名称（便于识别）">
-                      <el-input v-model="srcForm.name" placeholder="例如：主机场 A" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :xs="24" :sm="12">
-                    <el-form-item label="类型">
-                      <el-radio-group v-model="srcForm.kind">
-                        <el-radio-button value="url">远程 URL</el-radio-button>
-                        <el-radio-button value="text">订阅文本</el-radio-button>
-                      </el-radio-group>
-                    </el-form-item>
-                  </el-col>
-                </el-row>
-                <el-form-item v-if="srcForm.kind === 'url'" label="订阅 URL（保存后点「刷新」抓取）">
-                  <el-input v-model="srcForm.url" placeholder="https://example.com/sub?token=…" />
-                </el-form-item>
-                <el-form-item v-else label="订阅内容（vmess:// vless:// ss:// trojan:// 等）">
-                  <el-input v-model="srcForm.text" type="textarea" :rows="5" placeholder="粘贴订阅内容…" />
-                </el-form-item>
-                <el-row :gutter="16">
-                  <el-col :xs="24" :sm="12">
-                    <el-form-item label="抓取 User-Agent（留空 = 内置 Clash UA）">
-                      <el-input v-model="srcForm.ua" placeholder="clash.meta/v1.19.23" />
-                    </el-form-item>
-                  </el-col>
-                  <el-col :xs="24" :sm="12">
-                    <el-form-item label="抓取超时（ms，留空 = 30000）">
-                      <el-input-number v-model="srcForm.timeout" :min="100" :max="300000" placeholder="30000" style="width:100%" />
-                    </el-form-item>
-                  </el-col>
-                </el-row>
-                <el-form-item>
-                  <template #label>
-                    附加请求头（每行 <code>Name: Value</code>）
-                  </template>
-                  <el-input v-model="srcForm.headers" type="textarea" :rows="2" placeholder="Authorization: Bearer xxx" />
-                </el-form-item>
-                <div style="display:flex;align-items:center;gap:12px">
-                  <el-button type="primary" :loading="savingSource" @click="saveSource">保存</el-button>
-                  <span class="muted" style="font-size:12px">{{ srcFormHint }}</span>
-                </div>
-              </el-form>
-            </el-card>
-
-          <!-- Subscription List -->
-          <div v-for="s in sources" :key="s.id" class="sub-item">
-            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-              <el-checkbox :model-value="s.enabled" :disabled="togglingId === s.id" @change="(v) => toggleEnabled(s, v)" label="启用" size="small"></el-checkbox>
-              <span style="font-weight:600;font-size:14px">{{ s.name }}</span>
-              <el-tag :type="s.kind === 'url' ? '' : 'warning'" size="small" effect="dark" round>
-                {{ s.kind === 'url' ? 'URL' : '文本' }}
-              </el-tag>
-              <span style="flex:1"></span>
-              <el-button size="small" :loading="refreshingIds.get(s.id)" @click="refreshOne(s.id)">
-                <el-icon><Refresh /></el-icon>
-              </el-button>
-              <el-button size="small" @click="previewSource(s.id)">预览</el-button>
-              <el-button size="small" @click="openEditForm(s.id)">编辑</el-button>
-              <el-button size="small" type="danger" plain @click="deleteSource(s.id)">删除</el-button>
-            </div>
-            <!-- Status line -->
-            <div :style="{ fontSize: '12px', marginTop: '4px', color: getStatusColor(s) }">
-              {{ getStatusText(s) }}
-            </div>
-            <!-- Usage -->
-            <div v-if="getUsageText(s)" style="font-size:12px;margin-top:2px;color:#64748b">
-              {{ getUsageText(s) }}
-            </div>
-            <!-- Preview nodes -->
-            <div v-if="getPreview(s.id)" style="margin-top:8px">
-              <div style="font-size:12px;color:#94a3b8;margin-bottom:6px">
-                {{ getPreview(s.id).nodeCount }} 个节点
-                <template v-if="getPreview(s.id)._protoStr"> · {{ getPreview(s.id)._protoStr }}</template>
-              </div>
-              <el-table v-if="getPreview(s.id).nodes && getPreview(s.id).nodes.length" :data="getPreview(s.id).nodes"
-                size="small" max-height="280" border style="border-radius:8px"
-                @dragover="onNodeDragOver" @drop="(e) => onNodeDrop(e, s)" @dragend="onNodeDragEnd">
-                <el-table-column width="40">
-                  <template #header>
-                    <el-checkbox :model-value="isAllChecked(s)" @change="(v) => toggleCheckAll(s, v)" size="small" />
-                  </template>
-                  <template #default="{ row }">
-                    <el-checkbox :model-value="!isNodeExcluded(s, row.tag)" @change="(v) => toggleNodeCheck(s, row.tag, v)" size="small" />
-                  </template>
-                </el-table-column>
-                <el-table-column prop="tag" label="名称" min-width="120">
-                  <template #default="{ row, $index }">
-                    <span class="drag-handle" draggable="true" title="拖拽调整节点顺序"
-                      @dragstart="(e) => onNodeDragStart(e, s, $index)">⠿</span>{{ row.tag }}
-                  </template>
-                </el-table-column>
-                <el-table-column prop="type" label="类型" width="100">
-                  <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.type }}</code></template>
-                </el-table-column>
-                <el-table-column prop="server" label="服务器" min-width="120">
-                  <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.server || '-' }}</code></template>
-                </el-table-column>
-              </el-table>
-              <div style="margin-top:6px;display:flex;align-items:center;gap:12px">
-                <el-button size="small" type="primary" plain @click="saveNodeSelection(s)">保存节点选择</el-button>
-                <span class="muted" style="font-size:12px">取消勾选的节点不会出现在导出配置中；拖拽 <b>⠿</b> 可调整顺序，改完点「保存节点选择」。</span>
+          <!-- Loading -->
+          <div class="stack" v-if="pageLoading">
+            <div class="card source skel" v-for="i in 2" :key="i">
+              <div class="source-main">
+                <span class="skel-box" style="width:38px;height:38px;border-radius:12px"></span>
+                <span class="skel-lines">
+                  <span class="skel-line" style="width:34%"></span>
+                  <span class="skel-line" style="width:20%"></span>
+                </span>
               </div>
             </div>
           </div>
 
-          <div class="muted" style="font-size:12px;margin-top:12px">
-            勾选「启用」的订阅会合并进同一份配置——导出页和订阅地址取的都是这一份；跨订阅重名节点会自动改名。
-          </div>
-        </el-card>
-      </el-tab-pane>
-
-      <!-- ============ ② 规则 ============ -->
-      <el-tab-pane label="② 规则" name="rules">
-        <el-card>
-          <template #header>
-            <span style="font-weight:600;font-size:15px">分流规则（内置 ACL4SSR）</span>
-          </template>
-
-          <div v-for="r in ruleOptions" :key="r.value"
-            class="scene-card" :class="{ selected: acl === r.value }"
-            @click="selectRule(r.value)" style="position:relative">
-            <el-radio :model-value="acl" :value="r.value" @change="selectRule(r.value)" @click.stop>
-              <b>{{ r.label }}</b>
-            </el-radio>
-            <div style="margin-left:24px;margin-top:2px"><span>{{ r.desc }}</span></div>
+          <!-- Empty -->
+          <div class="card empty" v-else-if="!sources.length">
+            <span class="empty-icon"><el-icon><tickets /></el-icon></span>
+            <h3>先添加一个来源</h3>
+            <p>支持机场订阅链接，也可以直接粘贴 SS、VMess、VLESS、Trojan 等节点。</p>
+            <button class="btn btn-primary btn-lg" type="button" @click="openAddForm">
+              <el-icon><plus /></el-icon> 添加订阅源
+            </button>
           </div>
 
-          <div class="muted" style="font-size:12px;margin-top:12px">
-            规则文本随页面内置，无需机场提供规则链接；其中 <code class="mono">GEOIP,CN</code> 直连使用 sing-box 远程 geoip-cn 规则集。
-          </div>
-          <div v-if="rulesHint" :class="rulesHintType === 'ok' ? 'status-ok' : 'status-err'" style="font-size:12px;margin-top:6px">
-            {{ rulesHint }}
-          </div>
-        </el-card>
-      </el-tab-pane>
+          <!-- List -->
+          <div class="stack" v-else>
+            <article v-for="s in sources" :key="s.id" class="card source" :class="{ 'is-off': !s.enabled }">
+              <div class="source-main">
+                <span class="tile" :class="topProtocol(s) ? 'tile-f-' + familyOf(topProtocol(s)) : ''" aria-hidden="true">
+                  <span class="tile-abbr" v-if="topProtocol(s)">{{ abbrOf(topProtocol(s)) }}</span>
+                  <el-icon v-else><tickets /></el-icon>
+                </span>
 
-      <!-- ============ ③ 导出 ============ -->
-      <el-tab-pane label="③ 导出" name="export">
-        <!-- Generate -->
-        <el-card>
-          <div v-if="enabledSubs.length === 0" style="color:#f87171;font-size:13px">
-            还没有参与导出的订阅。请到「订阅」页添加并勾选要合并的订阅源。
-          </div>
-          <div v-else class="muted" style="font-size:13px">
-            将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），按「{{ aclName }}」生成完整 sing-box 配置。
-          </div>
-          <div style="margin-top:12px;display:flex;align-items:center;gap:12px">
-            <el-button type="primary" :loading="generating" :disabled="!enabledSubs.length" @click="generate">
-              <el-icon><Cpu /></el-icon> 生成配置
-            </el-button>
-            <span v-if="genStatus" :class="genStatusType === 'ok' ? 'status-ok' : genStatusType === 'err' ? 'status-err' : 'muted'" style="font-size:13px">
-              {{ genStatus }}
-            </span>
-          </div>
-        </el-card>
+                <button class="source-title" type="button" @click="toggleCard(s.id)"
+                        :aria-expanded="isOpen(s.id) ? 'true' : 'false'">
+                  <span class="title-line">
+                    <span class="name">{{ s.name }}</span>
+                    <span class="chip chip-ghost">{{ s.kind === 'url' ? 'URL' : '文本' }}</span>
+                    <span class="chip chip-danger" v-if="s.lastError">失败</span>
+                  </span>
+                  <span class="subline mono">{{ hostOf(s) }}</span>
+                </button>
 
-        <!-- Result -->
-        <el-card v-if="last" style="margin-top:16px">
-          <!-- Warnings -->
-          <el-alert v-if="allWarnings.length" type="warning" :closable="false" show-icon style="margin-bottom:12px;border-radius:8px">
-            <template #title>注意</template>
-            <template #default>
-              <div v-for="(w,i) in allWarnings" :key="i" style="font-size:12px;margin-top:2px">· {{ w }}</div>
-            </template>
-          </el-alert>
+                <button class="check" type="button" role="switch"
+                        :class="{ on: s.enabled }"
+                        :aria-checked="s.enabled ? 'true' : 'false'"
+                        :disabled="togglingId === s.id"
+                        :title="s.enabled ? '已参与导出，点击停用' : '未参与导出，点击启用'"
+                        @click="toggleEnabled(s, !s.enabled)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 12.5l4.5 4.5L19 7" />
+                  </svg>
+                  <span class="sr-only">启用 {{ s.name }}</span>
+                </button>
 
-          <!-- Output Tabs -->
-          <el-tabs v-model="activeOutTab" @tab-change="onOutTabChange">
-            <el-tab-pane label="节点表格" name="node">
-              <el-table :data="filteredNodes" size="small" max-height="480" border stripe style="border-radius:8px">
-                <el-table-column prop="type" label="类型" width="100">
-                  <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.type }}</code></template>
-                </el-table-column>
-                <el-table-column prop="tag" label="标签" min-width="140"></el-table-column>
-                <el-table-column prop="server" label="服务器" min-width="120">
-                  <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.server || '-' }}</code></template>
-                </el-table-column>
-                <el-table-column prop="port" label="端口" width="80">
-                  <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.port || '-' }}</code></template>
-                </el-table-column>
-                <el-table-column label="类别" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="row.kind === 'endpoint' ? 'warning' : ''" size="small" effect="dark" round>{{ row.kind }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column v-if="hasPing" label="延迟" width="110">
-                  <template #default="{ row }">
-                    <span class="latency-cell" :style="{ color: getLatencyColor(row) }">
-                      <span class="dot" :style="{ background: getLatencyColor(row) }"></span>
-                      {{ getLatencyText(row) }}
+                <button class="chev" type="button" :class="{ open: isOpen(s.id) }"
+                        :aria-label="isOpen(s.id) ? '收起节点列表' : '展开节点列表'"
+                        @click="toggleCard(s.id)">
+                  <el-icon><arrow-down /></el-icon>
+                </button>
+              </div>
+
+              <!-- Facts and actions share a line while there is width for it.
+                   Stacked, the two rows added 30px of height to every card and
+                   left the right half of each one empty. -->
+              <div class="source-meta">
+                <div class="facts">
+                  <span><b>{{ s.nodeCount || 0 }}</b> 节点</span>
+                  <i class="fact-sep"></i>
+                  <span :class="s.lastError ? 'is-danger' : ''">{{ statusText(s) }}</span>
+                  <template v-if="usageOf(s)">
+                    <i class="fact-sep"></i>
+                    <span class="num">
+                      {{ usageOf(s).usedText }}<template v-if="usageOf(s).totalText"> / {{ usageOf(s).totalText }}</template>
                     </span>
+                    <template v-if="usageOf(s).daysText">
+                      <i class="fact-sep"></i>
+                      <span :class="usageOf(s).soon ? 'is-warn' : ''">{{ usageOf(s).daysText }}</span>
+                    </template>
                   </template>
-                </el-table-column>
-              </el-table>
-            </el-tab-pane>
-            <el-tab-pane label="节点地图" name="map">
-              <div class="map-box" style="height:340px">
-                <canvas ref="worldMapCanvas" width="800" height="400"></canvas>
-                <div class="map-legend">
-                  <span><span class="dot" style="background:#34d399"></span>快(&lt;200ms)</span>
-                  <span><span class="dot" style="background:#fbbf24"></span>中(200-500ms)</span>
-                  <span><span class="dot" style="background:#f87171"></span>慢(&gt;500ms)</span>
-                  <span><span class="dot" style="background:#64748b"></span>超时</span>
-                  <span><span class="dot" style="background:#3b82f6"></span>未测试</span>
+                </div>
+
+                <span class="spacer"></span>
+
+                <div class="source-actions">
+                  <button class="btn btn-sm" type="button" :disabled="refreshingIds.get(s.id)" @click="refreshOne(s.id)">
+                    <el-icon :class="{ spin: refreshingIds.get(s.id) }"><refresh /></el-icon>
+                    {{ refreshingIds.get(s.id) ? '刷新中…' : '刷新' }}
+                  </button>
+                  <button class="btn btn-sm" type="button" @click="toggleCard(s.id)">
+                    <el-icon><grid /></el-icon> {{ isOpen(s.id) ? '收起节点' : '节点' }}
+                  </button>
+                  <el-dropdown trigger="click" @command="(cmd) => onSourceCommand(cmd, s)">
+                    <button class="btn btn-sm btn-icon" type="button" :aria-label="s.name + ' 的更多操作'">
+                      <el-icon><more-filled /></el-icon>
+                    </button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                        <el-dropdown-item command="copy" :disabled="!s.subUrl">复制订阅地址</el-dropdown-item>
+                        <el-dropdown-item command="qr" :disabled="!s.subUrl">扫码导入</el-dropdown-item>
+                        <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
                 </div>
               </div>
-            </el-tab-pane>
-            <el-tab-pane label="完整配置 JSON" name="cfg">
-              <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;overflow:auto;max-height:520px;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-all;color:#334155">{{ cfgJson }}</pre>
-            </el-tab-pane>
-          </el-tabs>
 
-          <!-- Actions -->
-          <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-            <el-button size="small" @click="copyConfig"><el-icon><DocumentCopy /></el-icon> 复制完整配置</el-button>
-            <el-button size="small" @click="downloadConfig"><el-icon><Download /></el-icon> 下载 JSON</el-button>
-            <el-button size="small" :loading="pingRunning" @click="pingNodes">
-              <el-icon><Connection /></el-icon> 延迟测试
-            </el-button>
-            <span v-if="pingStatus" :class="pingStatusType === 'ok' ? 'status-ok' : pingStatusType === 'err' ? 'status-err' : 'muted'" style="font-size:12px">
-              {{ pingStatus }}
-            </span>
+              <div class="traffic-track" v-if="usageOf(s) && usageOf(s).fraction !== null">
+                <div class="traffic-fill" :class="'is-' + usageOf(s).tone"
+                     :style="{ width: (usageOf(s).fraction * 100).toFixed(1) + '%' }"></div>
+              </div>
+
+              <div class="inline-alert" v-if="s.lastError">
+                <el-icon><warning-filled /></el-icon>
+                <span>{{ s.lastError.message || s.lastError }}</span>
+              </div>
+
+              <!-- Node preview -->
+              <div class="source-body" v-if="isOpen(s.id)">
+                <div class="facts" v-if="!getPreview(s.id)">
+                  <el-icon class="spin"><loading /></el-icon> 正在读取节点…
+                </div>
+                <template v-else>
+                  <div class="node-head">
+                    <span class="micro">节点</span>
+                    <span class="node-count num">{{ getPreview(s.id).nodeCount }}</span>
+                    <span class="chip chip-proto" v-for="(n, t) in getPreview(s.id).protocolMap"
+                          :key="t" :class="'p-' + familyOf(t)">{{ abbrOf(t) }} <b>{{ n }}</b></span>
+                  </div>
+
+                  <el-table v-if="getPreview(s.id).nodes && getPreview(s.id).nodes.length"
+                    :data="getPreview(s.id).nodes" size="small" max-height="300"
+                    @dragover="onNodeDragOver" @drop="(e) => onNodeDrop(e, s)" @dragend="onNodeDragEnd">
+                    <el-table-column width="42">
+                      <template #header>
+                        <el-checkbox :model-value="isAllChecked(s)" @change="(v) => toggleCheckAll(s, v)" size="small" />
+                      </template>
+                      <template #default="{ row }">
+                        <el-checkbox :model-value="!isNodeExcluded(s, row.tag)" @change="(v) => toggleNodeCheck(s, row.tag, v)" size="small" />
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="tag" label="名称" min-width="150">
+                      <template #default="{ row, $index }">
+                        <span class="drag-handle" draggable="true" title="拖拽调整节点顺序"
+                          @dragstart="(e) => onNodeDragStart(e, s, $index)">⠿</span>
+                        <span class="chip chip-proto" :class="'p-' + familyOf(row.type)">{{ abbrOf(row.type) }}</span>
+                        <span>{{ row.tag }}</span>
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="server" label="服务器" min-width="140">
+                      <template #default="{ row }"><span class="mono muted">{{ row.server || '—' }}</span></template>
+                    </el-table-column>
+                    <el-table-column label="地区" width="80">
+                      <template #default="{ row }">
+                        <span class="chip chip-region" v-if="countryOf(row.tag)">{{ countryOf(row.tag).code }}</span>
+                        <span class="muted" v-else>—</span>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                  <div class="muted" v-else style="font-size:12.5px">这个订阅还没有解析出节点。</div>
+
+                  <div class="source-actions">
+                    <button class="btn btn-primary btn-sm" type="button" @click="saveNodeSelection(s)">保存节点选择</button>
+                    <span class="muted" style="font-size:12px">
+                      取消勾选的节点不会出现在导出配置中；拖拽 <b>⠿</b> 调整顺序后点「保存节点选择」。
+                    </span>
+                  </div>
+                </template>
+              </div>
+            </article>
           </div>
-        </el-card>
 
-        <!-- Subscription Address -->
-        <el-card v-if="globalSubUrl" style="margin-top:16px">
-          <template #header>
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span style="font-weight:600;font-size:15px">订阅地址</span>
-              <el-tag size="small" effect="dark" round>一条链接，客户端自动跟进</el-tag>
+          <p class="footnote" v-if="sources.length">
+            勾选为「启用」的订阅会合并进同一份配置——导出页和订阅地址取的都是这一份；跨订阅重名节点会自动改名。
+          </p>
+        </div>
+      </el-tab-pane>
+
+      <!-- ---------- ② 规则 ---------- -->
+      <el-tab-pane name="rules">
+        <template #label><span class="seg-label"><i class="seg-step">2</i>规则</span></template>
+
+        <div class="section">
+          <div class="section-head">
+            <h2>分流规则</h2>
+            <span class="count">内置 ACL4SSR</span>
+          </div>
+
+          <div class="stack">
+            <article v-for="r in ruleOptions" :key="r.value"
+                     class="card pick" :class="{ selected: acl === r.value }"
+                     @click="selectRule(r.value)">
+              <span class="check check-lg" :class="{ on: acl === r.value }" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4"
+                     stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7" /></svg>
+              </span>
+              <div class="pick-body">
+                <div class="pick-title">
+                  <span>{{ r.label }}</span>
+                  <span class="chip chip-accent" v-if="acl === r.value">当前</span>
+                </div>
+                <p class="pick-desc">{{ r.desc }}</p>
+                <div class="pick-chips">
+                  <span class="chip chip-ghost" v-for="t in r.tags" :key="t">{{ t }}</span>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <p class="footnote">
+            规则文本随页面内置，无需机场提供规则链接；其中 <code>GEOIP,CN</code> 直连使用 sing-box 远程 geoip-cn 规则集。
+          </p>
+          <p class="footnote" v-if="rulesHint" :class="rulesHintType === 'ok' ? 'is-ok' : 'is-danger'">{{ rulesHint }}</p>
+        </div>
+      </el-tab-pane>
+
+      <!-- ---------- ③ 导出 ---------- -->
+      <el-tab-pane name="export">
+        <template #label><span class="seg-label"><i class="seg-step">3</i>导出</span></template>
+
+        <div class="section">
+          <!-- Generate -->
+          <div class="card action-card">
+            <div class="action-info">
+              <h2>生成配置</h2>
+              <p v-if="enabledSubs.length">
+                将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），
+                按「{{ aclName }}」生成完整 sing-box 配置。
+              </p>
+              <p v-else class="is-danger">还没有参与导出的订阅。请到「订阅」页添加并启用要合并的订阅源。</p>
             </div>
-          </template>
-          <div class="muted" style="font-size:12px;line-height:1.6">
-            把这个地址填进客户端一次即可：之后你在「订阅」页点「刷新」，客户端再来拉取时拿到的就是最新节点。
-            默认按客户端的 User-Agent 自动判断格式，也可以固定成某一个客户端。
+            <button class="btn btn-primary btn-lg" type="button"
+                    :disabled="!enabledSubs.length || generating" @click="generate">
+              <!-- Same DOM-compilation rule as the theme toggle above. -->
+              <el-icon :class="{ spin: generating }">
+                <component :is="generating ? 'Loading' : 'MagicStick'" />
+              </el-icon>
+              {{ generating ? '生成中…' : '生成配置' }}
+            </button>
           </div>
-          <el-row :gutter="16" style="margin-top:12px">
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="对外地址（留空用当前浏览器地址）" size="small">
-                <el-input v-model="publicUrlInput" placeholder="http://150.158.78.150" @input="onPublicUrlInput" @blur="flushPublicUrl" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="客户端类型" size="small">
-                <el-select v-model="exportTarget" @change="onTargetChange" style="width:100%"
-                  placeholder="自动识别客户端（按 User-Agent）">
-                  <el-option :value="''" label="自动识别客户端（按 User-Agent）"></el-option>
-                  <el-option v-for="t in targets" :key="t.id" :value="t.id" :label="t.label" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <div v-if="publicUrlHint" :class="publicUrlHintType === 'ok' ? 'status-ok' : publicUrlHintType === 'err' ? 'status-err' : 'muted'" style="font-size:12px;margin-bottom:8px">
-            {{ publicUrlHint }}
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-            <el-input :model-value="fullSubUrl" readonly style="flex:1;min-width:240px"></el-input>
-            <el-button size="small" @click="copyText(fullSubUrl)"><el-icon><DocumentCopy /></el-icon></el-button>
-            <el-button size="small" @click="showQr(fullSubUrl)"><el-icon><Iphone /></el-icon> QR</el-button>
-            <el-button size="small" type="warning" plain @click="rotateToken"><el-icon><Key /></el-icon> 轮换密钥</el-button>
-          </div>
-          <div v-if="exportSubHint" class="muted" style="font-size:12px;margin-top:6px">{{ exportSubHint }}</div>
-        </el-card>
+          <p class="footnote" v-if="genStatus"
+             :class="genStatusType === 'ok' ? 'is-ok' : genStatusType === 'err' ? 'is-danger' : ''">{{ genStatus }}</p>
 
-        <!-- LAN Sharing -->
-        <el-card v-if="lanIps.length" style="margin-top:16px">
-          <template #header>
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span style="font-weight:600;font-size:15px">局域网分享</span>
-              <el-tag size="small" effect="dark" round>同一 Wi-Fi 下的设备可导入</el-tag>
-            </div>
-          </template>
-          <div class="muted" style="font-size:12px;margin-bottom:8px">以下地址可在局域网内其他设备上使用。</div>
-          <div v-for="iface in lanIps" :key="iface.name" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px">
-            <code class="mono" style="flex:1;font-size:12px;word-break:break-all">{{ iface.name }}: {{ iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : '') }}</code>
-            <el-button size="small" @click="copyText(iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : ''))">复制</el-button>
-            <el-button size="small" @click="showQr(iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : ''))">QR</el-button>
-          </div>
-        </el-card>
+          <!-- Result -->
+          <div class="card result-card" v-if="last">
+            <el-alert v-if="allWarnings.length" type="warning" :closable="false" show-icon>
+              <template #title>注意</template>
+              <template #default>
+                <div v-for="(w, i) in allWarnings" :key="i" style="font-size:12px;margin-top:2px">· {{ w }}</div>
+              </template>
+            </el-alert>
 
-        <!-- Help -->
-        <el-collapse style="margin-top:16px">
-          <el-collapse-item title="如何使用这份配置" name="help">
-            <div style="font-size:13px;line-height:1.7;color:#64748b">
-              生成产物是一份完整的 <code class="mono">sing-box</code> 配置 JSON。
-              <ul style="margin:8px 0;padding-left:20px">
-                <li><b>GUI 客户端</b>：把下载的 <code class="mono">singbox-config.json</code> 作为配置文件导入。</li>
-                <li><b>命令行</b>：保存为 <code class="mono">config.json</code> 后运行 <code class="mono">sing-box run -c config.json</code>。</li>
-                <li>配置按客户端形态生成：开 TUN 接管并带 DNS 骨架，需给 sing-box 相应的系统权限。</li>
-                <li>ACL4SSR 会生成 🚀 节点选择 / ♻️ 自动选择 / 各地区组等策略组。</li>
-                <li>国内 IP 直连依赖 sing-box 启动时拉取 <code class="mono">geoip-cn</code> 规则集。</li>
-              </ul>
-              订阅与凭据保存在服务端数据文件（<code class="mono">{{ dataPath || 'singbox-web.data.json' }}</code>）里。
-              <b>任何拿到订阅地址的人都能取到你的全部节点</b>，需要对外请套 HTTPS 反向代理。
+            <el-tabs v-model="activeOutTab" class="seg seg-sm" @tab-change="onOutTabChange">
+              <el-tab-pane label="节点" name="node">
+                <div class="section">
+                  <div class="filters" v-if="regionList.length > 1">
+                    <button class="chip-filter" type="button" :class="{ on: !regionFilter }" @click="regionFilter = ''">
+                      全部 <b>{{ filteredNodes.length }}</b>
+                    </button>
+                    <button class="chip-filter" type="button" v-for="r in regionList" :key="r.code"
+                            :class="{ on: regionFilter === r.code }" @click="regionFilter = r.code">
+                      {{ r.code }} <b>{{ r.count }}</b>
+                    </button>
+                  </div>
+                  <el-table :data="displayNodes" size="small" max-height="460">
+                    <el-table-column label="协议" width="86">
+                      <template #default="{ row }">
+                        <span class="chip chip-proto" :class="'p-' + familyOf(row.type)">{{ abbrOf(row.type) }}</span>
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="tag" label="标签" min-width="150"></el-table-column>
+                    <el-table-column prop="server" label="服务器" min-width="130">
+                      <template #default="{ row }"><span class="mono muted">{{ row.server || '—' }}</span></template>
+                    </el-table-column>
+                    <el-table-column prop="port" label="端口" width="76">
+                      <template #default="{ row }"><span class="mono muted num">{{ row.port || '—' }}</span></template>
+                    </el-table-column>
+                    <el-table-column label="地区" width="80">
+                      <template #default="{ row }">
+                        <span class="chip chip-region" v-if="countryOf(row.tag)">{{ countryOf(row.tag).code }}</span>
+                        <span class="muted" v-else>—</span>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="类别" width="92">
+                      <template #default="{ row }">
+                        <span class="chip" :class="row.kind === 'endpoint' ? 'chip-warn' : 'chip-ghost'">{{ row.kind }}</span>
+                      </template>
+                    </el-table-column>
+                    <el-table-column v-if="hasPing" label="延迟" width="106">
+                      <template #default="{ row }">
+                        <span class="latency-cell" :style="{ color: getLatencyColor(row) }">
+                          <span class="dot" :style="{ background: getLatencyColor(row) }"></span>
+                          {{ getLatencyText(row) }}
+                        </span>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </div>
+              </el-tab-pane>
+
+              <el-tab-pane label="地图" name="map">
+                <div class="map-box" style="height:360px">
+                  <canvas ref="worldMapCanvas" width="800" height="400"></canvas>
+                </div>
+                <div class="map-legend">
+                  <span><i class="dot" style="background:var(--ok)"></i>快 (&lt;200ms)</span>
+                  <span><i class="dot" style="background:var(--warn)"></i>中 (200-500ms)</span>
+                  <span><i class="dot" style="background:var(--danger)"></i>慢 (&gt;500ms)</span>
+                  <span><i class="dot" style="background:var(--idle)"></i>超时</span>
+                  <span><i class="dot" style="background:var(--accent)"></i>未测试</span>
+                </div>
+              </el-tab-pane>
+
+              <el-tab-pane label="配置 JSON" name="cfg">
+                <pre class="code-block">{{ cfgJson }}</pre>
+              </el-tab-pane>
+            </el-tabs>
+
+            <div class="result-actions">
+              <button class="btn btn-sm" type="button" @click="copyConfig">
+                <el-icon><document-copy /></el-icon> 复制完整配置
+              </button>
+              <button class="btn btn-sm" type="button" @click="downloadConfig">
+                <el-icon><download /></el-icon> 下载 JSON
+              </button>
+              <button class="btn btn-sm" type="button" :disabled="pingRunning" @click="pingNodes">
+                <el-icon :class="{ spin: pingRunning }"><connection /></el-icon>
+                {{ pingRunning ? '测试中…' : '延迟测试' }}
+              </button>
+              <span class="spacer"></span>
+              <span class="footnote" v-if="pingStatus"
+                    :class="pingStatusType === 'ok' ? 'is-ok' : pingStatusType === 'err' ? 'is-danger' : ''">{{ pingStatus }}</span>
             </div>
-          </el-collapse-item>
-        </el-collapse>
+          </div>
+
+          <!-- Subscription address -->
+          <div class="card sub-address" v-if="globalSubUrl">
+            <div class="section-head">
+              <h2>订阅地址</h2>
+              <span class="chip chip-accent">填一次，客户端自动跟进</span>
+            </div>
+            <p class="footnote" style="margin:0">
+              把这个地址填进客户端一次即可：之后你在「订阅」页点「刷新」，客户端再来拉取时拿到的就是最新节点。
+              默认按客户端的 User-Agent 自动判断格式，也可以固定成某一个客户端。
+            </p>
+            <el-row :gutter="14">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="对外地址（留空用当前浏览器地址）" size="small">
+                  <el-input v-model="publicUrlInput" placeholder="http://150.158.78.150"
+                            @input="onPublicUrlInput" @blur="flushPublicUrl" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="客户端类型" size="small">
+                  <el-select v-model="exportTarget" @change="onTargetChange" style="width:100%"
+                    placeholder="自动识别客户端（按 User-Agent）">
+                    <el-option :value="''" label="自动识别客户端（按 User-Agent）"></el-option>
+                    <el-option v-for="t in targets" :key="t.id" :value="t.id" :label="t.label" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <p class="footnote" style="margin:0" v-if="publicUrlHint"
+               :class="publicUrlHintType === 'ok' ? 'is-ok' : publicUrlHintType === 'err' ? 'is-danger' : ''">{{ publicUrlHint }}</p>
+            <div class="url-row">
+              <span class="url-value">{{ fullSubUrl }}</span>
+              <button class="btn btn-sm" type="button" @click="copyText(fullSubUrl)">
+                <el-icon><document-copy /></el-icon> 复制
+              </button>
+              <button class="btn btn-sm" type="button" @click="showQr(fullSubUrl)">
+                <el-icon><iphone /></el-icon> QR
+              </button>
+              <button class="btn btn-sm" type="button" @click="rotateToken">
+                <el-icon><key /></el-icon> 轮换密钥
+              </button>
+            </div>
+            <p class="footnote" style="margin:0" v-if="exportSubHint">{{ exportSubHint }}</p>
+          </div>
+
+          <!-- LAN -->
+          <div class="card" v-if="lanIps.length" style="padding:18px 20px">
+            <div class="section-head" style="margin-bottom:6px">
+              <h2>局域网分享</h2>
+              <span class="chip chip-ghost">同一 Wi-Fi 下的设备可导入</span>
+            </div>
+            <div class="lan-row" v-for="iface in lanIps" :key="iface.name">
+              <span class="lan-name">{{ iface.name }}</span>
+              <code>{{ iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : '') }}</code>
+              <button class="btn btn-sm" type="button"
+                      @click="copyText(iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : ''))">复制</button>
+              <button class="btn btn-sm" type="button"
+                      @click="showQr(iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : ''))">QR</button>
+            </div>
+          </div>
+
+          <!-- Help -->
+          <div class="card">
+            <el-collapse>
+              <el-collapse-item title="如何使用这份配置" name="help">
+                <ul>
+                  <li><b>GUI 客户端</b>：把下载的 <code>singbox-config.json</code> 作为配置文件导入。</li>
+                  <li><b>命令行</b>：保存为 <code>config.json</code> 后运行 <code>sing-box run -c config.json</code>。</li>
+                  <li>配置按客户端形态生成：开 TUN 接管并带 DNS 骨架，需给 sing-box 相应的系统权限。</li>
+                  <li>ACL4SSR 会生成 🚀 节点选择 / ♻️ 自动选择 / 各地区组等策略组。</li>
+                  <li>国内 IP 直连依赖 sing-box 启动时拉取 <code>geoip-cn</code> 规则集。</li>
+                </ul>
+                订阅与凭据保存在服务端数据文件（<code>{{ dataPath || 'singbox-web.data.json' }}</code>）里。
+                <b>任何拿到订阅地址的人都能取到你的全部节点</b>，需要对外请套 HTTPS 反向代理。
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+        </div>
       </el-tab-pane>
     </el-tabs>
   </div>
 
-  <!-- QR Dialog -->
-  <el-dialog v-model="qrVisible" title="扫码导入" width="360px" :close-on-click-modal="true" center>
-    <div class="qr-canvas-wrap" style="text-align:center">
+  <!-- ============ Add / edit source dialog ============ -->
+  <el-dialog v-model="showAddForm" width="560px"
+             :title="editingId ? '编辑订阅源' : '添加订阅源'"
+             :close-on-click-modal="false" align-center>
+    <el-form label-position="top">
+      <el-row :gutter="16">
+        <el-col :xs="24" :sm="12">
+          <el-form-item label="名称（便于识别）">
+            <el-input v-model="srcForm.name" placeholder="例如：主机场 A" />
+          </el-form-item>
+        </el-col>
+        <el-col :xs="24" :sm="12">
+          <el-form-item label="类型">
+            <el-radio-group v-model="srcForm.kind">
+              <el-radio-button value="url">远程 URL</el-radio-button>
+              <el-radio-button value="text">订阅文本</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+        </el-col>
+      </el-row>
+      <el-form-item v-if="srcForm.kind === 'url'" label="订阅 URL（保存后点「刷新」抓取）">
+        <el-input v-model="srcForm.url" placeholder="https://example.com/sub?token=…" />
+      </el-form-item>
+      <el-form-item v-else label="订阅内容（vmess:// vless:// ss:// trojan:// 等）">
+        <el-input v-model="srcForm.text" type="textarea" :rows="6" placeholder="粘贴订阅内容…" />
+      </el-form-item>
+      <el-row :gutter="16">
+        <el-col :xs="24" :sm="12">
+          <el-form-item label="抓取 User-Agent（留空 = 内置 Clash UA）">
+            <el-input v-model="srcForm.ua" placeholder="clash.meta/v1.19.23" />
+          </el-form-item>
+        </el-col>
+        <el-col :xs="24" :sm="12">
+          <el-form-item label="抓取超时（ms，留空 = 30000）">
+            <el-input-number v-model="srcForm.timeout" :min="100" :max="300000" placeholder="30000" style="width:100%" />
+          </el-form-item>
+        </el-col>
+      </el-row>
+      <el-form-item>
+        <template #label>附加请求头（每行 <code>Name: Value</code>）</template>
+        <el-input v-model="srcForm.headers" type="textarea" :rows="2" placeholder="Authorization: Bearer xxx" />
+      </el-form-item>
+      <p class="footnote" style="margin:0">{{ srcFormHint }}</p>
+    </el-form>
+    <template #footer>
+      <button class="btn" type="button" @click="closeAddForm">取消</button>
+      <button class="btn btn-primary" type="button" :disabled="savingSource" @click="saveSource">
+        <el-icon :class="{ spin: savingSource }"><loading v-if="savingSource" /></el-icon> 保存
+      </button>
+    </template>
+  </el-dialog>
+
+  <!-- ============ QR dialog ============ -->
+  <el-dialog v-model="qrVisible" title="扫码导入" width="360px" align-center>
+    <div class="qr-wrap">
       <canvas ref="qrCanvas"></canvas>
-    </div>
-    <div style="font-size:11px;color:#64748b;word-break:break-all;text-align:center;max-height:60px;overflow:auto;margin-top:8px">
-      {{ qrUrl }}
+      <div class="qr-url">{{ qrUrl }}</div>
     </div>
     <template #footer>
-      <el-button @click="qrVisible = false">关闭</el-button>
+      <button class="btn" type="button" @click="qrVisible = false">关闭</button>
     </template>
   </el-dialog>
 </div>
@@ -728,7 +1864,22 @@ var CLIENT_PROTOCOLS = {
   "uri":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"]
 };
 
-var STORE = { apiToken:"sbx:apiToken", exportTarget:"sbx:exportTarget", legacySubs:"sbx:subs", legacyEnabled:"sbx:enabledIds", shape:"sbx:shape", acl:"sbx:acl" };
+// Protocol -> identity family and short label. The family picks the colour on
+// chips and tiles; the label is what fits inside a 38px tile.
+var PROTO_FAMILY = {
+  shadowsocks:"ss", shadowsocksr:"ss", ss:"ss",
+  vmess:"vmess", vless:"vless", trojan:"trojan",
+  hysteria:"hysteria", hysteria2:"hysteria", tuic:"tuic",
+  wireguard:"other", anytls:"other", snell:"other", socks:"other", http:"other"
+};
+var PROTO_ABBR = {
+  shadowsocks:"SS", shadowsocksr:"SSR", ss:"SS",
+  vmess:"VM", vless:"VL", trojan:"TJ",
+  hysteria:"HY", hysteria2:"HY2", tuic:"TU",
+  wireguard:"WG", anytls:"AT", snell:"SN", socks:"SK", http:"HT"
+};
+
+var STORE = { apiToken:"sbx:apiToken", exportTarget:"sbx:exportTarget", legacySubs:"sbx:subs", legacyEnabled:"sbx:enabledIds", shape:"sbx:shape", acl:"sbx:acl", theme:"sbx:theme" };
 var ACL_NAME = { "acl4ssr-default":"ACL4SSR 默认", "acl4ssr-full":"ACL4SSR 全分组", "acl4ssr-mini":"ACL4SSR 精简", none:"默认分域模板" };
 
 function lsLoad(key, fb) { try { var v=localStorage.getItem(key); return v?JSON.parse(v):fb; } catch(e){return fb;} }
@@ -760,8 +1911,15 @@ var app = Vue.createApp({
     // Loading state
     var pageLoading = Vue.ref(true);
 
+    // Theme: 'auto' follows the OS, 'light' / 'dark' pin it. The pre-paint
+    // script in <head> has already set the attribute; this only tracks it.
+    var theme = Vue.ref(lsLoad(STORE.theme, 'auto'));
+    var isDark = Vue.ref(document.documentElement.getAttribute('data-theme') === 'dark');
+
     // Preview data (separate from sources to avoid reactivity issues)
     var previewMap = Vue.ref(new Map());
+    // Expanded source cards, by id.
+    var openCards = Vue.ref([]);
 
     // Add/Edit form
     var showAddForm = Vue.ref(false);
@@ -777,6 +1935,7 @@ var app = Vue.createApp({
     var genStatus = Vue.ref('');
     var genStatusType = Vue.ref('');
     var activeOutTab = Vue.ref('node');
+    var regionFilter = Vue.ref('');
 
     // Ping
     var pingResults = Vue.reactive({});
@@ -806,10 +1965,10 @@ var app = Vue.createApp({
     var rulesHint = Vue.ref('');
     var rulesHintType = Vue.ref('');
     var ruleOptions = [
-      { value:'acl4ssr-default', label:'ACL4SSR 默认', desc:'去广告、自动测速，含国外媒体、电报、微软和苹果分流。' },
-      { value:'acl4ssr-full', label:'ACL4SSR 全分组', desc:'最完整分组：流媒体、AI、游戏、音乐，并按节点名自动分出地区组（完整 GFW 列表）。' },
-      { value:'acl4ssr-mini', label:'ACL4SSR 精简', desc:'只保留节点选择、自动选择、全球直连与拦截，策略组最少、规则最省。' },
-      { value:'none', label:'不使用（默认分域模板）', desc:'用内置的国内直连 / 局域网 / 私有地址模板，不引入 ACL4SSR 规则。' }
+      { value:'acl4ssr-default', label:'ACL4SSR 默认', desc:'去广告、自动测速，含国外媒体、电报、微软和苹果分流。', tags:['去广告','自动测速','流媒体','Telegram'] },
+      { value:'acl4ssr-full', label:'ACL4SSR 全分组', desc:'最完整分组：流媒体、AI、游戏、音乐，并按节点名自动分出地区组（完整 GFW 列表）。', tags:['流媒体','AI','游戏','音乐','地区分组'] },
+      { value:'acl4ssr-mini', label:'ACL4SSR 精简', desc:'只保留节点选择、自动选择、全球直连与拦截，策略组最少、规则最省。', tags:['最省规则','4 个策略组'] },
+      { value:'none', label:'不使用（默认分域模板）', desc:'用内置的国内直连 / 局域网 / 私有地址模板，不引入 ACL4SSR 规则。', tags:['内置模板','不引规则'] }
     ];
 
     // Map
@@ -853,6 +2012,50 @@ var app = Vue.createApp({
       return warns;
     });
 
+    // Headline numbers. Node totals come from the per-source count the server
+    // records on refresh, so they are right before anything is generated.
+    // Regions can only come from real node names, so they are counted from
+    // whatever node data exists yet — a generated config, or previews already
+    // loaded — and the metric stays hidden until there is some.
+    var stats = Vue.computed(function() {
+      var enabled = enabledSubs.value;
+      var nodes = 0;
+      enabled.forEach(function(s){ nodes += (s.nodeCount || 0); });
+      var pool = (last.value && last.value.nodes && last.value.nodes.length)
+        ? last.value.nodes
+        : previewNodes();
+      var codes = {};
+      pool.forEach(function(n){ var c = detectCountry(n.tag); if (c) codes[c.code] = true; });
+      return { sources: sources.value.length, enabled: enabled.length, nodes: nodes, regions: Object.keys(codes).length };
+    });
+
+    // The one button in the overview footer points at whatever the next real
+    // step is, rather than always at the same tab.
+    var nextStep = Vue.computed(function() {
+      if (!sources.value.length) return { tab:'subs', label:'添加订阅源' };
+      if (!last.value) return { tab:'export', label:'生成配置' };
+      return { tab:'export', label:'查看结果' };
+    });
+
+    // Region chips over the generated node list.
+    var regionList = Vue.computed(function() {
+      var counts = {};
+      filteredNodes.value.forEach(function(n) {
+        var c = detectCountry(n.tag);
+        if (c) counts[c.code] = (counts[c.code] || 0) + 1;
+      });
+      return Object.keys(counts).sort(function(a, b){ return counts[b] - counts[a]; })
+        .map(function(code){ return { code: code, count: counts[code] }; });
+    });
+    var displayNodes = Vue.computed(function() {
+      if (!regionFilter.value) return filteredNodes.value;
+      var code = regionFilter.value;
+      return filteredNodes.value.filter(function(n) {
+        var c = detectCountry(n.tag);
+        return c && c.code === code;
+      });
+    });
+
     // === API ===
     async function api(method, path, body, isRetry) {
       console.log('[api]', method, path);
@@ -894,20 +2097,6 @@ var app = Vue.createApp({
     }
     function subById(id) { return sources.value.find(function(s){return s.id===id;}) || null; }
     function getSubUrl(s) { return s.subUrl ? (location.origin + s.subUrl) : ''; }
-    function getStatusText(s) {
-      if (s.lastError) return '上次刷新失败：' + (s.lastError.message || s.lastError);
-      if (s.lastUpdatedAt) return s.nodeCount + ' 个节点 · ' + (relativeTime(s.lastUpdatedAt) || s.lastUpdatedAt) + '更新';
-      if (s.lastCheckedAt) return '已检查，内容未变化（' + relativeTime(s.lastCheckedAt) + '）';
-      return '尚未刷新';
-    }
-    function getStatusColor(s) { return s.lastError ? '#f87171' : '#94a3b8'; }
-    function getUsageText(s) {
-      var u=s.usageSummary; if(!u) return '';
-      var parts = u.unlimited ? ['已用 '+formatBytes(u.used)+' · 不限量'] : ['已用 '+formatBytes(u.used)+' / '+formatBytes(u.total)];
-      if(u.daysLeft!=null) parts.push(u.expired?'已到期':'剩余 '+u.daysLeft+' 天');
-      if(u.expireAt) parts.push(u.expireAt.slice(0,10)+' 到期');
-      return parts.join(' · ');
-    }
     function getPreview(id) { return previewMap.value.get(id) || null; }
     function isNodeExcluded(s, tag) { return (s.excludedNodes||[]).indexOf(tag) !== -1; }
     function isAllChecked(s) {
@@ -932,11 +2121,11 @@ var app = Vue.createApp({
     function getLatencyColor(row) {
       var key = latencyKey(row.server, row.port);
       var d = pingResults[key];
-      if (d==null) return '#3b82f6';
-      if (d<0) return '#64748b';
-      if (d<200) return '#34d399';
-      if (d<500) return '#fbbf24';
-      return '#f87171';
+      if (d==null) return cssVar('--accent');
+      if (d<0) return cssVar('--idle');
+      if (d<200) return cssVar('--ok');
+      if (d<500) return cssVar('--warn');
+      return cssVar('--danger');
     }
     function getLatencyText(row) {
       var key = latencyKey(row.server, row.port);
@@ -944,6 +2133,103 @@ var app = Vue.createApp({
       if (d==null) return '-';
       if (d<0) return '超时';
       return d + ' ms';
+    }
+
+    // === Presentation helpers ===
+    function familyOf(kind) { return PROTO_FAMILY[kind] || 'other'; }
+    function abbrOf(kind) { return PROTO_ABBR[kind] || String(kind || '?').slice(0, 3).toUpperCase(); }
+    function countryOf(tag) { return detectCountry(tag); }
+    function previewNodes() {
+      var out = [];
+      previewMap.value.forEach(function(p){ if (p && p.nodes) out = out.concat(p.nodes); });
+      return out;
+    }
+    // The tile shows the source's dominant protocol, so the card is identifiable
+    // by colour before you read the name. With no preview loaded there is
+    // nothing to summarise, and the tile falls back to a link glyph.
+    function topProtocol(s) {
+      var p = getPreview(s.id);
+      if (!p || !p.protocolMap) return null;
+      var best = null, bestN = -1;
+      Object.keys(p.protocolMap).forEach(function(k) {
+        if (p.protocolMap[k] > bestN) { bestN = p.protocolMap[k]; best = k; }
+      });
+      return best;
+    }
+    function hostOf(s) {
+      if (s.kind !== 'url') return '订阅文本';
+      try { return new URL(s.url).host; } catch(e) { return String(s.url || '').slice(0, 60); }
+    }
+    function statusText(s) {
+      if (s.lastError) return '上次刷新失败';
+      if (s.lastUpdatedAt) return (relativeTime(s.lastUpdatedAt) || '') + '更新';
+      if (s.lastCheckedAt) return '内容未变 · ' + (relativeTime(s.lastCheckedAt) || '');
+      return '尚未刷新';
+    }
+    // One usageSummary -> everything the facts row and the bar need, so the text
+    // and the bar can never disagree about the numbers.
+    function usageOf(s) {
+      var u = s.usageSummary; if (!u) return null;
+      var out = {
+        usedText: formatBytes(u.used),
+        totalText: u.unlimited ? null : formatBytes(u.total),
+        daysText: null, soon: false, fraction: null, tone: 'ok'
+      };
+      if (u.daysLeft != null) {
+        out.daysText = u.expired ? '已到期' : (u.daysLeft + ' 天后到期');
+        out.soon = !!u.expired || u.daysLeft <= 7;
+      }
+      if (!u.unlimited && Number(u.total) > 0 && u.used != null) {
+        out.fraction = Math.max(0, Math.min(1, Number(u.used) / Number(u.total)));
+        out.tone = out.fraction >= 0.9 ? 'danger' : out.fraction >= 0.75 ? 'warn' : 'ok';
+      }
+      return out;
+    }
+    // Canvas cannot use CSS, but it can read the computed custom properties, and
+    // every map colour is one. Reading them at draw time is what keeps the map
+    // in step with the theme switch.
+    function cssVar(name) {
+      var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+      return (v || '').trim();
+    }
+
+    // === Theme ===
+    function resolveTheme() {
+      var mode = theme.value;
+      var dark = mode === 'dark' ||
+        (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      isDark.value = dark;
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    }
+    function toggleTheme() {
+      theme.value = isDark.value ? 'light' : 'dark';
+      lsSave(STORE.theme, theme.value);
+      resolveTheme();
+      // The canvas reads its colours from the theme, so it has to be redrawn
+      // rather than merely restyled.
+      Vue.nextTick(function(){ if (last.value) drawWorldMap(); });
+    }
+
+    // === Expanded cards ===
+    function isOpen(id) { return openCards.value.indexOf(id) !== -1; }
+    function toggleCard(id) {
+      var list = openCards.value.slice();
+      var i = list.indexOf(id);
+      if (i >= 0) { list.splice(i, 1); }
+      else {
+        list.push(id);
+        // Expanding is the request to see nodes; making the user then find a
+        // separate 预览 button was a step that only existed because the table
+        // used to be always visible.
+        if (!getPreview(id)) previewSource(id);
+      }
+      openCards.value = list;
+    }
+    function onSourceCommand(cmd, s) {
+      if (cmd === 'edit') openEditForm(s.id);
+      else if (cmd === 'delete') deleteSource(s.id);
+      else if (cmd === 'copy') copyText(publicUrl.value ? (publicUrl.value + s.subUrl) : getSubUrl(s));
+      else if (cmd === 'qr') showQr(publicUrl.value ? (publicUrl.value + s.subUrl) : getSubUrl(s));
     }
 
     // === Data Loading ===
@@ -1019,14 +2305,14 @@ var app = Vue.createApp({
       try { var detail = await api('GET', '/api/subscriptions/'+encodeURIComponent(id)); full = detail.source || s; }
       catch(e) { ElementPlus.ElMessage.error('读取订阅源失败：'+(e.message||e)); return; }
       editingId.value = id;
-      srcForm.name = full.name;
-      srcForm.kind = full.kind;
+      srcForm.name = full.name || '';
+      srcForm.kind = full.kind || 'url';
       srcForm.url = full.kind==='url' ? (full.url||'') : '';
       srcForm.text = full.kind!=='url' ? (full.content||'') : '';
       var ro = full.requestOptions || {};
       srcForm.ua = ro.userAgent || '';
       srcForm.timeout = ro.timeout || null;
-      srcForm.headers = Object.keys(ro.headers||{}).map(function(n){ return n+': '+ro.headers[n]; }).join('\n');
+      srcForm.headers = Object.keys(ro.headers || {}).map(function(k){ return k+': '+ro.headers[k]; }).join('\n');
       srcFormHint.value = '保存后会重新抓取一次，并刷新概况。';
       showAddForm.value = true;
     }
@@ -1119,7 +2405,12 @@ var app = Vue.createApp({
       try {
         var data = await api('GET', '/api/subscriptions/'+encodeURIComponent(id)+'/preview');
         var proto = Object.keys(data.protocols||{}).sort().map(function(p){ return p+' ×'+data.protocols[p]; });
-        setPreview(id, { nodes: data.nodes||[], nodeCount: data.nodeCount||0, _protoStr: proto.join(' · ') });
+        setPreview(id, {
+          nodes: data.nodes||[],
+          nodeCount: data.nodeCount||0,
+          protocolMap: data.protocols||{},
+          _protoStr: proto.join(' · ')
+        });
       } catch(e) { ElementPlus.ElMessage.error('预览失败：'+(e.message||e)); }
     }
 
@@ -1170,7 +2461,7 @@ var app = Vue.createApp({
       if (!p || !p.nodes || to < 0 || to === from || from >= p.nodes.length) return;
       var nodes = p.nodes.slice();
       nodes.splice(to, 0, nodes.splice(from, 1)[0]);
-      setPreview(s.id, { nodes: nodes, nodeCount: p.nodeCount, _protoStr: p._protoStr });
+      setPreview(s.id, { nodes: nodes, nodeCount: p.nodeCount, protocolMap: p.protocolMap, _protoStr: p._protoStr });
     }
     function onNodeDragEnd() { clearDragState(); }
     async function saveNodeSelection(s) {
@@ -1200,6 +2491,12 @@ var app = Vue.createApp({
       // stays blank unless it happened to be the active tab at generate time.
       if (name === 'map') Vue.nextTick(drawWorldMap);
     }
+    function goTab(tab) {
+      if (tab === activeTab.value) return;
+      onTabChange(tab);
+      activeTab.value = tab;
+      if (tab === 'export' && activeOutTab.value === 'map') Vue.nextTick(drawWorldMap);
+    }
 
     // === Export ===
     async function generate() {
@@ -1211,6 +2508,7 @@ var app = Vue.createApp({
           ids: enabledSubs.value.map(function(s){ return s.id; }),
           out: 'config'
         });
+        regionFilter.value = '';
         var removed = 0;
         if (exportTarget.value && last.value.nodes) {
           var supported = CLIENT_PROTOCOLS[exportTarget.value];
@@ -1305,8 +2603,7 @@ var app = Vue.createApp({
       qrUrl.value = text;
       qrVisible.value = true;
       Vue.nextTick(function() {
-        var canvas = worldMapCanvas.value; // use ref
-        var qrCanvas = document.querySelector('.qr-canvas-wrap canvas');
+        var qrCanvas = document.querySelector('.qr-wrap canvas');
         if (!qrCanvas) return;
         if (typeof QRCode !== 'undefined' && QRCode.toCanvas) {
           QRCode.toCanvas(qrCanvas, text, { width: 256, margin: 2, color: { dark:'#1e293b', light:'#ffffff' } }, function(err) {
@@ -1356,12 +2653,21 @@ var app = Vue.createApp({
       var canvas = document.querySelector('.map-box canvas');
       if (!canvas) return;
       bindMapEvents();
+      // Read the theme once per draw and hand the colours down, so a redraw can
+      // never mix a light landmass with a dark background.
+      var C = {
+        bg1: cssVar('--map-bg-1'), bg2: cssVar('--map-bg-2'),
+        grid: cssVar('--map-grid'), land: cssVar('--map-land'),
+        landStroke: cssVar('--map-land-stroke'), label: cssVar('--map-label'),
+        ok: cssVar('--ok'), warn: cssVar('--warn'), danger: cssVar('--danger'),
+        idle: cssVar('--idle'), accent: cssVar('--accent')
+      };
       var ctx = canvas.getContext('2d');
       var w = canvas.width, h = canvas.height;
       var bgGrad = ctx.createLinearGradient(0,0,0,h);
-      bgGrad.addColorStop(0, '#e8eef5');
-      bgGrad.addColorStop(0.5, '#f1f5f9');
-      bgGrad.addColorStop(1, '#e8eef5');
+      bgGrad.addColorStop(0, C.bg1);
+      bgGrad.addColorStop(0.5, C.bg2);
+      bgGrad.addColorStop(1, C.bg1);
       ctx.fillStyle = bgGrad; ctx.fillRect(0,0,w,h);
       ctx.save();
       ctx.translate(w/2+mapPan.x, h/2+mapPan.y);
@@ -1370,18 +2676,18 @@ var app = Vue.createApp({
       function geoToX(lon) { return (lon+180)/360*w; }
       function geoToY(lat) { return (90-lat)/180*h; }
       // Grid
-      ctx.strokeStyle = '#dde4ec'; ctx.lineWidth = 0.5/mapZoom.value;
+      ctx.strokeStyle = C.grid; ctx.lineWidth = 0.5/mapZoom.value;
       for (var lat=-60;lat<=80;lat+=20) { ctx.beginPath(); ctx.moveTo(0,geoToY(lat)); ctx.lineTo(w,geoToY(lat)); ctx.stroke(); }
       for (var lon=-180;lon<=180;lon+=30) { ctx.beginPath(); ctx.moveTo(geoToX(lon),0); ctx.lineTo(geoToX(lon),h); ctx.stroke(); }
       // Continents
-      ctx.fillStyle = '#dbe2eb';
+      ctx.fillStyle = C.land;
       [[[-170,72],[-170,15],[-50,15],[-50,72]],[[-82,15],[-82,-55],[-34,-55],[-34,15]],[[-10,72],[-10,36],[40,36],[40,72]],
        [[-18,37],[-18,-35],[52,-35],[52,37]],[[40,72],[40,0],[150,0],[150,72]],[[95,25],[95,-10],[155,-10],[155,25]],
        [[113,-10],[113,-44],[154,-44],[154,-10]]].forEach(function(coords) {
         ctx.beginPath(); ctx.moveTo(geoToX(coords[0][0]),geoToY(coords[0][1]));
         for(var i=1;i<coords.length;i++) ctx.lineTo(geoToX(coords[i][0]),geoToY(coords[i][1]));
         ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = '#c8d3e0'; ctx.lineWidth = 0.8/mapZoom.value; ctx.stroke();
+        ctx.strokeStyle = C.landStroke; ctx.lineWidth = 0.8/mapZoom.value; ctx.stroke();
       });
       // Nodes
       if (last.value && last.value.nodes) {
@@ -1400,7 +2706,7 @@ var app = Vue.createApp({
         Object.keys(groups).forEach(function(key) {
           var g = groups[key]; var x=geoToX(g.country.lng), y=geoToY(g.country.lat);
           var color; var d=g.delay;
-          if(d==null)color='#3b82f6'; else if(d<0)color='#64748b'; else if(d<200)color='#34d399'; else if(d<500)color='#fbbf24'; else color='#f87171';
+          if(d==null)color=C.accent; else if(d<0)color=C.idle; else if(d<200)color=C.ok; else if(d<500)color=C.warn; else color=C.danger;
           var r = Math.min(12, 4+g.nodes.length*2)/mapZoom.value;
           // Shadow
           ctx.beginPath(); ctx.arc(x,y+1/mapZoom.value,r+1/mapZoom.value,0,Math.PI*2);
@@ -1408,12 +2714,15 @@ var app = Vue.createApp({
           // Marker
           ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
           ctx.fillStyle = color; ctx.fill();
-          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2/mapZoom.value; ctx.stroke();
+          ctx.strokeStyle = C.bg2; ctx.lineWidth = 2/mapZoom.value; ctx.stroke();
           ctx.font = 'bold '+(11/mapZoom.value)+'px system-ui, sans-serif'; ctx.textAlign = 'center';
-          // Label shadow for readability
-          ctx.fillStyle = 'rgba(255,255,255,0.8)';
+          // Label gets a halo in the background colour so it stays readable over
+          // land in either theme.
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = C.bg2;
           ctx.fillText(g.country.code+' ('+g.nodes.length+')', x+0.5/mapZoom.value, y-r-3.5/mapZoom.value);
-          ctx.fillStyle = '#1e293b';
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = C.label;
           ctx.fillText(g.country.code+' ('+g.nodes.length+')', x, y-r-4/mapZoom.value);
         });
       }
@@ -1423,7 +2732,18 @@ var app = Vue.createApp({
     Vue.onMounted(function() {
       // Everything below is the start-up path: no early return here, or a
       // missing map canvas would skip loadSubs() and leave the page inert.
+      resolveTheme();
       bindMapEvents();
+
+      // Follow the OS while the theme is on 'auto'.
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      var onSchemeChange = function() {
+        if (theme.value !== 'auto') return;
+        resolveTheme();
+        if (last.value) drawWorldMap();
+      };
+      if (mq.addEventListener) mq.addEventListener('change', onSchemeChange);
+      else if (mq.addListener) mq.addListener(onSchemeChange);
 
       // Visibility change flush
       document.addEventListener('visibilitychange', function() {
@@ -1480,23 +2800,26 @@ var app = Vue.createApp({
 
     return {
       activeTab, sources, targets, globalSubUrl, publicUrl, dataPath, settings, acl,
+      theme, isDark, toggleTheme,
       showAddForm, editingId, savingSource, srcFormHint, srcForm,
       exportTarget, last, generating, genStatus, genStatusType, activeOutTab,
+      regionFilter, regionList, displayNodes,
       pingResults, pingRunning, pingStatus, pingStatusType,
-      pageLoading, previewMap, getPreview,
+      pageLoading, previewMap, getPreview, openCards, isOpen, toggleCard, onSourceCommand,
       refreshingIds, refreshingAll, togglingId,
       qrVisible, qrUrl, worldMapCanvas,
       publicUrlInput, publicUrlHint, publicUrlHintType, exportSubHint,
       lanIps, rulesHint, rulesHintType, ruleOptions,
       enabledSubs, aclName, filteredNodes, hasPing, cfgJson, fullSubUrl, allWarnings,
-      onTabChange, onOutTabChange, openAddForm, openEditForm, closeAddForm, saveSource, deleteSource,
+      stats, nextStep,
+      familyOf, abbrOf, countryOf, topProtocol, hostOf, statusText, usageOf,
+      onTabChange, onOutTabChange, goTab, openAddForm, openEditForm, closeAddForm, saveSource, deleteSource,
       refreshOne, refreshAll, toggleEnabled, previewSource, saveNodeSelection,
       onNodeDragStart, onNodeDragOver, onNodeDrop, onNodeDragEnd,
       isNodeExcluded, isAllChecked, toggleNodeCheck, toggleCheckAll,
       selectRule, generate, copyConfig, downloadConfig, pingNodes,
       onPublicUrlInput, flushPublicUrl, onTargetChange, rotateToken,
-      showQr, copyText, getSubUrl, getStatusText, getStatusColor, getUsageText,
-      getLatencyColor, getLatencyText
+      showQr, copyText, getSubUrl, getLatencyColor, getLatencyText
     };
   }
 });

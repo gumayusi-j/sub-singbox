@@ -1,0 +1,17 @@
+<!-- Tab icon: one subscription fanning out into many nodes, in the page accent.
+     Served from public/ like every other asset so the page keeps its "no
+     external fetch" guarantee; static.embedded.js inlines it for the
+     single-file build. Strokes stay thick so the mark survives 16px. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="9" fill="#2f6bff"/>
+  <g stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M16 7v8"/>
+    <path d="M16 15l-6.5 6.5"/>
+    <path d="M16 15l6.5 6.5"/>
+  </g>
+  <g fill="#ffffff">
+    <circle cx="16" cy="6.5" r="2.9"/>
+    <circle cx="9" cy="22" r="2.9"/>
+    <circle cx="23" cy="22" r="2.9"/>
+  </g>
+</svg>

@@ -10,9 +10,13 @@ import vueJs from "./public/vendor/vue.global.prod.js";
 import elementPlusJs from "./public/vendor/element-plus.full.min.js";
 import elementPlusIconsJs from "./public/vendor/element-plus-icons.iife.min.js";
 import qrcodeJs from "./public/vendor/qrcode.min.js";
+// Plain text, not a library: the page's tab icon. Kept in the same map so the
+// bundle stays self-contained and the page never reaches outside for it.
+import faviconSvg from "./public/favicon.svg";
 
 const ASSETS = {
     "/index.html": html,
+    "/favicon.svg": faviconSvg,
     "/vendor/element-plus.css": elementPlusCss,
     "/vendor/vue.global.prod.js": vueJs,
     "/vendor/element-plus.full.min.js": elementPlusJs,
