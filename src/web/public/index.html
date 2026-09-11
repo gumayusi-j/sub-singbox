@@ -584,6 +584,34 @@ a:focus-visible,
 .check-lg svg { width: 16px; height: 16px; }
 .check:disabled { opacity: 0.5; cursor: default; }
 
+/* The enable control, label and all.
+   The ring alone is Tower's checkbox, but Tower draws it inside an iOS list
+   where a filled circle beside a row is a familiar switch. On the web nothing
+   announces that a ring is a control - the only hint was a title tooltip, and
+   "does this subscription count?" is the single most important thing on this
+   row. So the ring stays as the mark and the word 启用 carries the meaning. */
+.enable {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 10px 0 3px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background var(--select) var(--ease), color var(--select) var(--ease),
+              transform var(--press-out) var(--ease);
+}
+.enable:hover { background: var(--surface-2); }
+.enable:hover .check { border-color: var(--text-3); }
+.enable:active { transform: scale(0.97); }
+.enable:disabled { opacity: 0.5; cursor: default; }
+.enable.on { color: var(--accent); }
+.enable-label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+
 /* ==========================================================================
    7. Overview card
    The page's one piece of chrome that earns its space: the numbers you would
@@ -1376,7 +1404,10 @@ pre.code-block {
                   <el-icon v-else><tickets /></el-icon>
                 </span>
 
+                <!-- title: the name ellipsises on a narrow screen, and the
+                     enable control takes 72px of the row. -->
                 <button class="source-title" type="button" @click="toggleCard(s.id)"
+                        :title="s.name"
                         :aria-expanded="isOpen(s.id) ? 'true' : 'false'">
                   <span class="title-line">
                     <span class="name">{{ s.name }}</span>
@@ -1386,17 +1417,20 @@ pre.code-block {
                   <span class="subline mono">{{ hostOf(s) }}</span>
                 </button>
 
-                <button class="check" type="button" role="switch"
+                <button class="enable" type="button" role="switch"
                         :class="{ on: s.enabled }"
                         :aria-checked="s.enabled ? 'true' : 'false'"
                         :disabled="togglingId === s.id"
-                        :title="s.enabled ? '已参与导出，点击停用' : '未参与导出，点击启用'"
+                        :title="s.enabled ? '点击停用：停用后不参与导出' : '点击启用：启用后合并进导出配置'"
                         @click="toggleEnabled(s, !s.enabled)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4"
-                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M5 12.5l4.5 4.5L19 7" />
-                  </svg>
-                  <span class="sr-only">启用 {{ s.name }}</span>
+                  <span class="check" :class="{ on: s.enabled }" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4"
+                         stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M5 12.5l4.5 4.5L19 7" />
+                    </svg>
+                  </span>
+                  <span class="enable-label">启用</span>
+                  <span class="sr-only">{{ s.name }}</span>
                 </button>
 
                 <button class="chev" type="button" :class="{ open: isOpen(s.id) }"
@@ -1574,14 +1608,22 @@ pre.code-block {
                 将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），
                 按「{{ aclName }}」生成完整 sing-box 配置。
               </p>
-              <p v-else class="is-danger">还没有参与导出的订阅。请到「订阅」页添加并启用要合并的订阅源。</p>
+              <p v-else>
+                还没有订阅参与导出。到「订阅」页把要合并的订阅源点成<b>「启用」</b>即可。
+              </p>
             </div>
-            <button class="btn btn-primary btn-lg" type="button"
-                    :disabled="!enabledSubs.length || generating" @click="generate">
+            <!-- With nothing enabled the primary action is the thing that
+                 actually unblocks you, rather than a disabled 生成配置 that
+                 only says what is missing. -->
+            <button v-if="!enabledSubs.length" class="btn btn-primary btn-lg" type="button"
+                    @click="goTab('subs')">
+              <el-icon><arrow-left /></el-icon> 去选择订阅源
+            </button>
+            <button v-else class="btn btn-primary btn-lg" type="button"
+                    :disabled="generating" @click="generate">
               <!-- Same DOM-compilation rule as the theme toggle above. -->
-              <el-icon :class="{ spin: generating }">
-                <component :is="generating ? 'Loading' : 'MagicStick'" />
-              </el-icon>
+              <el-icon v-if="generating" class="spin"><loading /></el-icon>
+              <el-icon v-else><magic-stick /></el-icon>
               {{ generating ? '生成中…' : '生成配置' }}
             </button>
           </div>
@@ -2057,6 +2099,9 @@ var app = Vue.createApp({
     // step is, rather than always at the same tab.
     var nextStep = Vue.computed(function() {
       if (!sources.value.length) return { tab:'subs', label:'添加订阅源' };
+      // Pointing at the export tab while nothing is enabled just walks the user
+      // into a message telling them to come back here.
+      if (!enabledSubs.value.length) return { tab:'subs', label:'选择订阅源' };
       if (!last.value) return { tab:'export', label:'生成配置' };
       return { tab:'export', label:'查看结果' };
     });
