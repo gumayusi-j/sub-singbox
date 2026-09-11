@@ -7,16 +7,32 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>singbox-kit · 订阅 → 选择规则 → 导出 sing-box</title>
+<!--
+  The front-end libraries are vendored under public/vendor/ and served from this
+  origin. They used to come from cdn.jsdelivr.net, which made the whole page
+  hostage to a third party: the server that hands out the config routinely runs
+  somewhere jsdelivr is slow or blocked, and a failed fetch left a blank page.
+
+  To upgrade, fetch the pinned URLs below into public/vendor/, keep the local
+  file names, and bump the version in this comment:
+    vue@3.5.13                       dist/vue.global.prod.js
+    element-plus@2.9.1               dist/index.css
+    element-plus@2.9.1               dist/index.full.min.js
+    @element-plus/icons-vue@2.3.1    dist/index.iife.min.js
+    qrcode@1.5.1                     build/qrcode.min.js
+  Each file is ~/npm/<package>/<path> on cdn.jsdelivr.net. Vue must stay first:
+  Element Plus reads the global it installs.
+-->
 <!-- Vue 3 -->
-<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+<script src="/vendor/vue.global.prod.js"></script>
 <!-- Element Plus Light Theme -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.9.1/dist/index.css">
+<link rel="stylesheet" href="/vendor/element-plus.css">
 <!-- Element Plus -->
-<script src="https://cdn.jsdelivr.net/npm/element-plus@2.9.1/dist/index.full.min.js"></script>
+<script src="/vendor/element-plus.full.min.js"></script>
 <!-- Element Plus Icons -->
-<script src="https://cdn.jsdelivr.net/npm/@element-plus/icons-vue@2.3.1/dist/index.iife.min.js"></script>
+<script src="/vendor/element-plus-icons.iife.min.js"></script>
 <!-- QR Code -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+<script src="/vendor/qrcode.min.js"></script>
 <style>
   :root {
     color-scheme: light;

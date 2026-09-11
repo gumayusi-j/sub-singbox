@@ -3,6 +3,7 @@
 // bundled, the UI page (public/index.html) inlined, so it runs with a bare
 // `node dist/singbox-kit-web.js --port 9000` (no @babel/register/preload).
 import { build } from "esbuild";
+import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url)); // project root
@@ -55,6 +56,21 @@ await build({
                 build.onResolve({ filter: /^\.\/static$/ }, () => ({
                     path: ROOT + "src/web/static.embedded.js",
                 }));
+            },
+        },
+        {
+            name: "vendor-text",
+            setup(build) {
+                // The vendored front-end libraries are inlined as text so the
+                // output stays a single self-contained file. Filtering on the
+                // resolved path keeps ordinary .js/.css imports out of this.
+                build.onLoad(
+                    { filter: /[\\/]public[\\/]vendor[\\/][^\\/]+\.(js|css)$/ },
+                    (args) => ({
+                        contents: readFileSync(args.path, "utf8"),
+                        loader: "text",
+                    }),
+                );
             },
         },
     ],

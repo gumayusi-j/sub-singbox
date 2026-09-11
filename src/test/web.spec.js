@@ -105,6 +105,26 @@ describe("singbox-kit web API", function () {
         expect(html).to.include("bindMapEvents");
     });
 
+    it("serves every front-end library itself instead of leaning on a CDN", async function () {
+        // The libraries used to come from cdn.jsdelivr.net, which made the page
+        // hostage to a third party: the server that hands out the config often
+        // runs somewhere jsdelivr is slow or blocked, and a fetch that never
+        // lands leaves a blank page with no way to tell why. Every asset the
+        // page asks for has to come from this server, and has to exist.
+        const html = await (await fetch(base + "/")).text();
+        const urls = [
+            ...html.matchAll(/<script[^>]+src="([^"]+)"/g),
+            ...html.matchAll(/<link[^>]+href="([^"]+)"/g),
+        ].map((m) => m[1]);
+        expect(urls.length, "页面应引用脚本/样式").to.be.greaterThan(0);
+        expect(urls.filter((u) => !u.startsWith("/")), "仍存在外部地址")
+            .to.deep.equal([]);
+        for (const url of urls) {
+            const resp = await fetch(base + url);
+            expect(resp.status, url + " 应能由服务端提供").to.equal(200);
+        }
+    });
+
     it("returns 404 for unknown static paths", async function () {
         const resp = await fetch(base + "/nope.css");
         expect(resp.status).to.equal(404);
