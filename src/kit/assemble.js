@@ -7,7 +7,8 @@ import {
     defaultExperimental,
     localDnsTag,
 } from "./defaults";
-import { toSingboxRule, foldSingboxRules, isSupportedType } from "./rules/singbox";
+import { toRouteRule, foldSingboxRules } from "./rules/singbox";
+import { defaultsToDirect, projectDnsRules } from "./dns-policy";
 import { applyClashModes } from "./modes";
 import { migrateConfig, CompatError } from "./compat";
 
@@ -115,21 +116,15 @@ function addSystemOutbounds(existing, options) {
 // Normalize a single provided rule into a sing-box route rule object. Returns
 // null for a rule whose matcher this target cannot express, so the caller can
 // drop it and report the omission instead of emitting a rule that never fires.
+//
+// Every rule source funnels through the shared dispatcher so a raw line, a
+// parsed condition, a descriptor object and a ready-made matcher all behave
+// the same wherever they arrive from. The condition tree case is what makes a
+// logical rule safe here: an AND tree has no `content`, so without it the rule
+// would fall through to the "already a matcher" branch below and land in
+// route.rules as an object sing-box refuses to start on.
 function normalizeProvidedRule(rule, defaultOutbound, options) {
-    if (typeof rule === "string") {
-        const parts = rule.split(",").map((p) => p.trim());
-        if (!isSupportedType(parts[0], options)) return null;
-        const outbound = parts[2] || defaultOutbound;
-        return toSingboxRule({ type: parts[0], content: parts[1] }, outbound);
-    }
-    if (!isPlainObject(rule)) return rule;
-    if (rule.type && rule.content !== undefined) {
-        // internal descriptor { type, content, outbound? }
-        if (!isSupportedType(rule.type, options)) return null;
-        return toSingboxRule(rule, rule.outbound || defaultOutbound);
-    }
-    // already a sing-box matcher, e.g. { ip_is_private: true, outbound: "direct" }
-    return rule;
+    return toRouteRule(rule, defaultOutbound, options);
 }
 
 function normalizeProvidedRules(rules, defaultOutbound, options) {
@@ -144,6 +139,22 @@ function normalizeProvidedRules(rules, defaultOutbound, options) {
         out.push(normalized);
     }
     return out;
+}
+
+// Clash-mode DNS branches sit first and are unconditional when their mode is
+// active, so anything projected from a destination rule has to land behind
+// them - otherwise a direct-routed domain would resolve locally even under
+// 全局代理.
+function insertAfterClashModes(rules, inserted) {
+    let index = 0;
+    while (
+        index < rules.length &&
+        isPlainObject(rules[index]) &&
+        rules[index].clash_mode !== undefined
+    ) {
+        index += 1;
+    }
+    return rules.slice(0, index).concat(inserted, rules.slice(index));
 }
 
 // Merge caller-supplied overrides after all defaults have been applied so
@@ -293,6 +304,30 @@ export default function assemble(parsed, options) {
             localDnsTag: localTag,
             remoteDnsTag: remoteDns ? remoteDns.tag : null,
         });
+    }
+
+    // A caller-supplied rule that routes a domain direct needs the resolver to
+    // agree, or a nearby connection gets an answer from the far side of the
+    // proxy. Same projection the ACL builder does; only the destination rules
+    // carry domain matchers, so it stays a short list.
+    //
+    // It goes after the clash-mode branches: under 全局代理 a direct-routed
+    // domain still has to resolve through the proxy.
+    if (
+        !options.dns &&
+        isPlainObject(config.dns) &&
+        Array.isArray(config.dns.rules) &&
+        dnsHasServer(config.dns, "local")
+    ) {
+        const projected = projectDnsRules(config.route.rules, configOutbounds, {
+            localServer: "local",
+        });
+        if (projected.length > 0) {
+            config.dns.rules = insertAfterClashModes(config.dns.rules, projected);
+        }
+        if (defaultsToDirect(config.route.final, configOutbounds)) {
+            config.dns.final = "local";
+        }
     }
 
     applyExtras(config, options);

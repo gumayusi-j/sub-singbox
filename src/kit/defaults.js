@@ -144,13 +144,23 @@ export function defaultLog(options) {
     };
 }
 
+// The tunnel's IPv6 address, written out rather than borrowed from sing-box's
+// default so a core update cannot change it underneath a saved profile.
+export const IPV6_TUN_ADDRESS = "fdfe:dcba:9876::1/126";
+
 // The one inbound Tower emits: a TUN that takes over system traffic. The field
 // overrides are for callers tuning the interface, not for picking a different
 // shape - a loopback mixed inbound used to be reachable from here and is gone.
 export function defaultInbounds(options) {
     options = options || {};
-    const rawAddress =
-        options.tunAddress || options.inet4_address || ["172.19.0.1/30"];
+    // The tunnel address and the DNS strategy have to agree: declaring a v6
+    // address while resolving v4-only (or the reverse) is how a client ends up
+    // with a route it cannot actually use. Both follow options.ipv6Enabled.
+    const defaultAddress =
+        options.ipv6Enabled === true
+            ? ["172.19.0.1/30", IPV6_TUN_ADDRESS]
+            : ["172.19.0.1/30"];
+    const rawAddress = options.tunAddress || options.inet4_address || defaultAddress;
     const address = Array.isArray(rawAddress)
         ? rawAddress.slice()
         : [String(rawAddress)];
@@ -217,7 +227,7 @@ export function defaultDns(options) {
             { action: "route", server: "local", rule_set: "geosite-geolocation-cn" },
         ],
         final: "google",
-        strategy: options.dnsStrategy || "ipv4_only",
+        strategy: options.dnsStrategy || (options.ipv6Enabled === true ? "prefer_ipv4" : "ipv4_only"),
         // Preserve DNS answer metadata so TUN connections addressed only by
         // IP can still match the domain rules that originally routed them.
         reverse_mapping: true,

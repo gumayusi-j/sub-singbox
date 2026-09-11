@@ -101,6 +101,28 @@ describe("ACL4SSR presets", function () {
         assertReferencesResolve(config);
     });
 
+    // The parser rewrite must not cost the folding pass. A snapshot holds
+    // ~10k rule lines; if a matcher field ever came out array-valued at the
+    // top level, foldSingboxRules would refuse every one of them and the
+    // config would carry one route rule per line.
+    it("keeps every preset's rule list folded and free of parser artefacts", function () {
+        const sizes = { "acl4ssr-mini": 11, "acl4ssr-default": 16, "acl4ssr-full": 26 };
+        for (const [id, expected] of Object.entries(sizes)) {
+            const config = assembleAcl(parsed(), { aclPreset: id });
+            expect(config.route.rules.length, id).to.equal(expected);
+            const blob = JSON.stringify(config.route.rules);
+            // `no-resolve` is parsed now but has no sing-box equivalent, so it
+            // must not reach the output under any spelling.
+            expect(blob, id).to.not.match(/no[-_]resolve/i);
+            expect(blob, id).to.not.contain("undefined");
+            // A reject policy word is an action, never an outbound tag.
+            for (const rule of config.route.rules) {
+                expect(String(rule.outbound || ""), id).to.not.match(/^REJECT/i);
+            }
+            assertReferencesResolve(config);
+        }
+    });
+
     it("always reaches the final group even when no region matches", function () {
         const config = assembleAcl(parsed(["随便一个节点"]), {
             aclPreset: "acl4ssr-full",

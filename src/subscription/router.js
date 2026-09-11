@@ -15,8 +15,44 @@ import { refreshMany, refreshSource } from "./refresh";
 import { renderSubscription, isNotModified } from "./render";
 import { resolveTarget, listTargets, listExportTargets } from "./targets";
 import { usageSummary } from "./usage";
-import { parseNodes } from "../kit/convert";
-import { findPreset } from "../kit/acl4ssr/build";
+import { parseNodes, downloadText } from "../kit/convert";
+import { findScheme, normalizeScheme, schemeFromImport, CUSTOM_PREFIX, MAX_SCHEMES } from "../kit/schemes";
+import { normalizeNodeFilter } from "../kit/nodes/filter";
+import { importRules } from "../kit/rules/import";
+import crypto from "crypto";
+
+// What the rules page shows after an import. The counts are the honest part -
+// a rule the target cannot express is dropped, and saying so is the difference
+// between "imported" and "imported the half of it that fit".
+function importReport(imported) {
+    return {
+        format: imported.format,
+        rules: imported.stats.rules,
+        skipped: imported.stats.skipped,
+        groups: imported.groups.length,
+        final: imported.final,
+        droppedByType: imported.stats.droppedByType,
+        warnings: imported.warnings.slice(0, 20),
+    };
+}
+
+// A name for an import that the user did not name. The source's own label
+// where there is one, and never embellished - a plain name stays plain.
+function defaultSchemeName(imported, url) {
+    if (typeof url === "string" && url !== "") {
+        try {
+            const parsed = new URL(url);
+            const last = parsed.pathname.split("/").filter(Boolean).pop();
+            if (last) return last.slice(0, 80);
+            if (parsed.hostname) return parsed.hostname.slice(0, 80);
+        } catch (_e) {
+            // Fall through to the format-based name.
+        }
+    }
+    if (imported.format === "mihomo") return "导入的 Clash 规则";
+    if (imported.format === "surge") return "导入的 Surge 规则";
+    return "导入的规则";
+}
 
 const API_ROOT = "/api/subscriptions";
 const SUB_ROOT = "/sub/";
@@ -30,7 +66,7 @@ const SUB_ROOT = "/sub/";
 // the response shape (a full config versus a bare outbounds fragment), so a
 // stray "outbounds" saved here would silently strip every client's config down
 // to that fragment, with no way back from the URL.
-const SETTINGS_KEYS = ["aclPreset"];
+const SETTINGS_KEYS = ["aclPreset", "nodeFilter", "ipv6Enabled"];
 
 // The options a client-visible render is made from: the saved server-side
 // defaults first, then whatever the caller overrides. /sub/<token> and
@@ -61,11 +97,19 @@ function renderOptionsFor(store, overrides) {
 // besides it (run shape, mixed fallback, inbound port, remote DNS, extra
 // rules) is either Tower's default or belongs to the deployment config, so a
 // stored value for it would be a knob with no UI left to turn it back.
-function sanitizeSettingsPatch(body) {
+function sanitizeSettingsPatch(body, customSchemes) {
     const raw = body && typeof body === "object" ? body : {};
     const patch = {};
     if (raw.aclPreset !== undefined) {
-        patch.aclPreset = findPreset(raw.aclPreset) ? raw.aclPreset : null;
+        // An id has to name something that exists right now, or clearing it
+        // leaves a saved pointer at a scheme the user has since deleted.
+        patch.aclPreset = findScheme(raw.aclPreset, customSchemes) ? raw.aclPreset : null;
+    }
+    if (raw.nodeFilter !== undefined) {
+        patch.nodeFilter = normalizeNodeFilter(raw.nodeFilter);
+    }
+    if (raw.ipv6Enabled !== undefined) {
+        patch.ipv6Enabled = raw.ipv6Enabled === true;
     }
     return patch;
 }
@@ -110,9 +154,31 @@ export function sanitizePublicUrl(value) {
 // answers 400 for false rather than storing nothing and looking like it worked.
 function sanitizeTopLevelSettings(body) {
     const raw = body && typeof body === "object" ? body : {};
-    if (raw.publicUrl === undefined) return null;
-    const value = sanitizePublicUrl(raw.publicUrl);
-    return value === undefined ? false : { publicUrl: value };
+    const patch = {};
+
+    if (raw.publicUrl !== undefined) {
+        const value = sanitizePublicUrl(raw.publicUrl);
+        if (value === undefined) return false;
+        patch.publicUrl = value;
+    }
+
+    if (raw.customSchemes !== undefined) {
+        // Entries that do not normalize are dropped individually rather than
+        // failing the whole request: one card the user cannot render should
+        // not block them from saving the rest.
+        const list = Array.isArray(raw.customSchemes) ? raw.customSchemes : [];
+        const schemes = [];
+        for (const item of list) {
+            const scheme = normalizeScheme(item);
+            if (scheme !== null) schemes.push(scheme);
+            if (schemes.length >= MAX_SCHEMES) break;
+        }
+        // An empty list clears the field, matching the null-means-delete
+        // convention the store uses everywhere else.
+        patch.customSchemes = schemes.length > 0 ? schemes : null;
+    }
+
+    return Object.keys(patch).length > 0 ? patch : null;
 }
 
 function redactUrl(value) {
@@ -192,6 +258,7 @@ export function createSubscriptionRouter(options) {
         return {
             sources: model.sources.map((source) => summarize(source, false)),
             settings: model.settings.defaultOptions || {},
+            customSchemes: model.settings.customSchemes || [],
             publicUrl: model.settings.publicUrl || "",
             globalSubUrl: SUB_ROOT + model.settings.globalToken,
             targets: listExportTargets().filter(
@@ -516,12 +583,97 @@ export function createSubscriptionRouter(options) {
                 });
                 return;
             }
-            const saved = store.setDefaultOptions(sanitizeSettingsPatch(body));
+            // Top-level settings first: a single request may both add a
+            // custom scheme and select it, and the selection is validated
+            // against what is stored.
             const model = top ? store.setSettings(top) : store.getSettings();
+            const saved = store.setDefaultOptions(
+                sanitizeSettingsPatch(body, model.customSchemes),
+            );
             sendJson(res, 200, {
                 ok: true,
-                data: { settings: saved, publicUrl: model.publicUrl || "" },
+                data: {
+                    settings: saved,
+                    publicUrl: model.publicUrl || "",
+                    customSchemes: model.customSchemes || [],
+                },
             });
+            return;
+        }
+
+        if (pathname === "/api/schemes/import" && method === "POST") {
+            const body = (await readJsonBody()) || {};
+            let text = typeof body.input === "string" ? body.input : "";
+
+            if (typeof body.url === "string" && body.url.trim() !== "") {
+                const target = body.url.trim();
+                if (!/^https?:\/\//i.test(target)) {
+                    sendJson(res, 400, { ok: false, error: "规则链接必须是 http(s) 地址" });
+                    return;
+                }
+                try {
+                    const downloaded = await downloadText(target, { fetchImpl });
+                    text = downloaded.text;
+                } catch (e) {
+                    sendJson(res, 400, {
+                        ok: false,
+                        error: "规则下载失败：" + (e && e.message ? e.message : e),
+                    });
+                    return;
+                }
+            }
+
+            if (text.trim() === "") {
+                sendJson(res, 400, { ok: false, error: "没有可导入的规则内容" });
+                return;
+            }
+
+            const imported = importRules(text);
+            const name =
+                typeof body.name === "string" && body.name.trim() !== ""
+                    ? body.name.trim()
+                    : defaultSchemeName(imported, body.url);
+            const scheme = schemeFromImport(imported, {
+                id: CUSTOM_PREFIX + crypto.randomUUID().slice(0, 8),
+                name,
+                summary:
+                    imported.format === "mihomo"
+                        ? "导入自 Clash/Mihomo 配置"
+                        : imported.format === "surge"
+                          ? "导入自 Surge 配置"
+                          : "导入自规则文本",
+            });
+
+            if (scheme === null) {
+                sendJson(res, 400, {
+                    ok: false,
+                    error: "这份配置里没有能转换成 sing-box 的规则",
+                    report: importReport(imported),
+                });
+                return;
+            }
+
+            const existing = (store.getSettings() || {}).customSchemes || [];
+            const next = existing.concat([scheme]).slice(-MAX_SCHEMES);
+            store.setSettings({ customSchemes: next });
+            sendJson(res, 200, {
+                ok: true,
+                data: { scheme, report: importReport(imported), customSchemes: next },
+            });
+            return;
+        }
+
+        const schemePath = /^\/api\/schemes\/([^/]+)$/.exec(pathname);
+        if (schemePath && method === "DELETE") {
+            const id = decodeURIComponent(schemePath[1]);
+            const existing = (store.getSettings() || {}).customSchemes || [];
+            const next = existing.filter((entry) => !(entry && entry.id === id));
+            store.setSettings({ customSchemes: next.length > 0 ? next : null });
+            // A saved selection pointing at a scheme that no longer exists
+            // would fall back to the default skeleton with no way to tell why.
+            const defaults = (store.getSettings() || {}).defaultOptions || {};
+            if (defaults.aclPreset === id) store.setDefaultOptions({ aclPreset: null });
+            sendJson(res, 200, { ok: true, data: { customSchemes: next } });
             return;
         }
 
@@ -600,6 +752,7 @@ export function createSubscriptionRouter(options) {
             pathname.startsWith(API_ROOT + "/") ||
             pathname === "/api/settings" ||
             pathname.startsWith("/api/settings/") ||
+            pathname.startsWith("/api/schemes/") ||
             pathname === "/api/export";
         if (isApiRoute) {
             if (!apiGuard(req)) {

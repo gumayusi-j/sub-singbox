@@ -11,9 +11,17 @@ import { ProxyUtils } from "@/core/proxy-utils";
 import { fromNodes, parseNodes } from "../kit/convert";
 import { mergeParsed, dedupeNodeNames } from "../kit/merge";
 import assemble from "../kit/assemble";
-import { assembleAcl, findPreset } from "../kit/acl4ssr/build";
+import { assembleAcl } from "../kit/acl4ssr/build";
+import { findScheme } from "../kit/schemes";
+import { filterNodeNames, normalizeNodeFilter } from "../kit/nodes/filter";
 import { CompatError } from "../kit/compat";
 import { formatUserInfoHeader } from "./usage";
+
+// The name a node is known by - what the user sees in a client, and what a
+// name filter is written against.
+function nodeName(node) {
+    return node && typeof node.name === "string" ? node.name : "";
+}
 
 function isNonNegative(value) {
     return Number.isFinite(value) && value >= 0;
@@ -73,11 +81,21 @@ export function selectSources(store, resolved, options) {
 // profile in kit/defaults.js, which is Tower's one and only run shape (TUN
 // tun-in, DNS skeleton, CN-direct). The same goes for the knobs that only mean
 // anything to the other profile (addMixed, inboundPort, tun).
-function normalizeOptions(options) {
+function normalizeOptions(options, customSchemes) {
     options = options || {};
+    // A scheme id may name a bundled preset or one the user imported. The
+    // resolved object is what the builder wants; an id that names neither is
+    // dropped so the run falls back to the default skeleton rather than
+    // throwing on a stale saved value.
+    const scheme = options.aclPreset ? findScheme(options.aclPreset, customSchemes) : null;
     return {
         out: options.out === "outbounds" ? "outbounds" : "config",
-        aclPreset: findPreset(options.aclPreset) ? options.aclPreset : undefined,
+        aclPreset: scheme !== null ? options.aclPreset : undefined,
+        aclScheme: scheme || undefined,
+        // A list of nodes to keep, by name. Distinct from a source's
+        // excludedNodes, which is a per-source deny list of exact names.
+        nodeFilter: normalizeNodeFilter(options.nodeFilter),
+        ipv6Enabled: options.ipv6Enabled === true ? true : options.ipv6Enabled === false ? false : undefined,
         remoteDns: options.remoteDns || undefined,
         // Everything below is only ever read by assemble()/assembleAcl().
         final: options.final || undefined,
@@ -144,6 +162,7 @@ export function renderSubscription(store, resolved, options) {
     }
 
     const warnings = [];
+    const normalized = normalizeOptions(options, (store.getSettings() || {}).customSchemes);
     // Each body is parsed twice on the sing-box path (once into nodes, once
     // into outbounds); parseNodes is the expensive half and is memoised by the
     // caller's snapshot, so keep one list and reuse it.
@@ -154,6 +173,25 @@ export function renderSubscription(store, resolved, options) {
         if (Array.isArray(excluded) && excluded.length > 0) {
             const excludedSet = new Set(excluded);
             nodes = nodes.filter((node) => !excludedSet.has(node && node.name));
+        }
+        // Keep only the nodes the name filter selects. An expression that
+        // cannot be evaluated leaves the node list alone and says so: a saved
+        // filter going bad should not silently empty someone's subscription.
+        if (normalized.nodeFilter) {
+            const filtered = filterNodeNames(
+                nodes.map((node) => [nodeName(node)]),
+                normalized.nodeFilter.pattern,
+                normalized.nodeFilter,
+            );
+            if (filtered.error) {
+                warnings.push({
+                    message: "节点名称筛选未生效：" + filtered.error,
+                    path: "nodeFilter",
+                });
+            } else {
+                const keep = new Set(filtered.names.map((pair) => pair[0]));
+                nodes = nodes.filter((node) => keep.has(nodeName(node)));
+            }
         }
         // Apply custom node order if set
         const order = entry.source.nodeOrder;
@@ -172,7 +210,6 @@ export function renderSubscription(store, resolved, options) {
         return errorResponse(409, "stored snapshot contains no supported nodes");
     }
 
-    const normalized = normalizeOptions(options);
     let body;
 
     try {

@@ -1564,7 +1564,9 @@ pre.code-block {
         <div class="section">
           <div class="section-head">
             <h2>分流规则</h2>
-            <span class="count">内置 ACL4SSR</span>
+            <button class="btn" type="button" @click="openImport">
+              <el-icon><upload /></el-icon> 导入规则
+            </button>
           </div>
 
           <div class="stack">
@@ -1585,11 +1587,18 @@ pre.code-block {
                   <span class="chip chip-ghost" v-for="t in r.tags" :key="t">{{ t }}</span>
                 </div>
               </div>
+              <!-- @click.stop: the whole card is the select control, and
+                   deleting must not also select what is being deleted. -->
+              <button v-if="r.custom" class="btn btn-icon" type="button"
+                      title="删除这个方案" @click.stop="deleteScheme(r.value, r.label)">
+                <el-icon><delete /></el-icon>
+              </button>
             </article>
           </div>
 
           <p class="footnote">
             规则文本随页面内置，无需机场提供规则链接；其中 <code>GEOIP,CN</code> 直连使用 sing-box 远程 geoip-cn 规则集。
+            也可以导入自己的 Clash / Mihomo / Surge 规则，导入后与内置方案并列可选。
           </p>
           <p class="footnote" v-if="rulesHint" :class="rulesHintType === 'ok' ? 'is-ok' : 'is-danger'">{{ rulesHint }}</p>
         </div>
@@ -1627,6 +1636,21 @@ pre.code-block {
               {{ generating ? '生成中…' : '生成配置' }}
             </button>
           </div>
+          <!-- Render options that change the config rather than which nodes go
+               into it. -->
+          <div class="card" style="margin-top:12px">
+            <div class="filters" style="justify-content:space-between;flex-wrap:nowrap">
+              <div>
+                <b style="font-size:13px">IPv6</b>
+                <p class="muted" style="font-size:12px;margin:3px 0 0;line-height:1.5">
+                  开启后隧道与 DNS 走双栈（prefer_ipv4）。部分网络通告了 IPv6 却没有出口，
+                  开启反而更慢，所以默认关闭。
+                </p>
+              </div>
+              <el-switch v-model="ipv6Enabled" @change="persistAll" />
+            </div>
+          </div>
+
           <p class="footnote" v-if="genStatus"
              :class="genStatusType === 'ok' ? 'is-ok' : genStatusType === 'err' ? 'is-danger' : ''">{{ genStatus }}</p>
 
@@ -1642,9 +1666,22 @@ pre.code-block {
             <el-tabs v-model="activeOutTab" class="seg seg-sm" @tab-change="onOutTabChange">
               <el-tab-pane label="节点" name="node">
                 <div class="section">
+                  <!-- Name filter. An expression, not a keyword box: the
+                       keyword form is just a shorthand for one. -->
+                  <div class="filters" style="margin-bottom:10px">
+                    <el-input v-model="nodeFilterPattern" size="small" clearable
+                              style="max-width:340px"
+                              placeholder="按名称筛选节点，例如 (?i)港|hk"
+                              @input="persistAll" />
+                    <el-checkbox v-model="nodeFilterCase" size="small" @change="persistAll">忽略大小写</el-checkbox>
+                    <span class="muted" style="font-size:12px" v-if="nodeFilterPattern.trim()">
+                      <template v-if="nodeFilterState.error">{{ nodeFilterState.error }}</template>
+                      <template v-else>匹配 {{ nodeFilterState.matched }} / {{ nodeFilterState.total }} 个节点</template>
+                    </span>
+                  </div>
                   <div class="filters" v-if="regionList.length > 1">
                     <button class="chip-filter" type="button" :class="{ on: !regionFilter }" @click="regionFilter = ''">
-                      全部 <b>{{ filteredNodes.length }}</b>
+                      全部 <b>{{ nodeFilterState.nodes.length }}</b>
                     </button>
                     <button class="chip-filter" type="button" v-for="r in regionList" :key="r.code"
                             :class="{ on: regionFilter === r.code }" @click="regionFilter = r.code">
@@ -1874,6 +1911,45 @@ pre.code-block {
     </template>
   </el-dialog>
 
+  <!-- ============ Rule import dialog ============ -->
+  <el-dialog v-if="showImport" :model-value="true"
+             @close="closeImport" @update:model-value="closeImport"
+             title="导入规则方案" width="620px"
+             :close-on-click-modal="false" align-center>
+    <el-tabs v-model="importMode" class="seg seg-sm">
+      <el-tab-pane label="文本" name="text">
+        <el-input v-model="importForm.text" type="textarea" :rows="9"
+                  placeholder="粘贴 Clash / Mihomo 的 rules 列表、Surge 的 [Rule] 段，或一段规则行…" />
+      </el-tab-pane>
+      <el-tab-pane label="链接" name="url">
+        <el-input v-model="importForm.url" placeholder="https://example.com/rules.yaml" />
+      </el-tab-pane>
+      <el-tab-pane label="文件" name="file">
+        <input type="file" accept=".yaml,.yml,.json,.conf,.ini,.txt,.list"
+               @change="importFile($event.target)" />
+      </el-tab-pane>
+    </el-tabs>
+    <el-form label-position="top" style="margin-top:12px">
+      <el-form-item label="方案名称（留空则按来源命名）">
+        <el-input v-model="importForm.name" placeholder="例如：我的 Clash 规则" />
+      </el-form-item>
+    </el-form>
+    <p class="footnote" style="margin:0" v-if="importHint"
+       :class="importHintType === 'err' ? 'is-danger' : importHintType === 'ok' ? 'is-ok' : ''">{{ importHint }}</p>
+    <div v-if="importReport" class="footnote" style="margin:8px 0 0">
+      <div>来源格式 {{ importReport.format }} · 规则 {{ importReport.rules }} 条 · 跳过 {{ importReport.skipped }} 条 · 策略组 {{ importReport.groups }} 个</div>
+      <div v-if="importReport.final">兜底策略：{{ importReport.final }}</div>
+      <div v-for="(w, i) in importReport.warnings" :key="i">· {{ w.message }}</div>
+    </div>
+    <template #footer>
+      <button class="btn" type="button" @click="closeImport">关闭</button>
+      <button class="btn btn-primary" type="button" :disabled="importing" @click="submitImport">
+        <el-icon v-if="importing" class="spin"><loading /></el-icon>
+        {{ importing ? '导入中…' : '导入' }}
+      </button>
+    </template>
+  </el-dialog>
+
   <!-- ============ QR dialog ============ -->
   <el-dialog v-if="qrVisible" :model-value="true"
              @close="qrVisible = false" @update:model-value="qrVisible = false"
@@ -2030,12 +2106,39 @@ var app = Vue.createApp({
     // Rules
     var rulesHint = Vue.ref('');
     var rulesHintType = Vue.ref('');
-    var ruleOptions = [
+    var BUILTIN_RULES = [
       { value:'acl4ssr-default', label:'ACL4SSR 默认', desc:'去广告、自动测速，含国外媒体、电报、微软和苹果分流。', tags:['去广告','自动测速','流媒体','Telegram'] },
       { value:'acl4ssr-full', label:'ACL4SSR 全分组', desc:'最完整分组：流媒体、AI、游戏、音乐，并按节点名自动分出地区组（完整 GFW 列表）。', tags:['流媒体','AI','游戏','音乐','地区分组'] },
       { value:'acl4ssr-mini', label:'ACL4SSR 精简', desc:'只保留节点选择、自动选择、全球直连与拦截，策略组最少、规则最省。', tags:['最省规则','4 个策略组'] },
       { value:'none', label:'不使用（默认分域模板）', desc:'用内置的国内直连 / 局域网 / 私有地址模板，不引入 ACL4SSR 规则。', tags:['内置模板','不引规则'] }
     ];
+    // Schemes the user imported. They sit beside the bundled presets rather
+    // than on top of them - picking one replaces the preset entirely.
+    var customSchemes = Vue.ref([]);
+    var ruleOptions = Vue.computed(function() {
+      return BUILTIN_RULES.concat(customSchemes.value.map(function(s) {
+        return {
+          value: s.id,
+          label: s.name,
+          desc: s.summary || '自定义规则方案',
+          tags: ['自定义'].concat(s.sourceFormat ? [s.sourceFormat] : []),
+          custom: true
+        };
+      }));
+    });
+    // Import dialog
+    var showImport = Vue.ref(false);
+    var importMode = Vue.ref('text');
+    var importForm = Vue.reactive({ name:'', url:'', text:'' });
+    var importing = Vue.ref(false);
+    var importHint = Vue.ref('');
+    var importHintType = Vue.ref('');
+    var importReport = Vue.ref(null);
+    // Node-name filter and the IPv6 switch. Both are render options, so they
+    // travel with the subscription link the client polls.
+    var nodeFilterPattern = Vue.ref('');
+    var nodeFilterCase = Vue.ref(true);
+    var ipv6Enabled = Vue.ref(false);
 
     // Map
     var worldMapCanvas = Vue.ref(null);
@@ -2046,7 +2149,12 @@ var app = Vue.createApp({
 
     // === Computed ===
     var enabledSubs = Vue.computed(function() { return sources.value.filter(function(s){ return s.enabled; }); });
-    var aclName = Vue.computed(function() { return ACL_NAME[acl.value] || acl.value; });
+    var aclName = Vue.computed(function() {
+      // An imported scheme has no entry in ACL_NAME; its name comes from the
+      // same list the cards are drawn from.
+      var found = ruleOptions.value.filter(function(r){ return r.value === acl.value; })[0];
+      return found ? found.label : (ACL_NAME[acl.value] || acl.value);
+    });
     var filteredNodes = Vue.computed(function() {
       var nodes = (last.value && last.value.nodes) || [];
       if (!exportTarget.value) return nodes;
@@ -2106,10 +2214,30 @@ var app = Vue.createApp({
       return { tab:'export', label:'查看结果' };
     });
 
+    // A local preview of the name filter. The server applies the real one when
+    // it renders - this exists so the count moves as you type, and it is
+    // deliberately the same rule: unanchored, case per the toggle, matched
+    // against the tag the client will actually show.
+    var nodeFilterState = Vue.computed(function() {
+      var pattern = (nodeFilterPattern.value || '').trim();
+      var nodes = filteredNodes.value;
+      if (!pattern) return { nodes: nodes, error: '', matched: nodes.length, total: nodes.length };
+      var re;
+      try {
+        re = new RegExp(pattern, nodeFilterCase.value ? 'i' : '');
+      } catch (e) {
+        return { nodes: nodes, error: '表达式无效，服务端不会应用它', matched: 0, total: nodes.length };
+      }
+      var kept = nodes.filter(function(n) {
+        return n && typeof n.tag === 'string' && re.test(n.tag);
+      });
+      return { nodes: kept, error: '', matched: kept.length, total: nodes.length };
+    });
+
     // Region chips over the generated node list.
     var regionList = Vue.computed(function() {
       var counts = {};
-      filteredNodes.value.forEach(function(n) {
+      nodeFilterState.value.nodes.forEach(function(n) {
         var c = detectCountry(n.tag);
         if (c) counts[c.code] = (counts[c.code] || 0) + 1;
       });
@@ -2117,9 +2245,10 @@ var app = Vue.createApp({
         .map(function(code){ return { code: code, count: counts[code] }; });
     });
     var displayNodes = Vue.computed(function() {
-      if (!regionFilter.value) return filteredNodes.value;
+      var nodes = nodeFilterState.value.nodes;
+      if (!regionFilter.value) return nodes;
       var code = regionFilter.value;
-      return filteredNodes.value.filter(function(n) {
+      return nodes.filter(function(n) {
         var c = detectCountry(n.tag);
         return c && c.code === code;
       });
@@ -2315,9 +2444,18 @@ var app = Vue.createApp({
         publicUrl.value = data.publicUrl || '';
         dataPath.value = data.dataPath || '';
         settings.value = data.settings || {};
+        customSchemes.value = data.customSchemes || [];
         if (!settingsReady.value) {
           var opts = data.settings || {};
-          acl.value = ACL_NAME[opts.aclPreset] ? opts.aclPreset : 'none';
+          // A saved selection may name a bundled preset or an imported scheme;
+          // anything else (a scheme since deleted) falls back to 不使用.
+          var isCustom = typeof opts.aclPreset === 'string' && opts.aclPreset.indexOf('custom:') === 0;
+          acl.value = (ACL_NAME[opts.aclPreset] || isCustom) ? opts.aclPreset : 'none';
+          if (opts.nodeFilter && opts.nodeFilter.pattern) {
+            nodeFilterPattern.value = opts.nodeFilter.pattern;
+            nodeFilterCase.value = opts.nodeFilter.caseInsensitive !== false;
+          }
+          ipv6Enabled.value = opts.ipv6Enabled === true;
           publicUrlInput.value = publicUrl.value;
           settingsReady.value = true;
           if (pendingSave.value) persistAll();
@@ -2352,8 +2490,14 @@ var app = Vue.createApp({
       if (saveTimer.value) { clearTimeout(saveTimer.value); saveTimer.value = null; }
       pendingSave.value = false;
       try {
-        var data = await api('PUT', '/api/settings', { aclPreset: acl.value === 'none' ? null : acl.value });
+        var pattern = (nodeFilterPattern.value || '').trim();
+        var data = await api('PUT', '/api/settings', {
+          aclPreset: acl.value === 'none' ? null : acl.value,
+          nodeFilter: pattern ? { pattern: pattern, caseInsensitive: nodeFilterCase.value } : null,
+          ipv6Enabled: ipv6Enabled.value === true
+        });
         settings.value = (data && data.settings) || settings.value;
+        if (data && data.customSchemes) customSchemes.value = data.customSchemes;
         rulesHint.value = '已保存。'; rulesHintType.value = 'ok';
       } catch(e) {
         rulesHint.value = '保存失败：' + (e.message||e); rulesHintType.value = 'err';
@@ -2550,6 +2694,66 @@ var app = Vue.createApp({
       // Invalidate last result
       last.value = null;
       genStatus.value = '';
+    }
+
+    // === Rule import ===
+    function openImport() {
+      importForm.name = ''; importForm.url = ''; importForm.text = '';
+      importMode.value = 'text';
+      importHint.value = ''; importHintType.value = '';
+      importReport.value = null;
+      showImport.value = true;
+    }
+    function closeImport() { showImport.value = false; }
+    async function importFile(input) {
+      var file = input && input.files && input.files[0];
+      if (!file) return;
+      try {
+        importForm.text = await file.text();
+        // The file's own name, verbatim - an import that has no emoji keeps
+        // none, rather than being decorated into one.
+        if (!importForm.name.trim()) importForm.name = file.name.replace(/\.[^.]+$/, '');
+        importMode.value = 'text';
+        importHint.value = '已读取 ' + file.name; importHintType.value = 'ok';
+      } catch(e) {
+        importHint.value = '读取文件失败'; importHintType.value = 'err';
+      }
+      if (input) input.value = '';
+    }
+    async function submitImport() {
+      var body = { name: importForm.name.trim() };
+      if (importMode.value === 'url') {
+        if (!importForm.url.trim()) { importHint.value = '请填写规则链接。'; importHintType.value = 'err'; return; }
+        body.url = importForm.url.trim();
+      } else {
+        if (!importForm.text.trim()) { importHint.value = '请粘贴规则内容或选择文件。'; importHintType.value = 'err'; return; }
+        body.input = importForm.text;
+      }
+      importing.value = true; importHint.value = '正在解析…'; importHintType.value = '';
+      try {
+        var data = await api('POST', '/api/schemes/import', body);
+        customSchemes.value = (data && data.customSchemes) || customSchemes.value;
+        importReport.value = (data && data.report) || null;
+        importHint.value = '导入成功，共 ' + importReport.value.rules + ' 条规则';
+        importHintType.value = 'ok';
+        ElementPlus.ElMessage.success('已导入「' + data.scheme.name + '」');
+      } catch(e) {
+        importHint.value = (e.message||e); importHintType.value = 'err';
+        importReport.value = (e && e.report) || null;
+      } finally { importing.value = false; }
+    }
+    async function deleteScheme(id, name) {
+      try {
+        await ElementPlus.ElMessageBox.confirm('删除规则方案「' + name + '」？', '删除方案', { type:'warning' });
+      } catch(e) { return; }
+      try {
+        var data = await api('DELETE', '/api/schemes/' + encodeURIComponent(id));
+        customSchemes.value = (data && data.customSchemes) || [];
+        if (acl.value === id) { acl.value = 'none'; persistAll(); }
+        ElementPlus.ElMessage.success('已删除');
+      } catch(e) {
+        ElementPlus.ElMessage.error('删除失败：' + (e.message||e));
+      }
     }
     function onTabChange(tab) {
       if (tab !== 'rules' && saveTimer.value) flushSettings();
@@ -2913,7 +3117,10 @@ var app = Vue.createApp({
       refreshingIds, refreshingAll, togglingId,
       qrVisible, qrUrl, worldMapCanvas,
       publicUrlInput, publicUrlHint, publicUrlHintType, exportSubHint,
-      lanIps, rulesHint, rulesHintType, ruleOptions,
+      lanIps, rulesHint, rulesHintType, ruleOptions, customSchemes,
+      nodeFilterPattern, nodeFilterCase, nodeFilterState, ipv6Enabled,
+      showImport, importMode, importForm, importing, importHint, importHintType, importReport,
+      openImport, closeImport, submitImport, importFile, deleteScheme,
       enabledSubs, aclName, filteredNodes, hasPing, cfgJson, fullSubUrl, allWarnings,
       stats, nextStep,
       familyOf, abbrOf, countryOf, topProtocol, hostOf, statusText, usageOf,

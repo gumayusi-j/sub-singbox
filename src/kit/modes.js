@@ -16,6 +16,8 @@
 // runtime: they are written into configs, so they must not change with the UI
 // language.
 
+import { onlyLeaves } from "./dns-policy";
+
 export const RULE_MODE = "规则判定";
 export const GLOBAL_MODE = "全局代理";
 export const DIRECT_MODE = "直接连接";
@@ -71,31 +73,15 @@ function insertionIndex(routeRules) {
 // (Tower's `onlyLeaves` check). Returns null when no candidate qualifies.
 export function pickDnsDetour(outbounds, nodeTags, candidates) {
     if (!Array.isArray(outbounds)) return null;
-    const nodes = new Set(Array.isArray(nodeTags) ? nodeTags : []);
-    if (nodes.size === 0) return null;
+    const nodes = Array.isArray(nodeTags) ? nodeTags : [];
+    if (nodes.length === 0) return null;
 
-    const members = new Map();
-    for (const outbound of outbounds) {
-        if (isPlainObject(outbound) && typeof outbound.tag === "string" && Array.isArray(outbound.outbounds)) {
-            members.set(outbound.tag, outbound.outbounds);
-        }
-    }
-
-    const onlyLeaves = (tag, visiting) => {
-        if (nodes.has(tag)) return true;
-        const children = members.get(tag);
-        // Not a node and not a group: a system outbound such as direct, or a
-        // dangling reference. Either way it is not a proxy path.
-        if (!children || children.length === 0) return false;
-        if (visiting.has(tag)) return false;
-        const next = new Set(visiting);
-        next.add(tag);
-        return children.every((child) => onlyLeaves(child, next));
-    };
-
+    // The walk itself lives in dns-policy, so this leak check and the
+    // directness test the DNS projection uses cannot drift apart.
+    const allowed = new Set(nodes);
     for (const candidate of candidates || []) {
         if (typeof candidate !== "string" || candidate === "") continue;
-        if (onlyLeaves(candidate, new Set())) return candidate;
+        if (onlyLeaves(candidate, allowed, outbounds)) return candidate;
     }
     return null;
 }
