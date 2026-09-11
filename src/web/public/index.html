@@ -318,12 +318,16 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 
 button { font: inherit; color: inherit; }
+/* No border-radius here. `outline` already follows the element's own corner
+   radius, so setting one was never needed - and it silently reshaped anything
+   focusable, because [tabindex]:focus-visible (0,2,0) outranks a plain class:
+   the add-source dialog carries tabindex="-1", takes focus when it opens, and
+   came out with a 6px corner instead of the card's 18px. */
 button:focus-visible,
 a:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 6px;
 }
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -1135,7 +1139,6 @@ pre.code-block {
 .el-dialog__headerbtn { top: 12px; right: 12px; }
 .el-dialog__body { padding: 20px; color: var(--text); }
 .el-dialog__footer { padding: 12px 20px; border-top: 1px solid var(--stroke-soft); display: flex; justify-content: flex-end; gap: 8px; }
-.el-overlay { backdrop-filter: blur(2px); }
 
 .el-form-item__label { color: var(--text-2); font-weight: 550; font-size: 12.5px; }
 .el-form-item { margin-bottom: 16px; }
@@ -1759,7 +1762,23 @@ pre.code-block {
   </div>
 
   <!-- ============ Add / edit source dialog ============ -->
-  <el-dialog v-model="showAddForm" width="560px"
+  <!-- v-if rather than v-model. With v-model the dialog is hidden by Element
+       Plus's own fade-out, and on this page that leave animation never
+       advances: the overlay sits at opacity 1 for a second and a half after
+       you dismiss it, so the dialog reads as refusing to close. Unmounting on
+       the state alone removes that dependency - closing is immediate, at the
+       cost of the fade.
+
+       Both close events are bound on purpose. The close button and Save reach
+       closeAddForm() directly, but the header X only arrives through an event,
+       and `@update:model-value` did not fire here: with it alone the X took ~2s
+       to close, and adding `@close` brought that to ~30ms. `@close` is the one
+       doing the work; the update handler is kept because it is the documented
+       API and is harmless if it ever does fire. -->
+  <el-dialog v-if="showAddForm" :model-value="true"
+             @close="closeAddForm"
+             @update:model-value="closeAddForm"
+             width="560px"
              :title="editingId ? '编辑订阅源' : '添加订阅源'"
              :close-on-click-modal="false" align-center>
     <el-form label-position="top">
@@ -1805,13 +1824,18 @@ pre.code-block {
     <template #footer>
       <button class="btn" type="button" @click="closeAddForm">取消</button>
       <button class="btn btn-primary" type="button" :disabled="savingSource" @click="saveSource">
-        <el-icon :class="{ spin: savingSource }"><loading v-if="savingSource" /></el-icon> 保存
+        <!-- v-if on the wrapper, not inside it: an <el-icon> whose only child is
+             a false v-if renders an empty glyph box, which Element Plus sizes
+             to 1em and leaves as a phantom gap before the label. -->
+        <el-icon v-if="savingSource" class="spin"><loading /></el-icon> 保存
       </button>
     </template>
   </el-dialog>
 
   <!-- ============ QR dialog ============ -->
-  <el-dialog v-model="qrVisible" title="扫码导入" width="360px" align-center>
+  <el-dialog v-if="qrVisible" :model-value="true"
+             @close="qrVisible = false" @update:model-value="qrVisible = false"
+             title="扫码导入" width="360px" align-center>
     <div class="qr-wrap">
       <canvas ref="qrCanvas"></canvas>
       <div class="qr-url">{{ qrUrl }}</div>
