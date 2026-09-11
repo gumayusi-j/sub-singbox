@@ -24,6 +24,7 @@
     --el-color-primary-light-3: #5e9ff0;
     --el-color-primary-light-5: #8bb8f5;
     --el-color-primary-light-7: #aed1fa;
+    --el-color-primary-light-8: #cfe3fc;
     --el-color-primary-light-9: #eff6ff;
     --el-color-primary-dark-2: #2563eb;
     --el-bg-color: #ffffff;
@@ -259,6 +260,20 @@
   /* QR canvas */
   .qr-canvas-wrap canvas { border-radius: 12px; margin: 12px auto; display: block; }
 
+  /* Node drag sort (preview table) */
+  .drag-handle {
+    cursor: grab;
+    color: #cbd5e1;
+    margin-right: 5px;
+    user-select: none;
+    font-size: 12px;
+    vertical-align: 1px;
+  }
+  .drag-handle:hover { color: #3b82f6; }
+  .drag-handle:active { cursor: grabbing; }
+  .el-table tr.dragging td { opacity: 0.35; }
+  .el-table tr.drop-target td { border-top: 2px solid #3b82f6; }
+
   /* Pre/Code */
   pre {
     background: #f8fafc !important;
@@ -414,7 +429,8 @@
                 <template v-if="getPreview(s.id)._protoStr"> · {{ getPreview(s.id)._protoStr }}</template>
               </div>
               <el-table v-if="getPreview(s.id).nodes && getPreview(s.id).nodes.length" :data="getPreview(s.id).nodes"
-                size="small" max-height="280" border style="border-radius:8px">
+                size="small" max-height="280" border style="border-radius:8px"
+                @dragover="onNodeDragOver" @drop="(e) => onNodeDrop(e, s)" @dragend="onNodeDragEnd">
                 <el-table-column width="40">
                   <template #header>
                     <el-checkbox :model-value="isAllChecked(s)" @change="(v) => toggleCheckAll(s, v)" size="small" />
@@ -423,7 +439,12 @@
                     <el-checkbox :model-value="!isNodeExcluded(s, row.tag)" @change="(v) => toggleNodeCheck(s, row.tag, v)" size="small" />
                   </template>
                 </el-table-column>
-                <el-table-column prop="tag" label="名称" min-width="120" />
+                <el-table-column prop="tag" label="名称" min-width="120">
+                  <template #default="{ row, $index }">
+                    <span class="drag-handle" draggable="true" title="拖拽调整节点顺序"
+                      @dragstart="(e) => onNodeDragStart(e, s, $index)">⠿</span>{{ row.tag }}
+                  </template>
+                </el-table-column>
                 <el-table-column prop="type" label="类型" width="100">
                   <template #default="{ row }"><code class="mono" style="font-size:12px">{{ row.type }}</code></template>
                 </el-table-column>
@@ -433,7 +454,7 @@
               </el-table>
               <div style="margin-top:6px;display:flex;align-items:center;gap:12px">
                 <el-button size="small" type="primary" plain @click="saveNodeSelection(s)">保存节点选择</el-button>
-                <span class="muted" style="font-size:12px">取消勾选的节点将不会出现在导出配置中。</span>
+                <span class="muted" style="font-size:12px">取消勾选的节点不会出现在导出配置中；拖拽 <b>⠿</b> 可调整顺序，改完点「保存节点选择」。</span>
               </div>
             </div>
           </div>
@@ -500,7 +521,7 @@
           </el-alert>
 
           <!-- Output Tabs -->
-          <el-tabs v-model="activeOutTab">
+          <el-tabs v-model="activeOutTab" @tab-change="onOutTabChange">
             <el-tab-pane label="节点表格" name="node">
               <el-table :data="filteredNodes" size="small" max-height="480" border stripe style="border-radius:8px">
                 <el-table-column prop="type" label="类型" width="100">
@@ -1071,17 +1092,70 @@ var app = Vue.createApp({
       }
       togglingId.value = null;
     }
+    function setPreview(id, preview) {
+      var newMap = new Map(previewMap.value);
+      newMap.set(id, preview);
+      previewMap.value = newMap;
+    }
     async function previewSource(id) {
       var s = subById(id); if (!s) return;
       try {
         var data = await api('GET', '/api/subscriptions/'+encodeURIComponent(id)+'/preview');
         var proto = Object.keys(data.protocols||{}).sort().map(function(p){ return p+' ×'+data.protocols[p]; });
-        var preview = { nodes: data.nodes||[], nodeCount: data.nodeCount||0, _protoStr: proto.join(' · ') };
-        var newMap = new Map(previewMap.value);
-        newMap.set(id, preview);
-        previewMap.value = newMap;
+        setPreview(id, { nodes: data.nodes||[], nodeCount: data.nodeCount||0, _protoStr: proto.join(' · ') });
       } catch(e) { ElementPlus.ElMessage.error('预览失败：'+(e.message||e)); }
     }
+
+    // === Node drag sort ===
+    // el-table offers no way to put attributes on its <tr>, so the ⠿ handle is
+    // the drag source and the drop target is resolved from the DOM position of
+    // the row under the cursor. The resulting order is persisted by
+    // saveNodeSelection as nodeOrder, which the export path sorts by.
+    var dragSubId = Vue.ref(null);
+    var dragFromIdx = Vue.ref(-1);
+    function rowIndexOf(tr) {
+      if (!tr || !tr.parentNode) return -1;
+      return [].indexOf.call(tr.parentNode.querySelectorAll('tr'), tr);
+    }
+    function clearDropTargets() {
+      [].forEach.call(document.querySelectorAll('tr.drop-target'), function(r){ r.classList.remove('drop-target'); });
+    }
+    function clearDragState() {
+      clearDropTargets();
+      [].forEach.call(document.querySelectorAll('tr.dragging'), function(r){ r.classList.remove('dragging'); });
+      dragFromIdx.value = -1; dragSubId.value = null;
+    }
+    function onNodeDragStart(e, s, idx) {
+      dragSubId.value = s.id;
+      dragFromIdx.value = idx;
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      var tr = e.target.closest ? e.target.closest('tr') : null;
+      if (tr) tr.classList.add('dragging');
+    }
+    function onNodeDragOver(e) {
+      if (dragFromIdx.value < 0) return;
+      var tr = e.target.closest ? e.target.closest('tr') : null;
+      if (!tr) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      var over = rowIndexOf(tr);
+      clearDropTargets();
+      if (over !== dragFromIdx.value) tr.classList.add('drop-target');
+    }
+    function onNodeDrop(e, s) {
+      var from = dragFromIdx.value;
+      var sameSub = dragSubId.value === s.id;
+      var to = rowIndexOf(e.target.closest ? e.target.closest('tr') : null);
+      clearDragState();
+      if (!sameSub || from < 0) return;
+      e.preventDefault();
+      var p = getPreview(s.id);
+      if (!p || !p.nodes || to < 0 || to === from || from >= p.nodes.length) return;
+      var nodes = p.nodes.slice();
+      nodes.splice(to, 0, nodes.splice(from, 1)[0]);
+      setPreview(s.id, { nodes: nodes, nodeCount: p.nodeCount, _protoStr: p._protoStr });
+    }
+    function onNodeDragEnd() { clearDragState(); }
     async function saveNodeSelection(s) {
       var excluded = [].concat(s.excludedNodes || []);
       var p = getPreview(s.id);
@@ -1102,6 +1176,12 @@ var app = Vue.createApp({
     }
     function onTabChange(tab) {
       if (tab !== 'rules' && saveTimer.value) flushSettings();
+    }
+    function onOutTabChange(name) {
+      // The canvas is only in the DOM while its pane is shown, so the draw has
+      // to wait for the render this tab switch triggers. Without this the map
+      // stays blank unless it happened to be the active tab at generate time.
+      if (name === 'map') Vue.nextTick(drawWorldMap);
     }
 
     // === Export ===
@@ -1232,9 +1312,33 @@ var app = Vue.createApp({
     }
 
     // === World Map ===
+    // The map canvas lives inside a `v-if="last"` card, so it does not exist at
+    // mount time. Bind its listeners lazily on the first draw instead of
+    // guarding the start-up path on a query that is always null.
+    var mapBound = false;
+    function bindMapEvents() {
+      if (mapBound) return;
+      var c = document.querySelector('.map-box canvas');
+      if (!c) return;
+      mapBound = true;
+      c.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        mapZoom.value = Math.max(0.5, Math.min(5, mapZoom.value * (e.deltaY>0?0.9:1.1)));
+        drawWorldMap();
+      });
+      c.addEventListener('mousedown', function(e) { mapDragging.value=true; mapLast.x=e.clientX; mapLast.y=e.clientY; });
+      document.addEventListener('mousemove', function(e) {
+        if (!mapDragging.value) return;
+        mapPan.x += e.clientX-mapLast.x; mapPan.y += e.clientY-mapLast.y;
+        mapLast.x=e.clientX; mapLast.y=e.clientY; drawWorldMap();
+      });
+      document.addEventListener('mouseup', function() { mapDragging.value=false; });
+    }
+
     function drawWorldMap() {
       var canvas = document.querySelector('.map-box canvas');
       if (!canvas) return;
+      bindMapEvents();
       var ctx = canvas.getContext('2d');
       var w = canvas.width, h = canvas.height;
       var bgGrad = ctx.createLinearGradient(0,0,0,h);
@@ -1299,22 +1403,10 @@ var app = Vue.createApp({
       ctx.restore();
     }
 
-    // Map events
     Vue.onMounted(function() {
-      var c = document.querySelector('.map-box canvas');
-      if (!c) return;
-      c.addEventListener('wheel', function(e) {
-        e.preventDefault();
-        mapZoom.value = Math.max(0.5, Math.min(5, mapZoom.value * (e.deltaY>0?0.9:1.1)));
-        drawWorldMap();
-      });
-      c.addEventListener('mousedown', function(e) { mapDragging.value=true; mapLast.x=e.clientX; mapLast.y=e.clientY; });
-      document.addEventListener('mousemove', function(e) {
-        if (!mapDragging.value) return;
-        mapPan.x += e.clientX-mapLast.x; mapPan.y += e.clientY-mapLast.y;
-        mapLast.x=e.clientX; mapLast.y=e.clientY; drawWorldMap();
-      });
-      document.addEventListener('mouseup', function() { mapDragging.value=false; });
+      // Everything below is the start-up path: no early return here, or a
+      // missing map canvas would skip loadSubs() and leave the page inert.
+      bindMapEvents();
 
       // Visibility change flush
       document.addEventListener('visibilitychange', function() {
@@ -1380,8 +1472,9 @@ var app = Vue.createApp({
       publicUrlInput, publicUrlHint, publicUrlHintType, exportSubHint,
       lanIps, rulesHint, rulesHintType, ruleOptions,
       enabledSubs, aclName, filteredNodes, hasPing, cfgJson, fullSubUrl, allWarnings,
-      onTabChange, openAddForm, openEditForm, closeAddForm, saveSource, deleteSource,
+      onTabChange, onOutTabChange, openAddForm, openEditForm, closeAddForm, saveSource, deleteSource,
       refreshOne, refreshAll, toggleEnabled, previewSource, saveNodeSelection,
+      onNodeDragStart, onNodeDragOver, onNodeDrop, onNodeDragEnd,
       isNodeExcluded, isAllChecked, toggleNodeCheck, toggleCheckAll,
       selectRule, generate, copyConfig, downloadConfig, pingNodes,
       onPublicUrlInput, flushPublicUrl, onTargetChange, rotateToken,

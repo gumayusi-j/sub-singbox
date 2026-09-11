@@ -46,24 +46,63 @@ describe("singbox-kit web API", function () {
         // The address moved off the subscriptions page to the export page.
         expect(html).to.not.include("subTargetSel");
         // The export address carries an optional public base and a pinned
-        // client. The select ships empty on purpose - its options come from
-        // the server's target list, so a hardcoded one here would drift.
-        expect(html).to.include('id="publicUrl"');
-        expect(html).to.include('<select id="exportTarget"></select>');
+        // client. The select ships with only the "auto" entry on purpose - its
+        // other options come from the server's target list, so a hardcoded one
+        // here would drift.
+        expect(html).to.include('v-model="publicUrlInput"');
+        expect(html).to.include('v-model="exportTarget"');
+        expect(html).to.include('v-for="t in targets"');
         // The feature was specified without one; this keeps it that way.
         expect(html).to.not.include("二维码");
     });
 
-    it("references no element the page fails to define", async function () {
-        // A listener left behind for a removed element makes $() return null,
-        // and the resulting throw aborts the whole IIFE: every later listener
-        // and the init block silently never run, leaving an inert page. Cheap
-        // to check here, and easy to miss when moving markup between sections.
+    it("keeps the page's start-up path reachable", async function () {
+        // Everything the page needs to come alive - the subscription list, the
+        // target list, the polling address - hangs off loadSubs(), which is
+        // called from the onMounted callback. A top-level early `return` there
+        // (e.g. guarding on the map canvas, which lives behind v-if="last" and
+        // so never exists at mount time) skips it and leaves the page sitting
+        // on its loading spinner forever. Returns nested inside the event
+        // handlers of the same callback are fine.
         const html = await (await fetch(base + "/")).text();
-        const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
-        const refs = [...html.matchAll(/\$\("([^"]+)"\)/g)].map((m) => m[1]);
-        const missing = refs.filter((ref) => !ids.has(ref));
-        expect(missing, "$() 引用了页面里不存在的 id").to.deep.equal([]);
+        const start = html.indexOf("Vue.onMounted(function() {");
+        const end = html.indexOf("\n    });", start);
+        expect(start, "页面里应有 Vue.onMounted 初始化块").to.be.greaterThan(-1);
+        expect(end, "onMounted 块应有闭合的结尾").to.be.greaterThan(start);
+        // De-indent the callback body so the check does not depend on how
+        // deeply setup() itself happens to be nested.
+        const body = html
+            .slice(start, end)
+            .split("\n")
+            .map((line) => (line.startsWith("      ") ? line.slice(6) : line))
+            .join("\n");
+        expect(body, "onMounted 里不应有顶层早退，否则 loadSubs() 不会执行").to.not
+            .match(/^(if \(.*\) )?return;/m);
+        expect(body).to.include("loadSubs()");
+    });
+
+    it("keeps node reordering wired to the exported order", async function () {
+        // The preview table's ⠿ handle is the only way to set nodeOrder, and
+        // the export path sorts the stored nodes by it. Dropping the handle
+        // during a markup rewrite disables the feature silently, while
+        // saveNodeSelection keeps reporting success.
+        const html = await (await fetch(base + "/")).text();
+        expect(html).to.include('class="drag-handle"');
+        expect(html).to.include("draggable=");
+        expect(html).to.include("onNodeDrop");
+        expect(html).to.include("nodeOrder");
+    });
+
+    it("keeps the world map wired to its tab", async function () {
+        // The map canvas only exists while its output tab is shown, so the
+        // draw has to be triggered by switching to that tab - generate() only
+        // covers the case where the map was already the active tab. Without
+        // the handler the map renders blank and never binds its zoom/pan
+        // listeners.
+        const html = await (await fetch(base + "/")).text();
+        expect(html).to.include('@tab-change="onOutTabChange"');
+        expect(html).to.include("drawWorldMap");
+        expect(html).to.include("bindMapEvents");
     });
 
     it("returns 404 for unknown static paths", async function () {
