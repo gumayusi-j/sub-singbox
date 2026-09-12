@@ -1821,12 +1821,20 @@ pre.code-block {
                             @input="onPublicUrlInput" @blur="flushPublicUrl" />
                 </el-form-item>
               </el-col>
-              <el-col :xs="24" :sm="12">
+              <el-col :xs="24" :sm="8">
                 <el-form-item label="客户端类型" size="small">
                   <el-select v-model="exportTarget" @change="onTargetChange" style="width:100%"
                     placeholder="自动识别客户端（按 User-Agent）">
                     <el-option :value="''" label="自动识别客户端（按 User-Agent）"></el-option>
                     <el-option v-for="t in targets" :key="t.id" :value="t.id" :label="t.label" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="4">
+                <el-form-item label="订阅源" size="small">
+                  <el-select v-model="exportSourceId" style="width:100%" placeholder="全部订阅源">
+                    <el-option :value="''" label="全部订阅源"></el-option>
+                    <el-option v-for="s in sources" :key="s.id" :value="s.id" :label="s.name" />
                   </el-select>
                 </el-form-item>
               </el-col>
@@ -2147,6 +2155,7 @@ var app = Vue.createApp({
 
     // Export
     var exportTarget = Vue.ref(lsLoad(STORE.exportTarget, ''));
+    var exportSourceId = Vue.ref(''); // '' = all sources, otherwise a source id
     var last = Vue.ref(null);
     var generating = Vue.ref(false);
     var genStatus = Vue.ref('');
@@ -2247,7 +2256,10 @@ var app = Vue.createApp({
     var cfgJson = Vue.computed(function() { return last.value ? JSON.stringify(last.value.output, null, 2) : ''; });
     var fullSubUrl = Vue.computed(function() {
       var base = publicUrl.value || location.origin;
-      var query = exportTarget.value ? '?target=' + encodeURIComponent(exportTarget.value) : '';
+      var params = [];
+      if (exportTarget.value) params.push('target=' + encodeURIComponent(exportTarget.value));
+      if (exportSourceId.value) params.push('src=' + encodeURIComponent(exportSourceId.value));
+      var query = params.length > 0 ? '?' + params.join('&') : '';
       return base + globalSubUrl.value + query;
     });
     var allWarnings = Vue.computed(function() {
@@ -3278,7 +3290,7 @@ var app = Vue.createApp({
       activeTab, sources, targets, globalSubUrl, publicUrl, dataPath, settings, acl,
       theme, isDark, toggleTheme,
       showAddForm, editingId, savingSource, srcFormHint, srcForm,
-      exportTarget, last, generating, genStatus, genStatusType, activeOutTab,
+      exportTarget, exportSourceId, last, generating, genStatus, genStatusType, activeOutTab,
       regionFilter, regionList, displayNodes,
       pingResults, pingRunning, pingStatus, pingStatusType,
       pageLoading, previewMap, getPreview, openCards, isOpen, toggleCard, onSourceCommand,
