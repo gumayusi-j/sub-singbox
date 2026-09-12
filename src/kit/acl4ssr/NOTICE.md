@@ -5,7 +5,7 @@ unmodified so the generated sing-box configs can carry an offline, built-in
 rule set (no subscription-side rule provider needed at export time).
 
 - Project / source:  https://github.com/ACL4SSR/ACL4SSR
-- Revision (pinned): `f7c4233b2bc706c89668753b18a9f899d7e9f9bf`
+- Revision (pinned): `75f0101039d71724b6e998b34604c2e053580e0c`
 - License:           CC BY-SA 4.0 — https://creativecommons.org/licenses/by-sa/4.0/
 - Origin:            Copied from the open-source Tower (iOS) app's bundled
                      snapshot, which rewrites the upstream configs' master URLs
