@@ -73,8 +73,13 @@ export function selectSources(store, resolved, options) {
 
     const enabled = all.filter((s) => s.enabled);
     if (!ids || ids.length === 0) return enabled;
-    const wanted = new Set(ids);
-    return enabled.filter((s) => wanted.has(s.id));
+
+    // When ?src= explicitly names sources, return them even if disabled.
+    // This keeps per-source subscription links stable across enable/disable
+    // toggles — the client keeps working as long as the source exists.
+    const byId = new Map(all.map((source) => [source.id, source]));
+    const wanted = ids.map((id) => byId.get(id)).filter(Boolean);
+    return wanted.length > 0 ? wanted : enabled.filter((s) => ids.includes(s.id));
 }
 
 // No `mode` is forwarded: leaving it unset is what selects the "client"
