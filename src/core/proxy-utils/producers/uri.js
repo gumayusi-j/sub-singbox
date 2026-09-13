@@ -879,6 +879,9 @@ export default function URI_Producer() {
                             );
                     }
                 }
+                if (proxy.udp) {
+                    query += '&udp=1';
+                }
                 if (proxy['udp-over-tcp']) {
                     query += '&uot=1';
                 }
