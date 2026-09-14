@@ -132,7 +132,7 @@ describe("subscription targets — table integrity", function () {
 
     it("lists the clients the export page can pin an address to", function () {
         const listed = listExportTargets();
-        expect(listed).to.have.length(9);
+        expect(listed).to.have.length(10);
         expect(listed[0]).to.have.keys(["id", "label"]);
         // Membership, not order: the table's order is a UA-matching concern.
         expect(listed.map((t) => t.id)).to.have.members([
@@ -145,6 +145,7 @@ describe("subscription targets — table integrity", function () {
             "sing-box",
             "hiddify",
             "egern",
+            "stash",
         ]);
         // URI list is an output format rather than a client a user picks.
         expect(listed.map((t) => t.id)).to.not.include("uri");

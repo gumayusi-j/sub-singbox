@@ -62,6 +62,7 @@ export const TARGETS = [
     {
         id: "stash",
         label: "Stash",
+        exportable: true,
         produce: "stash",
         contentType: "text/yaml; charset=utf-8",
         ua: /\bstash\b/i,
