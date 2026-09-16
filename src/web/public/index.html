@@ -3176,10 +3176,13 @@ var app = Vue.createApp({
       skippedExpanded.value = false;
       skippedGroupExpanded.value = new Set();
       try {
-        last.value = await api('POST', '/api/export', {
+        var exportBody = {
           ids: enabledSubs.value.map(function(s){ return s.id; }),
           out: 'config'
-        });
+        };
+        if (exportTarget.value) exportBody.target = exportTarget.value;
+        if (exportSourceId.value) exportBody.src = exportSourceId.value;
+        last.value = await api('POST', '/api/export', exportBody);
         regionFilter.value = '';
         var removed = 0;
         if (exportTarget.value && last.value.nodes) {
