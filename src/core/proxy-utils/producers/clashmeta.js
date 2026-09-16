@@ -442,7 +442,7 @@ export default function ClashMeta_Producer() {
                 return proxy;
             });
 
-        return produceProxyListOutput(list, type, opts);
+        return produceProxyListOutput(list, type, Object.assign({}, opts, { 'pretty-yaml': true }));
     };
     return { type, produce };
 }
