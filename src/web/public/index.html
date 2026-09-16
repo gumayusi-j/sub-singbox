@@ -881,6 +881,66 @@ a:focus-visible,
 .result-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .result-actions .footnote { margin: 0; }
 
+/* Result summary metrics */
+.result-summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.result-summary .metric-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 28px; padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2); color: var(--text-2);
+  font-size: 12.5px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.result-summary .metric-chip b { color: var(--text); font-weight: 700; }
+.result-summary .metric-chip.is-ok { background: var(--ok-soft); color: var(--ok); }
+.result-summary .metric-chip.is-warn { background: var(--warn-soft); color: var(--warn); }
+.result-summary .metric-chip.is-danger { background: var(--danger-soft); color: var(--danger); }
+
+/* Skipped nodes section */
+.skipped-section { margin-top: 4px; }
+.skipped-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; cursor: pointer; user-select: none;
+  font-size: 13px; font-weight: 600; color: var(--text-2);
+}
+.skipped-header:hover { color: var(--text); }
+.skipped-header .chev { transition: transform var(--disclose) var(--ease); }
+.skipped-header .chev.open { transform: rotate(180deg); }
+.skipped-header .count {
+  font-size: 11px; font-weight: 700; color: var(--warn);
+  background: var(--warn-soft); border-radius: var(--r-pill);
+  padding: 1px 7px; margin-left: 2px;
+}
+.skipped-body {
+  padding: 8px 0 4px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.skipped-group {
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--r-card-sm);
+  overflow: hidden;
+}
+.skipped-group-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; cursor: pointer; user-select: none;
+  background: var(--surface-2); font-size: 12.5px;
+}
+.skipped-group-header:hover { background: var(--surface-3); }
+.skipped-group-header .reason { flex: 1; color: var(--text-2); font-weight: 550; }
+.skipped-group-header .group-count {
+  font-size: 11px; font-weight: 700; color: var(--warn);
+  background: var(--warn-soft); border-radius: var(--r-pill);
+  padding: 1px 7px;
+}
+.skipped-group-body {
+  padding: 6px 14px 10px;
+  display: flex; flex-wrap: wrap; gap: 4px 8px;
+}
+.skipped-node-tag {
+  font-size: 11.5px; color: var(--text-2);
+  padding: 2px 0; line-height: 1.6;
+}
+
 .filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .chip-filter {
   display: inline-flex;
@@ -1701,12 +1761,49 @@ pre.code-block {
 
           <!-- Result -->
           <div class="card result-card" v-if="last">
+            <!-- Result summary -->
+            <div class="result-summary" v-if="resultSummary">
+              <span class="metric-chip" :class="resultSummary.nodes > 0 ? 'is-ok' : ''">
+                <b>{{ resultSummary.nodes }}</b> 兼容节点
+              </span>
+              <span class="metric-chip" v-if="resultSummary.skipped > 0" :class="resultSummary.skipped > 0 ? 'is-warn' : ''">
+                <b>{{ resultSummary.skipped }}</b> 已跳过
+              </span>
+              <span class="metric-chip" v-if="resultSummary.rules > 0">
+                <b>{{ resultSummary.rules }}</b> 规则集
+              </span>
+            </div>
+
             <el-alert v-if="allWarnings.length" type="warning" :closable="false" show-icon>
               <template #title>注意</template>
               <template #default>
                 <div v-for="(w, i) in allWarnings" :key="i" style="font-size:12px;margin-top:2px">· {{ w }}</div>
               </template>
             </el-alert>
+
+            <!-- Skipped nodes section -->
+            <div class="skipped-section" v-if="skippedNodeGroups.length > 0">
+              <div class="skipped-header" @click="toggleSkippedExpanded">
+                <span class="chev" :class="{ open: skippedExpanded }"><el-icon><arrow-down /></el-icon></span>
+                <span>跳过的节点</span>
+                <span class="count">{{ (last.skippedNodes || []).length }}</span>
+              </div>
+              <div class="skipped-body" v-if="skippedExpanded">
+                <div class="skipped-group" v-for="g in skippedNodeGroups" :key="g.reason">
+                  <div class="skipped-group-header" @click="toggleSkippedGroup(g.reason)">
+                    <span class="chev" :class="{ open: isSkippedGroupExpanded(g.reason) }"><el-icon><arrow-down /></el-icon></span>
+                    <span class="reason">{{ g.reason }}</span>
+                    <span class="group-count">{{ g.nodes.length }}</span>
+                  </div>
+                  <div class="skipped-group-body" v-if="isSkippedGroupExpanded(g.reason)">
+                    <span class="skipped-node-tag" v-for="n in g.nodes" :key="n.name">
+                      <span class="chip chip-proto" :class="'p-' + familyOf(n.type)" style="font-size:10px;height:18px;padding:0 5px">{{ abbrOf(n.type) }}</span>
+                      {{ n.name }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <el-tabs v-model="activeOutTab" class="seg seg-sm" @tab-change="onOutTabChange">
               <el-tab-pane label="节点" name="node">
@@ -2162,6 +2259,8 @@ var app = Vue.createApp({
     var genStatusType = Vue.ref('');
     var activeOutTab = Vue.ref('node');
     var regionFilter = Vue.ref('');
+    var skippedExpanded = Vue.ref(false);
+    var skippedGroupExpanded = Vue.ref(new Set());
 
     // Ping
     var pingResults = Vue.reactive({});
@@ -2276,6 +2375,47 @@ var app = Vue.createApp({
         }
       }
       return warns;
+    });
+
+    // Skipped nodes from the server, grouped by reason.
+    var skippedNodeGroups = Vue.computed(function() {
+      var skipped = (last.value && last.value.skippedNodes) || [];
+      if (skipped.length === 0) return [];
+      var groups = new Map();
+      var order = [];
+      skipped.forEach(function(node) {
+        var reason = node.reason || '未知原因';
+        if (!groups.has(reason)) { groups.set(reason, []); order.push(reason); }
+        groups.get(reason).push(node);
+      });
+      return order.map(function(reason) {
+        return { reason: reason, nodes: groups.get(reason) };
+      });
+    });
+
+    // Total skipped count (server-side skipped + client-side protocol filter).
+    var totalSkippedCount = Vue.computed(function() {
+      var serverSkipped = ((last.value && last.value.skippedNodes) || []).length;
+      var clientFiltered = 0;
+      if (exportTarget.value && last.value && last.value.nodes) {
+        var supported = CLIENT_PROTOCOLS[exportTarget.value];
+        if (supported) {
+          var set = {}; supported.forEach(function(p){ set[p]=true; });
+          clientFiltered = last.value.nodes.filter(function(n){ return !set[n.type]; }).length;
+        }
+      }
+      return serverSkipped + clientFiltered;
+    });
+
+    // Result summary stats.
+    var resultSummary = Vue.computed(function() {
+      if (!last.value) return null;
+      return {
+        nodes: filteredNodes.value.length,
+        skipped: totalSkippedCount.value,
+        rules: (last.value.output && last.value.output.route && last.value.output.route.rule_set)
+          ? last.value.output.route.rule_set.length : 0,
+      };
     });
 
     // Headline numbers. Node totals come from the per-source count the server
@@ -2950,12 +3090,25 @@ var app = Vue.createApp({
       activeTab.value = tab;
       if (tab === 'export' && activeOutTab.value === 'map') Vue.nextTick(drawWorldMap);
     }
+    function toggleSkippedExpanded() {
+      skippedExpanded.value = !skippedExpanded.value;
+    }
+    function toggleSkippedGroup(reason) {
+      var s = new Set(skippedGroupExpanded.value);
+      if (s.has(reason)) s.delete(reason); else s.add(reason);
+      skippedGroupExpanded.value = s;
+    }
+    function isSkippedGroupExpanded(reason) {
+      return skippedGroupExpanded.value.has(reason);
+    }
 
     // === Export ===
     async function generate() {
       if (!enabledSubs.value.length) return;
       generating.value = true;
       genStatus.value = '生成中…'; genStatusType.value = '';
+      skippedExpanded.value = false;
+      skippedGroupExpanded.value = new Set();
       try {
         last.value = await api('POST', '/api/export', {
           ids: enabledSubs.value.map(function(s){ return s.id; }),
@@ -2970,7 +3123,11 @@ var app = Vue.createApp({
             removed = last.value.nodes.filter(function(n){ return !set[n.type]; }).length;
           }
         }
-        genStatus.value = '完成：' + filteredNodes.value.length + ' 个节点' + (removed ? '（已过滤 '+removed+' 个不兼容节点）' : '') + '。';
+        var serverSkipped = (last.value.skippedNodes || []).length;
+        var parts = ['完成：' + filteredNodes.value.length + ' 个节点'];
+        if (removed > 0) parts.push('过滤 ' + removed + ' 个不兼容');
+        if (serverSkipped > 0) parts.push('跳过 ' + serverSkipped + ' 个');
+        genStatus.value = parts.join('，') + '。';
         genStatusType.value = 'ok';
         if (activeOutTab.value === 'map') Vue.nextTick(drawWorldMap);
       } catch(e) {
@@ -3040,6 +3197,10 @@ var app = Vue.createApp({
         publicUrlHint.value = '已改为按客户端 User-Agent 自动识别。';
       }
       publicUrlHintType.value = '';
+      // Auto-regenerate when target changes and there are enabled sources.
+      if (last.value && enabledSubs.value.length > 0) {
+        generate();
+      }
     }
     async function rotateToken() {
       try { await ElementPlus.ElMessageBox.confirm('轮换密钥会让旧地址立刻失效，需要重新复制。继续？', '轮换密钥', { type:'warning' }); }
@@ -3304,6 +3465,8 @@ var app = Vue.createApp({
       refreshProgress, cancelRefresh,
       openImport, closeImport, submitImport, importFile, deleteScheme,
       enabledSubs, aclName, filteredNodes, hasPing, cfgJson, fullSubUrl, allWarnings,
+      skippedNodeGroups, skippedExpanded, skippedGroupExpanded, resultSummary,
+      toggleSkippedExpanded, toggleSkippedGroup, isSkippedGroupExpanded,
       stats, nextStep,
       familyOf, abbrOf, countryOf, topProtocol, hostOf, statusText, usageOf,
       onTabChange, onOutTabChange, goTab, openAddForm, openEditForm, closeAddForm, saveSource, deleteSource,

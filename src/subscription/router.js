@@ -932,6 +932,9 @@ export function createSubscriptionRouter(options) {
             if (rendered.warnings && rendered.warnings.length > 0) {
                 data.warnings = rendered.warnings;
             }
+            if (rendered.skippedNodes && rendered.skippedNodes.length > 0) {
+                data.skippedNodes = rendered.skippedNodes;
+            }
             sendJson(res, 200, { ok: true, data });
             return;
         }

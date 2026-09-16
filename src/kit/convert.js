@@ -62,13 +62,91 @@ function produceToObject(nodes, opts) {
     return JSON.parse(external); // { outbounds, endpoints }
 }
 
+// Determine why a node was not exported. Returns a human-readable reason
+// string, or null when the node looks exportable. This is a best-effort
+// heuristic — the producer catches errors internally, so we inspect the
+// source node rather than the producer's exception.
+function skipReason(node) {
+    if (!node || typeof node !== "object") return "节点数据无效";
+    const type = (node.type || "").toLowerCase();
+    // SSR: sing-box removed native shadowsocksr support
+    if (type === "ssr") return "sing-box 不支持 SSR 协议";
+    // Snell v1-v3: unsupported baseline
+    if (type === "snell") {
+        const v = Number(node.version);
+        if (!Number.isNaN(v) && v >= 1 && v <= 3) {
+            return "sing-box 不支持 Snell v" + v;
+        }
+    }
+    // TUIC v4: token-based auth
+    if (type === "tuic" && node.token && node.token.length > 0) {
+        return "sing-box 不支持 TUIC v4";
+    }
+    // VLESS unsupported flow
+    if (type === "vless" && node.flow && node.flow !== "xtls-rprx-vision") {
+        return "sing-box 不支持 VLESS flow: " + node.flow;
+    }
+    // VLESS non-none encryption
+    if (type === "vless" && node.encryption && node.encryption !== "none") {
+        return "sing-box 不支持 VLESS 加密方式: " + node.encryption;
+    }
+    // Trojan with flow
+    if (type === "trojan" && node.flow) {
+        return "sing-box 不支持 Trojan flow: " + node.flow;
+    }
+    // xhttp network
+    if (node.network === "xhttp") {
+        return "sing-box 不支持 xhttp 传输方式";
+    }
+    // Shadowsocks over TLS without plugin (native SS TLS)
+    if (type === "ss" && node.tls && !node.plugin) {
+        return "sing-box 不支持原生 SS-over-TLS";
+    }
+    // SOCKS5 with TLS
+    if (type === "socks5" && node.tls) {
+        return "sing-box 不支持带 TLS 的 SOCKS5";
+    }
+    // Unknown type
+    if (!["ss", "vmess", "vless", "trojan", "hysteria", "hysteria2",
+        "tuic", "wireguard", "snell", "http", "socks5", "naive",
+        "anytls", "tailscale", "ssh"].includes(type)) {
+        return "不支持的协议类型: " + (node.type || "未知");
+    }
+    return null;
+}
+
+// Collect skipped nodes by comparing input nodes against the produced output.
+function collectSkipped(nodes, parsed) {
+    const produced = new Set();
+    for (const o of (parsed.outbounds || [])) {
+        if (o && typeof o.tag === "string") produced.add(o.tag);
+    }
+    for (const e of (parsed.endpoints || [])) {
+        if (e && typeof e.tag === "string") produced.add(e.tag);
+    }
+    const skipped = [];
+    for (const node of nodes) {
+        const name = node && node.name;
+        if (typeof name !== "string" || name === "") continue;
+        if (produced.has(name)) continue;
+        const reason = skipReason(node);
+        if (reason) {
+            skipped.push({ name, type: node.type || "unknown", reason });
+        }
+    }
+    return skipped;
+}
+
 // nodes: array of mihomo-style proxy objects (already parsed/normalized).
+// Returns { outbounds, endpoints, skippedNodes }.
 export function fromNodes(nodes, opts) {
     if (!Array.isArray(nodes)) {
         throw new TypeError("fromNodes expects an array of proxy node objects");
     }
-    if (nodes.length === 0) return { outbounds: [], endpoints: [] };
-    return produceToObject(nodes, opts);
+    if (nodes.length === 0) return { outbounds: [], endpoints: [], skippedNodes: [] };
+    const parsed = produceToObject(nodes, opts);
+    const skippedNodes = collectSkipped(nodes, parsed);
+    return { outbounds: parsed.outbounds, endpoints: parsed.endpoints, skippedNodes };
 }
 
 // Parse subscription text into mihomo-style node objects, without producing any
@@ -89,9 +167,11 @@ export function fromText(text, opts) {
     }
     const nodes = parseNodes(text);
     if (nodes.length === 0) {
-        return { outbounds: [], endpoints: [] };
+        return { outbounds: [], endpoints: [], skippedNodes: [] };
     }
-    return produceToObject(nodes, opts);
+    const parsed = produceToObject(nodes, opts);
+    const skippedNodes = collectSkipped(nodes, parsed);
+    return { outbounds: parsed.outbounds, endpoints: parsed.endpoints, skippedNodes };
 }
 
 // Merge the download headers: defaults (UA, optional bearer token) plus any
@@ -215,6 +295,8 @@ export default {
     parseNodes,
     tryLoadNodeDocument,
     buildHeaders,
+    skipReason,
+    collectSkipped,
     DEFAULT_USER_AGENT,
     DEFAULT_TIMEOUT_MS,
     CLIENT_GATING_STATUS_CODES,

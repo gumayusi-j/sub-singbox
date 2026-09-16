@@ -283,6 +283,9 @@ export async function convertRequest(body, config) {
         endpoints,
         nodes: collectNodes(parsed),
     };
+    if (Array.isArray(parsed.skippedNodes) && parsed.skippedNodes.length > 0) {
+        data.skippedNodes = parsed.skippedNodes;
+    }
     if (outMode === "outbounds") {
         data.output = { outbounds, endpoints };
     } else {

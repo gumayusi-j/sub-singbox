@@ -22,13 +22,16 @@ function isPlainObject(value) {
 // their tags never drift from what the caller pasted.
 export function mergeParsed(parsedList, warnings) {
     if (!Array.isArray(parsedList) || parsedList.length <= 1) {
+        const first = parsedList && parsedList[0];
         return {
-            outbounds: (parsedList && parsedList[0] && parsedList[0].outbounds) || [],
-            endpoints: (parsedList && parsedList[0] && parsedList[0].endpoints) || [],
+            outbounds: (first && first.outbounds) || [],
+            endpoints: (first && first.endpoints) || [],
+            skippedNodes: (first && first.skippedNodes) || [],
         };
     }
     const outbounds = [];
     const endpoints = [];
+    const skippedNodes = [];
     const seenOut = new Set();
     const seenEp = new Set();
     const append = (coll, o, seen, label) => {
@@ -60,8 +63,11 @@ export function mergeParsed(parsedList, warnings) {
         for (const o of (parsed && parsed.endpoints) || []) {
             append(endpoints, o, seenEp, "endpoint");
         }
+        if (parsed && Array.isArray(parsed.skippedNodes)) {
+            skippedNodes.push(...parsed.skippedNodes);
+        }
     }
-    return { outbounds, endpoints };
+    return { outbounds, endpoints, skippedNodes };
 }
 
 // The non-sing-box dialects key their entries by display name, so merging two

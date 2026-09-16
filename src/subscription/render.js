@@ -216,13 +216,18 @@ export function renderSubscription(store, resolved, options) {
     }
 
     let body;
+    const skippedNodes = [];
 
     try {
         if (target.mode === "singbox") {
-            const parsed = mergeParsed(
-                parsedNodes.map((nodes) => fromNodes(nodes, normalized)),
-                warnings,
-            );
+            const fromResults = parsedNodes.map((nodes) => fromNodes(nodes, normalized));
+            // Collect skipped nodes from each source's fromNodes result.
+            for (const result of fromResults) {
+                if (result && Array.isArray(result.skippedNodes)) {
+                    skippedNodes.push(...result.skippedNodes);
+                }
+            }
+            const parsed = mergeParsed(fromResults, warnings);
             if (normalized.out === "outbounds") {
                 body = JSON.stringify(
                     { outbounds: parsed.outbounds, endpoints: parsed.endpoints },
@@ -277,6 +282,7 @@ export function renderSubscription(store, resolved, options) {
         sources: withSnapshots.map((entry) => entry.source),
         usage,
         warnings,
+        skippedNodes,
         lastModifiedMs,
     };
 }
