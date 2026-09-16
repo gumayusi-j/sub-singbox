@@ -253,7 +253,9 @@ export function renderSubscription(store, resolved, options) {
             // structure Tower exports.  Other dialects (surge, loon, …) already
             // work as bare lists that their clients know how to merge.
             const CLASH_IDS = new Set(["clash", "stash", "shadowrocket", "karing"]);
-            body = CLASH_IDS.has(target.id) ? assembleClash(raw) : raw;
+            body = CLASH_IDS.has(target.id)
+                ? assembleClash(raw, normalized.aclScheme)
+                : raw;
         }
     } catch (e) {
         if (e instanceof CompatError) return errorResponse(422, e.message);
