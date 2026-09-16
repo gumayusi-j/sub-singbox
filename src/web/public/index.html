@@ -1741,6 +1741,58 @@ pre.code-block {
               {{ generating ? '生成中…' : '生成配置' }}
             </button>
           </div>
+
+          <!-- GitHub Gist Sync -->
+          <div class="card" style="padding:18px 20px">
+            <div class="section-head" style="margin-bottom:10px">
+              <h2>GitHub Gist 同步</h2>
+              <span class="chip chip-ghost">生成配置时自动推送</span>
+            </div>
+            <p class="footnote" style="margin:0 0 12px">
+              填写 Gist ID 和 Token 后，每次点击「生成配置」会自动将配置推送到 GitHub Gist。
+              不同客户端类型会生成不同文件名，所有文件共享同一个 Gist。
+            </p>
+            <el-row :gutter="14">
+              <el-col :xs="24" :sm="10">
+                <el-form-item label="Gist ID" size="small">
+                  <el-input v-model="gistId" placeholder="7f3a8b29c0d1e2f3a4b5c6d7e8f90123"
+                            @blur="saveGistConfig" @change="saveGistConfig" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="10">
+                <el-form-item label="GitHub Token" size="small">
+                  <el-input v-model="githubToken" type="password" show-password
+                            placeholder="ghp_xxxxxx"
+                            @blur="saveGistConfig" @change="saveGistConfig" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="4">
+                <el-form-item label=" " size="small">
+                  <button class="btn btn-primary" type="button" style="width:100%"
+                          :disabled="gistSyncing || !last" @click="syncToGist">
+                    <el-icon v-if="gistSyncing" class="spin"><loading /></el-icon>
+                    <el-icon v-else><upload /></el-icon>
+                    {{ gistSyncing ? '同步中…' : '手动同步' }}
+                  </button>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <p class="footnote" style="margin:0" v-if="gistStatus"
+               :class="gistStatusType === 'ok' ? 'is-ok' : gistStatusType === 'err' ? 'is-danger' : ''">{{ gistStatus }}</p>
+
+            <!-- Gist file download links -->
+            <div v-if="gistFiles.length" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke-soft)">
+              <p style="font-size:12.5px;font-weight:600;color:var(--text-2);margin:0 0 8px">Gist 文件下载直链</p>
+              <div v-for="f in gistFiles" :key="f.name"
+                   style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px">
+                <span class="chip chip-accent" style="font-family:var(--font-mono)">{{ f.name }}</span>
+                <span class="mono" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:11px">{{ f.rawUrl }}</span>
+                <button class="btn btn-sm" type="button" @click="copyText(f.rawUrl)">复制</button>
+                <a :href="f.rawUrl" target="_blank" class="btn btn-sm" style="text-decoration:none">打开</a>
+              </div>
+            </div>
+          </div>
+
           <!-- Render options that change the config rather than which nodes go
                into it. -->
           <div class="card" style="margin-top:12px">
@@ -1879,7 +1931,7 @@ pre.code-block {
                 </div>
               </el-tab-pane>
 
-              <el-tab-pane label="配置 JSON" name="cfg">
+              <el-tab-pane label="配置" name="cfg">
                 <pre class="code-block">{{ cfgJson }}</pre>
               </el-tab-pane>
             </el-tabs>
@@ -1889,7 +1941,7 @@ pre.code-block {
                 <el-icon><document-copy /></el-icon> 复制完整配置
               </button>
               <button class="btn btn-sm" type="button" @click="downloadConfig">
-                <el-icon><download /></el-icon> 下载 JSON
+                <el-icon><download /></el-icon> 下载配置
               </button>
               <button class="btn btn-sm" type="button" :disabled="pingRunning" @click="pingNodes">
                 <el-icon :class="{ spin: pingRunning }"><connection /></el-icon>
@@ -2257,6 +2309,14 @@ var app = Vue.createApp({
     var generating = Vue.ref(false);
     var genStatus = Vue.ref('');
     var genStatusType = Vue.ref('');
+
+    // GitHub Gist sync
+    var gistId = Vue.ref(lsLoad('sbx:gistId', ''));
+    var githubToken = Vue.ref(lsLoad('sbx:githubToken', ''));
+    var gistSyncing = Vue.ref(false);
+    var gistStatus = Vue.ref('');
+    var gistStatusType = Vue.ref('');
+    var gistFiles = Vue.ref([]); // [{ name, rawUrl, size }]
     var activeOutTab = Vue.ref('node');
     var regionFilter = Vue.ref('');
     var skippedExpanded = Vue.ref(false);
@@ -2352,7 +2412,13 @@ var app = Vue.createApp({
       return nodes.filter(function(n){ return set[n.type]; });
     });
     var hasPing = Vue.computed(function() { return Object.keys(pingResults).length > 0; });
-    var cfgJson = Vue.computed(function() { return last.value ? JSON.stringify(last.value.output, null, 2) : ''; });
+    var cfgJson = Vue.computed(function() {
+      if (!last.value) return '';
+      var out = last.value.output;
+      // sing-box returns an object; other targets (clash, surge, loon…) return
+      // a pre-formatted string.  Normalise to a displayable string either way.
+      return typeof out === 'string' ? out : JSON.stringify(out, null, 2);
+    });
     var fullSubUrl = Vue.computed(function() {
       var base = publicUrl.value || location.origin;
       var params = [];
@@ -3134,7 +3200,102 @@ var app = Vue.createApp({
         genStatus.value = '生成失败：'+(e.message||e); genStatusType.value = 'err';
       }
       generating.value = false;
+      // Auto-sync to Gist if configured
+      if (gistId.value && githubToken.value && last.value) {
+        syncToGist();
+      }
     }
+
+    // === GitHub Gist Sync ===
+    // File name mapping: different clients get different file names in the Gist.
+    var GIST_FILE_MAP = {
+      'sing-box': 'singbox-config.json',
+      'clash': 'clash-config.yaml',
+      'surge': 'surge-config.sgmodule',
+      'loon': 'loon-config.conf',
+      'quantumultx': 'qx-config.conf',
+      'shadowrocket': 'shadowrocket-config.conf',
+      'stash': 'stash-config.yaml',
+      'surfboard': 'surfboard-config.conf',
+      'v2ray': 'v2ray-config.json',
+      'egern': 'egern-config.yaml',
+      'hiddify': 'hiddify-config.json',
+      'karing': 'karing-config.json',
+      'uri': 'uri-list.txt'
+    };
+
+    async function syncToGist() {
+      if (!gistId.value || !githubToken.value) {
+        gistStatus.value = '请先填写 Gist ID 和 GitHub Token。';
+        gistStatusType.value = 'err';
+        return;
+      }
+      if (!last.value || !cfgJson.value) {
+        gistStatus.value = '请先生成配置。';
+        gistStatusType.value = 'err';
+        return;
+      }
+      gistSyncing.value = true;
+      gistStatus.value = '同步中…';
+      gistStatusType.value = '';
+
+      var targetKey = exportTarget.value || 'sing-box';
+      var fileName = GIST_FILE_MAP[targetKey] || (targetKey + '-config.json');
+      var content = cfgJson.value;
+
+      try {
+        var url = 'https://api.github.com/gists/' + gistId.value;
+        var body = {
+          description: 'singbox-kit 配置同步于 ' + new Date().toLocaleString(),
+          files: {}
+        };
+        body.files[fileName] = { content: content };
+
+        var res = await fetch(url, {
+          method: 'PATCH',
+          headers: {
+            'Accept': 'application/vnd.github+json',
+            'Authorization': 'Bearer ' + githubToken.value,
+            'X-GitHub-Api-Version': '2022-11-28',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          var errText = await res.text();
+          throw new Error('GitHub API 返回 ' + res.status + ': ' + errText);
+        }
+
+        var data = await res.json();
+        // Collect all files with raw_url from the Gist response
+        var files = [];
+        if (data && data.files) {
+          Object.keys(data.files).forEach(function(name) {
+            var f = data.files[name];
+            files.push({
+              name: name,
+              rawUrl: f.raw_url,
+              size: f.size
+            });
+          });
+        }
+        gistFiles.value = files;
+        gistStatus.value = '已同步 ' + fileName + ' 到 Gist。';
+        gistStatusType.value = 'ok';
+      } catch (e) {
+        gistStatus.value = '同步失败：' + (e.message || e);
+        gistStatusType.value = 'err';
+      }
+      gistSyncing.value = false;
+    }
+
+    // Persist Gist config to localStorage
+    function saveGistConfig() {
+      lsSave('sbx:gistId', gistId.value);
+      lsSave('sbx:githubToken', githubToken.value);
+    }
+
     function copyConfig() {
       if (!last.value) return;
       // Same path as every other copy button. A second, private copy
@@ -3143,9 +3304,13 @@ var app = Vue.createApp({
     }
     function downloadConfig() {
       if (!last.value) return;
+      var targetKey = exportTarget.value || 'sing-box';
+      var fileName = GIST_FILE_MAP[targetKey] || 'singbox-config.json';
+      var mime = fileName.endsWith('.json') ? 'application/json' :
+                fileName.endsWith('.yaml') ? 'text/yaml' : 'text/plain';
       var a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([cfgJson.value], { type:'application/json' }));
-      a.download = 'singbox-config.json';
+      a.href = URL.createObjectURL(new Blob([cfgJson.value], { type: mime }));
+      a.download = fileName;
       document.body.appendChild(a); a.click();
       setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 200);
     }
@@ -3452,6 +3617,8 @@ var app = Vue.createApp({
       theme, isDark, toggleTheme,
       showAddForm, editingId, savingSource, srcFormHint, srcForm,
       exportTarget, exportSourceId, last, generating, genStatus, genStatusType, activeOutTab,
+      gistId, githubToken, gistSyncing, gistStatus, gistStatusType, gistFiles,
+      saveGistConfig, syncToGist,
       regionFilter, regionList, displayNodes,
       pingResults, pingRunning, pingStatus, pingStatusType,
       pageLoading, previewMap, getPreview, openCards, isOpen, toggleCard, onSourceCommand,
