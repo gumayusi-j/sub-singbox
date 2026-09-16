@@ -1,15 +1,15 @@
 // Assemble a complete clash (mihomo) config from a produced proxy YAML list.
 //
-// Tower generates a full config with mixed-port, dns, proxy-groups and rules.
-// sub-singbox's ProxyUtils.produce only returns the proxies section; this
-// module wraps it into a standalone config that clash clients can import.
+// Mirrors Tower's clash export structure: two-tier proxy-groups with no
+// circular references.  The top-level "节点选择" only references other
+// groups (auto, manual, direct, region…), never raw nodes.  Actual nodes
+// live inside "手动切换" and "自动选择".  "🎯 直连" contains only DIRECT.
 
 import { safeLoad } from "@/utils/yaml";
 
 // ── helpers ──────────────────────────────────────────────────────────
 
 function extractNodeNames(proxyYaml) {
-    // Try structured YAML parse first; fall back to regex for resilience.
     try {
         const doc = safeLoad(proxyYaml);
         if (doc && Array.isArray(doc.proxies)) {
@@ -18,8 +18,6 @@ function extractNodeNames(proxyYaml) {
                 .filter(Boolean);
         }
     } catch (_e) { /* fall through */ }
-
-    // Regex fallback: match  - name: "value"  or  - name: value
     const names = [];
     const re = /(?:^|\n)\s*-\s*name\s*:\s*["']?([^"'\n]+?)["']?\s*(?:\n|$)/g;
     let m;
@@ -29,80 +27,85 @@ function extractNodeNames(proxyYaml) {
     return names;
 }
 
+function q(s) { return '"' + s + '"'; }
+
+function selectGroup(name, members, opts) {
+    const lines = [];
+    lines.push("  - name: " + q(name));
+    lines.push("    type: select");
+    if (opts && opts.hidden) lines.push("    hidden: true");
+    lines.push("    proxies:");
+    for (const m of members) lines.push("      - " + q(m));
+    return lines.join("\n");
+}
+
+function urlTestGroup(name, url, interval, tolerance, members, opts) {
+    const lines = [];
+    lines.push("  - name: " + q(name));
+    lines.push("    type: url-test");
+    lines.push("    url: " + q(url));
+    lines.push("    interval: " + interval);
+    lines.push("    tolerance: " + tolerance);
+    if (opts && opts.hidden) lines.push("    hidden: true");
+    lines.push("    proxies:");
+    for (const m of members) lines.push("      - " + q(m));
+    return lines.join("\n");
+}
+
 // ── main ─────────────────────────────────────────────────────────────
 
-/**
- * assembleClash(proxyYaml, options?)
- *
- * @param {string} proxyYaml  The YAML text produced by ProxyUtils.produce
- *                             (must contain a `proxies:` section).
- * @param {object} [options]  Optional overrides.
- * @returns {string}          A complete clash YAML config.
- */
-export default function assembleClash(proxyYaml, options = {}) {
+export default function assembleClash(proxyYaml) {
     const names = extractNodeNames(proxyYaml);
 
-    // If we couldn't extract any node names, just return the raw proxy list
-    // wrapped in the bare minimum so the client at least gets the nodes.
     if (names.length === 0) {
-        return (
-            header() +
-            "proxies:\n  []\n"
-        );
+        return header() + "proxies:\n  []\n";
     }
 
-    // ── proxy-groups ───────────────────────────────────────────────
-    const selectAll = names.map((n) => `      - "${n}"`).join("\n");
+    // Tower's group names (no circular refs between them)
+    const SELECT  = "🚀 节点选择";
+    const MANUAL  = "手动切换";
+    const AUTO    = "♻️ 自动选择";
+    const NESTED  = "🎛️ 手动切换";
+    const DIRECT  = "🎯 直连";
+
+    // ── proxy-groups (Tower order, no circular refs) ──────────────
     const groups = [
-        // 🚀 节点选择 — manual select with all nodes
-        `  - name: "🚀 节点选择"`,
-        `    type: select`,
-        `    proxies:`,
-        `      - "♻️ 自动选择"`,
-        `      - "🎯 直连"`,
-        ...names.map((n) => `      - "${n}"`),
-        ``,
-        // ♻️ 自动选择 — url-test with all nodes
-        `  - name: "♻️ 自动选择"`,
-        `    type: url-test`,
-        `    url: "http://www.gstatic.com/generate_204"`,
-        `    interval: 300`,
-        `    tolerance: 50`,
-        `    proxies:`,
-        ...names.map((n) => `      - "${n}"`),
-        ``,
-        // 🎯 直连
-        `  - name: "🎯 直连"`,
-        `    type: select`,
-        `    proxies:`,
-        `      - DIRECT`,
-        `      - "🚀 节点选择"`,
-        ``,
-        // 🐟 漏网之鱼
-        `  - name: "🐟 漏网之鱼"`,
-        `    type: select`,
-        `    proxies:`,
-        `      - "🚀 节点选择"`,
-        `      - "♻️ 自动选择"`,
-        `      - "🎯 直连"`,
-    ].join("\n");
+        // 1. 🚀 节点选择 — top-level select, references other GROUPS only
+        selectGroup(SELECT, [
+            AUTO,
+            DIRECT,
+            MANUAL,
+        ]),
 
-    // ── rules ──────────────────────────────────────────────────────
+        // 2. 手动切换 — select with all raw nodes
+        selectGroup(MANUAL, names),
+
+        // 3. ♻️ 自动选择 — url-test with all raw nodes
+        urlTestGroup(AUTO, "http://www.gstatic.com/generate_204", 300, 50, names),
+
+        // 4. 🎛️ 手动切换 — hidden nested copy (Tower's nestedManualGroupName)
+        selectGroup(NESTED, names, { hidden: true }),
+
+        // 5. 🎯 直连 — only DIRECT, never references any group
+        selectGroup(DIRECT, ["DIRECT"], { hidden: true }),
+    ].join("\n\n");
+
+    // ── rules ─────────────────────────────────────────────────────
     const rules = [
-        // Private / LAN → direct
-        `  - DOMAIN-SUFFIX,local,🎯 直连`,
-        `  - DOMAIN-SUFFIX,localhost,🎯 直连`,
-        `  - IP-CIDR,127.0.0.0/8,🎯 直连,no-resolve`,
-        `  - IP-CIDR,172.16.0.0/12,🎯 直连,no-resolve`,
-        `  - IP-CIDR,192.168.0.0/16,🎯 直连,no-resolve`,
-        `  - IP-CIDR,10.0.0.0/8,🎯 直连,no-resolve`,
-        // CN geoip → direct
-        `  - GEOIP,CN,🎯 直连`,
-        // Everything else → proxy
-        `  - MATCH,🐟 漏网之鱼`,
+        // Private / LAN
+        "  - DOMAIN-SUFFIX,local," + DIRECT,
+        "  - DOMAIN-SUFFIX,localhost," + DIRECT,
+        "  - IP-CIDR,127.0.0.0/8," + DIRECT + ",no-resolve",
+        "  - IP-CIDR,172.16.0.0/12," + DIRECT + ",no-resolve",
+        "  - IP-CIDR,192.168.0.0/16," + DIRECT + ",no-resolve",
+        "  - IP-CIDR,10.0.0.0/8," + DIRECT + ",no-resolve",
+        // CN → direct
+        "  - GEOIP,CN," + DIRECT + ",no-resolve",
+        // catch-all → proxy
+        "  - MATCH," + SELECT,
     ].join("\n");
 
-    // ── assemble ───────────────────────────────────────────────────
+    // ── assemble ──────────────────────────────────────────────────
     return header() + "\n" + proxyYaml.trimEnd() + "\n\nproxy-groups:\n" + groups + "\n\nrules:\n" + rules + "\n";
 }
 
@@ -113,6 +116,7 @@ function header() {
         "allow-lan: false",
         "mode: rule",
         "log-level: warning",
+        "ipv6: true",
         "",
         "dns:",
         "  enable: true",
@@ -122,9 +126,12 @@ function header() {
         '    - "*.lan"',
         '    - "+.local"',
         '    - "+.msftconnecttest.com"',
+        '    - "+.msftncsi.com"',
         "  default-nameserver:",
         "    - 223.5.5.5",
         "    - 119.29.29.29",
+        "  proxy-server-nameserver:",
+        "    - https://223.5.5.5/dns-query",
         "  nameserver:",
         "    - https://223.5.5.5/dns-query",
         "    - https://doh.pub/dns-query",
