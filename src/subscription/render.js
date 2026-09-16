@@ -11,6 +11,7 @@ import { ProxyUtils } from "@/core/proxy-utils";
 import { fromNodes, parseNodes } from "../kit/convert";
 import { mergeParsed, dedupeNodeNames } from "../kit/merge";
 import assemble from "../kit/assemble";
+import assembleClash from "../kit/assemble-clash";
 import { assembleAcl } from "../kit/acl4ssr/build";
 import { findScheme } from "../kit/schemes";
 import { filterNodeNames, normalizeNodeFilter } from "../kit/nodes/filter";
@@ -245,7 +246,14 @@ export function renderSubscription(store, resolved, options) {
             // name rather than on the sing-box tag.
             const nodes = dedupeNodeNames(parsedNodes, warnings);
             const produced = ProxyUtils.produce(nodes, target.produce, "external");
-            body = typeof produced === "string" ? produced : JSON.stringify(produced, null, 2);
+            const raw = typeof produced === "string" ? produced : JSON.stringify(produced, null, 2);
+
+            // Clash-family targets (clash, stash, shadowrocket, karing) receive
+            // a complete config with dns, proxy-groups and rules — the same
+            // structure Tower exports.  Other dialects (surge, loon, …) already
+            // work as bare lists that their clients know how to merge.
+            const CLASH_IDS = new Set(["clash", "stash", "shadowrocket", "karing"]);
+            body = CLASH_IDS.has(target.id) ? assembleClash(raw) : raw;
         }
     } catch (e) {
         if (e instanceof CompatError) return errorResponse(422, e.message);
