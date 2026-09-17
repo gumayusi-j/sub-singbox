@@ -187,6 +187,17 @@ function sanitizeTopLevelSettings(body) {
         patch.customSchemes = schemes.length > 0 ? schemes : null;
     }
 
+    if (raw.gist !== undefined) {
+        if (raw.gist === null) {
+            patch.gist = null;
+        } else if (typeof raw.gist === "object") {
+            patch.gist = {
+                id: typeof raw.gist.id === "string" ? raw.gist.id.trim() : "",
+                token: typeof raw.gist.token === "string" ? raw.gist.token.trim() : "",
+            };
+        }
+    }
+
     return Object.keys(patch).length > 0 ? patch : null;
 }
 
@@ -255,6 +266,15 @@ export function createSubscriptionRouter(options) {
         return record;
     }
 
+    function resolveEffectiveGist(storedGist) {
+        const stored = storedGist || {};
+        const fromConfig = (config && config.gist) || {};
+        return {
+            id: stored.id !== undefined && stored.id !== "" ? stored.id : (fromConfig.id || ""),
+            token: stored.token !== undefined && stored.token !== "" ? stored.token : (fromConfig.token || ""),
+        };
+    }
+
     function collectionPayload() {
         const model = store.read();
         // The dropdown offers the exportable subset, minus anything the
@@ -264,12 +284,14 @@ export function createSubscriptionRouter(options) {
         const allowed = (settings.allowedTargets || []).filter(
             (id) => typeof id === "string",
         );
+        const storedGist = model.settings && model.settings.gist;
         return {
             sources: model.sources.map((source) => summarize(source, false)),
             settings: model.settings.defaultOptions || {},
             customSchemes: model.settings.customSchemes || [],
             publicUrl: model.settings.publicUrl || "",
             globalSubUrl: SUB_ROOT + model.settings.globalToken,
+            gist: resolveEffectiveGist(storedGist),
             targets: listExportTargets().filter(
                 (t) => allowed.length === 0 || allowed.indexOf(t.id) !== -1,
             ),
@@ -651,6 +673,7 @@ export function createSubscriptionRouter(options) {
                     settings: saved,
                     publicUrl: model.publicUrl || "",
                     customSchemes: model.customSchemes || [],
+                    gist: resolveEffectiveGist(model.gist),
                 },
             });
             return;

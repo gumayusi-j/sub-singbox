@@ -80,6 +80,20 @@ function normalizeModel(raw) {
         if (typeof raw.settings.publicUrl === "string") {
             model.settings.publicUrl = raw.settings.publicUrl;
         }
+        if (isPlainObject(raw.settings.gist)) {
+            model.settings.gist = {
+                id: typeof raw.settings.gist.id === "string" ? raw.settings.gist.id : "",
+                token: typeof raw.settings.gist.token === "string" ? raw.settings.gist.token : "",
+            };
+        }
+        if (Array.isArray(raw.settings.customSchemes)) {
+            model.settings.customSchemes = deepClone(raw.settings.customSchemes);
+        }
+        for (const [k, v] of Object.entries(raw.settings)) {
+            if (!Object.prototype.hasOwnProperty.call(model.settings, k)) {
+                model.settings[k] = deepClone(v);
+            }
+        }
     }
     if (Array.isArray(raw.sources)) {
         model.sources = raw.sources.filter(isPlainObject).map(normalizeSource);

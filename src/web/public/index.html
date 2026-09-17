@@ -1749,7 +1749,7 @@ pre.code-block {
               <span class="chip chip-ghost">生成配置时自动推送</span>
             </div>
             <p class="footnote" style="margin:0 0 12px">
-              填写 Gist ID 和 Token 后，每次点击「生成配置」会自动将配置推送到 GitHub Gist。
+              填写 Gist ID 和 Token 后将自动持久化保存到本地（也可在 singbox-web.config.json 或 .env 中配置）。每次点击「生成配置」会自动将配置推送到 GitHub Gist。
               不同客户端类型会生成不同文件名，所有文件共享同一个 Gist。
             </p>
             <el-row :gutter="14">
@@ -2783,6 +2783,14 @@ var app = Vue.createApp({
         dataPath.value = data.dataPath || '';
         settings.value = data.settings || {};
         customSchemes.value = data.customSchemes || [];
+        if (data.gist && (data.gist.id || data.gist.token)) {
+          gistId.value = data.gist.id || '';
+          githubToken.value = data.gist.token || '';
+          lsSave('sbx:gistId', gistId.value);
+          lsSave('sbx:githubToken', githubToken.value);
+        } else if (gistId.value || githubToken.value) {
+          saveGistConfig();
+        }
         if (!settingsReady.value) {
           var opts = data.settings || {};
           // A saved selection may name a bundled preset or an imported scheme;
@@ -3307,10 +3315,18 @@ var app = Vue.createApp({
       gistSyncing.value = false;
     }
 
-    // Persist Gist config to localStorage
+    // Persist Gist config to localStorage and server file
     function saveGistConfig() {
       lsSave('sbx:gistId', gistId.value);
       lsSave('sbx:githubToken', githubToken.value);
+      api('PUT', '/api/settings', {
+        gist: {
+          id: (gistId.value || '').trim(),
+          token: (githubToken.value || '').trim()
+        }
+      }).catch(function(e) {
+        console.warn('[saveGistConfig] failed to save to server:', e);
+      });
     }
 
     function copyConfig() {

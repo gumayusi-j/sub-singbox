@@ -423,4 +423,22 @@ describe("singbox-kit web API", function () {
         expect(text).to.include('"done"');
         expect(text).to.include('"scheme"');
     });
+
+    it("loads gist config from environment variables", function () {
+        const origId = process.env.GIST_ID;
+        const origToken = process.env.GITHUB_TOKEN;
+        try {
+            process.env.GIST_ID = "env-gist-id";
+            process.env.GITHUB_TOKEN = "env-github-token";
+            const { loadConfig } = require("@/web/config");
+            const cfg = loadConfig();
+            expect(cfg.gist.id).to.equal("env-gist-id");
+            expect(cfg.gist.token).to.equal("env-github-token");
+        } finally {
+            if (origId !== undefined) process.env.GIST_ID = origId;
+            else delete process.env.GIST_ID;
+            if (origToken !== undefined) process.env.GITHUB_TOKEN = origToken;
+            else delete process.env.GITHUB_TOKEN;
+        }
+    });
 });

@@ -236,6 +236,24 @@ describe("subscription store", function () {
         expect(store.getSettings()).to.not.have.property("publicUrl");
     });
 
+    it("persists and restores gist settings across store restarts", async function () {
+        const { dataPath } = newStore();
+        const store = createStore({ dataPath });
+        store.setSettings({ gist: { id: "my-gist-id", token: "my-github-token" } });
+        await store.flush();
+
+        const reopened = createStore({ dataPath });
+        expect(reopened.getSettings().gist).to.deep.equal({
+            id: "my-gist-id",
+            token: "my-github-token",
+        });
+
+        // null clears
+        store.setSettings({ gist: null });
+        await store.flush();
+        expect(createStore({ dataPath }).getSettings()).to.not.have.property("gist");
+    });
+
     it("refuses to let setSettings take over a field that has its own writer", function () {
         const { dataPath } = newStore();
         const store = createStore({ dataPath });

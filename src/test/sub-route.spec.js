@@ -733,6 +733,48 @@ describe("settings — one saved config, two readers", function () {
         expect(ctx.store.getSettings()).to.not.have.property("publicUrl");
     });
 
+    it("persists and returns gist configuration", async function () {
+        ctx = await serve();
+        const { json, status } = await save({
+            gist: {
+                id: "test-gist-id-123",
+                token: "ghp_secrettoken456",
+            },
+        });
+        expect(status).to.equal(200);
+        expect(json.data.gist).to.deep.equal({
+            id: "test-gist-id-123",
+            token: "ghp_secrettoken456",
+        });
+        expect(ctx.store.getSettings().gist).to.deep.equal({
+            id: "test-gist-id-123",
+            token: "ghp_secrettoken456",
+        });
+
+        // Overview /api/subscriptions also returns it
+        const overview = (await ctx.request("/api/subscriptions")).json;
+        expect(overview.data.gist).to.deep.equal({
+            id: "test-gist-id-123",
+            token: "ghp_secrettoken456",
+        });
+    });
+
+    it("falls back to config gist settings when not in store", async function () {
+        ctx = await serve({
+            config: {
+                gist: {
+                    id: "config-gist-id",
+                    token: "config-token",
+                },
+            },
+        });
+        const overview = (await ctx.request("/api/subscriptions")).json;
+        expect(overview.data.gist).to.deep.equal({
+            id: "config-gist-id",
+            token: "config-token",
+        });
+    });
+
     it("offers the exportable clients, narrowed by allowedTargets", async function () {
         ctx = await serve();
         let ids = (await ctx.request("/api/subscriptions")).json.data.targets.map((t) => t.id);

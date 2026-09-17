@@ -10,3 +10,8 @@ Thumbs.db
 # generated per-source subscription tokens. Treated as credentials.
 singbox-web.data.json*
 singbox-web.data.snapshots/
+
+# Environment variables
+.env
+.env.*
+!.env.example

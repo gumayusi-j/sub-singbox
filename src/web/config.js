@@ -45,6 +45,12 @@ export const DEFAULT_CONFIG = {
     // When set, every /api/* route requires `Authorization: Bearer <token>`.
     // /sub/<token> is deliberately exempt: it is itself a capability URL.
     apiToken: "",
+    // GitHub Gist configuration for configuration synchronization.
+    // Can also be configured via GIST_ID / GIST_TOKEN (or GITHUB_TOKEN) env vars.
+    gist: {
+        id: "",
+        token: "",
+    },
     subscription: {
         defaultTarget: "sing-box",
         // What to do with a User-Agent the target table does not recognise:
@@ -79,7 +85,43 @@ export function resolveConfigPath() {
     return join(__dirname, "..", "..", "singbox-web.config.json");
 }
 
+export function loadDotenv() {
+    const candidates = [
+        join(process.cwd(), ".env"),
+        join(__dirname, "..", "..", ".env"),
+    ];
+    for (const envPath of candidates) {
+        if (existsSync(envPath)) {
+            try {
+                const text = readFileSync(envPath, "utf8");
+                for (let line of text.split(/\r?\n/)) {
+                    line = line.trim();
+                    if (!line || line.startsWith("#")) continue;
+                    const idx = line.indexOf("=");
+                    if (idx > 0) {
+                        const key = line.slice(0, idx).trim();
+                        let val = line.slice(idx + 1).trim();
+                        if (
+                            (val.startsWith('"') && val.endsWith('"')) ||
+                            (val.startsWith("'") && val.endsWith("'"))
+                        ) {
+                            val = val.slice(1, -1);
+                        }
+                        if (process.env[key] === undefined) {
+                            process.env[key] = val;
+                        }
+                    }
+                }
+            } catch (_e) {
+                // ignore invalid .env
+            }
+            break;
+        }
+    }
+}
+
 export function loadConfig() {
+    loadDotenv();
     const config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
     const path = resolveConfigPath();
     if (existsSync(path)) {
@@ -90,6 +132,11 @@ export function loadConfig() {
                 {},
                 DEFAULT_CONFIG.listen,
                 (fileConfig && fileConfig.listen) || {},
+            );
+            config.gist = Object.assign(
+                {},
+                DEFAULT_CONFIG.gist,
+                (fileConfig && fileConfig.gist) || {},
             );
             config.subscription = Object.assign(
                 {},
@@ -114,7 +161,15 @@ export function loadConfig() {
     if (process.env.SINGBOX_WEB_API_TOKEN) {
         config.apiToken = process.env.SINGBOX_WEB_API_TOKEN;
     }
+    if (process.env.GIST_ID) {
+        config.gist = config.gist || {};
+        config.gist.id = process.env.GIST_ID;
+    }
+    if (process.env.GIST_TOKEN || process.env.GITHUB_TOKEN) {
+        config.gist = config.gist || {};
+        config.gist.token = process.env.GIST_TOKEN || process.env.GITHUB_TOKEN;
+    }
     return config;
 }
 
-export default { loadConfig, resolveConfigPath, resolveDataPath, DEFAULT_CONFIG };
+export default { loadConfig, loadDotenv, resolveConfigPath, resolveDataPath, DEFAULT_CONFIG };
