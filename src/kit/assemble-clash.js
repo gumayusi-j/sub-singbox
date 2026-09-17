@@ -195,6 +195,9 @@ export default function assembleClash(proxyYaml, preset) {
             }
         }
 
+        // Reject foreign QUIC (UDP 443) before MATCH fallback to force TCP fallback
+        rules.push("  - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT");
+
         // Final catch-all
         const finalName = finalGroup || "🚀 节点选择";
         rules.push("  - MATCH," + finalName);
@@ -222,6 +225,7 @@ export default function assembleClash(proxyYaml, preset) {
             "  - IP-CIDR,192.168.0.0/16," + DIRECT + ",no-resolve",
             "  - IP-CIDR,10.0.0.0/8," + DIRECT + ",no-resolve",
             "  - GEOIP,CN," + DIRECT + ",no-resolve",
+            "  - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT",
             "  - MATCH," + SELECT,
         ].join("\n");
     }
@@ -237,6 +241,13 @@ function header() {
         "mode: rule",
         "log-level: warning",
         "ipv6: true",
+        "",
+        "hosts:",
+        "  'services.googleapis.cn': 'services.googleapis.com'",
+        "  '+.mcdn.bilivideo.com': '0.0.0.0'",
+        "  '+.mcdn.bilivideo.cn': '0.0.0.0'",
+        "  '+.edge.mountaintoys.cn': '0.0.0.0'",
+        "  '+.h2.smtcdns.net': '0.0.0.0'",
         "",
         "dns:",
         "  enable: true",

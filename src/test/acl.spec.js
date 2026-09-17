@@ -76,6 +76,7 @@ describe("ACL4SSR presets", function () {
         expect(tags).to.include("📲 电报信息");
         expect(tags).to.include("Ⓜ️ 微软服务");
         expect(tags).to.include("🍎 苹果服务");
+        expect(tags).to.include("💬 Ai平台");
         // no region groups in the default preset
         expect(tags).to.not.include("🇭🇰 香港节点");
         assertReferencesResolve(config);
@@ -85,19 +86,28 @@ describe("ACL4SSR presets", function () {
         const config = assembleAcl(parsed(), { aclPreset: "acl4ssr-full" });
         const tags = config.outbounds.map((o) => o.tag);
         expect(tags).to.include("🇭🇰 香港节点");
+        expect(tags).to.include("🇭🇰 香港自动");
         expect(tags).to.include("🇯🇵 日本节点");
+        expect(tags).to.include("🇯🇵 日本自动");
         expect(tags).to.include("🇺🇲 美国节点");
+        expect(tags).to.include("🇺🇲 美国自动");
         expect(tags).to.include("🚀 手动切换");
         // no node matches these -> the group must not exist at all
         expect(tags).to.not.include("🇨🇳 台湾节点");
+        expect(tags).to.not.include("🇨🇳 台湾自动");
         expect(tags).to.not.include("🇸🇬 狮城节点");
+        expect(tags).to.not.include("🇸🇬 狮城自动");
         expect(tags).to.not.include("🎥 奈飞节点");
         // and nothing may reference a dropped group
         const allRefs = config.outbounds.reduce((acc, o) => acc.concat(o.outbounds || []), []);
         expect(allRefs).to.not.include("🇨🇳 台湾节点");
-        // region groups only carry matching node tags
+        expect(allRefs).to.not.include("🇨🇳 台湾自动");
+        // region groups carry auto sub-group and matching node tags
         const hk = config.outbounds.find((o) => o.tag === "🇭🇰 香港节点");
-        expect(hk.outbounds).to.deep.equal(["🇭🇰 香港-01"]);
+        expect(hk.outbounds).to.deep.equal(["🇭🇰 香港自动", "🇭🇰 香港-01"]);
+        const hkAuto = config.outbounds.find((o) => o.tag === "🇭🇰 香港自动");
+        expect(hkAuto.outbounds).to.deep.equal(["🇭🇰 香港-01"]);
+        expect(hkAuto.type).to.equal("urltest");
         assertReferencesResolve(config);
     });
 
@@ -106,7 +116,7 @@ describe("ACL4SSR presets", function () {
     // top level, foldSingboxRules would refuse every one of them and the
     // config would carry one route rule per line.
     it("keeps every preset's rule list folded and free of parser artefacts", function () {
-        const sizes = { "acl4ssr-mini": 11, "acl4ssr-default": 16, "acl4ssr-full": 26 };
+        const sizes = { "acl4ssr-mini": 11, "acl4ssr-default": 17, "acl4ssr-full": 26 };
         for (const [id, expected] of Object.entries(sizes)) {
             const config = assembleAcl(parsed(), { aclPreset: id });
             expect(config.route.rules.length, id).to.equal(expected);
@@ -200,6 +210,29 @@ describe("ACL4SSR presets", function () {
             expect(nodeSelect.outbounds, presetId).to.not.include("💎 高倍率节点");
             assertReferencesResolve(config);
         }
+    });
+
+    it("emits low-multiplier group for mini preset when matching nodes exist", function () {
+        const testNodes = [
+            "香港 01 - 0.2x",
+            "台湾 02 [1x]",
+            "日本 03 1.0倍",
+            "普通节点 04",
+        ];
+        const config = assembleAcl(parsed(testNodes), { aclPreset: "acl4ssr-mini" });
+        const tags = config.outbounds.map((o) => o.tag);
+        expect(tags).to.include("💰 低倍率节点");
+        expect(tags).to.not.include("💎 高倍率节点");
+        const nodeSelect = config.outbounds.find((o) => o.tag === "🚀 节点选择");
+        expect(nodeSelect.outbounds).to.include("💰 低倍率节点");
+        const finalGroup = config.outbounds.find((o) => o.tag === "🐟 漏网之鱼");
+        expect(finalGroup.outbounds).to.include("💰 低倍率节点");
+        assertReferencesResolve(config);
+
+        // When no multiplier matches, mini drops low-multiplier group cleanly
+        const noMatch = assembleAcl(parsed(["香港 01", "日本 02"]), { aclPreset: "acl4ssr-mini" });
+        expect(noMatch.outbounds.map((o) => o.tag)).to.not.include("💰 低倍率节点");
+        assertReferencesResolve(noMatch);
     });
 
     it("rejects an unknown preset id", function () {
