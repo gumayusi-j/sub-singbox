@@ -344,37 +344,109 @@ a:focus-visible,
 .shell {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 32px 24px 96px;
+  /* 20px top gap below the sticky header (header ~52px + 20px gap = 72px),
+     sides match the header's negative margin so it spans edge-to-edge. */
+  padding: 20px 24px 96px;
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
 /* ==========================================================================
-   3. Page head
-   The old banner was the loudest element on the page and carried the least: a
-   gradient block with the product name in it. A tool you open to do a job
-   should open on the job, so the head is a title and nothing else, and the card
-   below it is the first thing that says something.
+   3. Page head — sticky glassmorphism bar
    ========================================================================== */
 .page-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
-  padding: 4px 2px 0;
+  padding: 10px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  /* Pull flush to shell edges; shell handles its own padding below */
+  margin: -32px -24px 0;
+  background: rgba(244, 245, 247, 0.82);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border-bottom: 1px solid var(--stroke-soft);
+  box-shadow: 0 1px 0 var(--stroke-soft), 0 2px 16px rgba(15,23,42,0.04);
+  transition: background var(--select) var(--ease), box-shadow var(--select) var(--ease);
+}
+html[data-theme="dark"] .page-head {
+  background: rgba(15, 17, 22, 0.84);
+  box-shadow: 0 1px 0 var(--stroke-soft), 0 2px 16px rgba(0,0,0,0.28);
+}
+
+/* Logo mark */
+.page-head .logo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+.page-head .logo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
+  color: #fff;
+  font-size: 15px;
+  flex: none;
+  box-shadow: 0 2px 10px rgba(47, 107, 255, 0.35);
 }
 .page-head h1 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  /* gradient text */
+  background: linear-gradient(90deg, var(--text) 55%, var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+html[data-theme="dark"] .page-head h1 {
+  background: linear-gradient(90deg, var(--text) 55%, var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 .page-head p {
-  margin: 3px 0 0;
-  font-size: 13px;
+  margin: 2px 0 0;
+  font-size: 11.5px;
   color: var(--text-3);
 }
-.page-head .head-actions { margin-left: auto; display: flex; gap: 8px; }
+
+/* Live status badge: enabled sub count */
+.head-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.head-status-badge .dot-live {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex: none;
+  animation: pulse-dot 2.4s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6); }
+  50%       { box-shadow: 0 0 0 4px rgba(22, 163, 74, 0); }
+}
+.page-head .head-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
 .icon-btn {
   display: inline-flex;
@@ -584,33 +656,68 @@ a:focus-visible,
 .check-lg svg { width: 16px; height: 16px; }
 .check:disabled { opacity: 0.5; cursor: default; }
 
-/* The enable control, label and all.
-   The ring alone is Tower's checkbox, but Tower draws it inside an iOS list
-   where a filled circle beside a row is a familiar switch. On the web nothing
-   announces that a ring is a control - the only hint was a title tooltip, and
-   "does this subscription count?" is the single most important thing on this
-   row. So the ring stays as the mark and the word 启用 carries the meaning. */
-.enable {
+/* ==========================================================================
+   iOS-style toggle switch — replaces the old ring + "启用" label.
+   The track slides from neutral → accent; the thumb translates right.
+   Keyboard-accessible: button role="switch" with aria-checked.
+   ========================================================================== */
+.toggle-switch {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 32px;
-  padding: 0 10px 0 3px;
+  gap: 8px;
   flex: none;
-  border: 1px solid transparent;
-  border-radius: var(--r-pill);
+  padding: 3px 0;
+  border: 0;
   background: transparent;
-  color: var(--text-3);
   cursor: pointer;
-  transition: background var(--select) var(--ease), color var(--select) var(--ease),
-              transform var(--press-out) var(--ease);
+  transition: transform var(--press-out) var(--ease);
 }
-.enable:hover { background: var(--surface-2); }
-.enable:hover .check { border-color: var(--text-3); }
-.enable:active { transform: scale(0.97); }
-.enable:disabled { opacity: 0.5; cursor: default; }
-.enable.on { color: var(--accent); }
-.enable-label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.toggle-switch:active { transform: scale(0.94); }
+.toggle-switch:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+.toggle-track {
+  position: relative;
+  width: 40px;
+  height: 23px;
+  border-radius: 12px;
+  background: var(--surface-3);
+  border: 1.5px solid var(--stroke);
+  transition: background var(--select) var(--ease), border-color var(--select) var(--ease),
+              box-shadow var(--select) var(--ease);
+  flex: none;
+}
+.toggle-switch.on .toggle-track {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--text-3);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  transition: transform var(--select) var(--ease), background var(--select) var(--ease);
+}
+.toggle-switch.on .toggle-thumb {
+  transform: translateX(17px);
+  background: #fff;
+}
+.toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  white-space: nowrap;
+  transition: color var(--select) var(--ease);
+}
+.toggle-switch.on .toggle-label { color: var(--accent); }
+
+/* Keep the old .enable/.enable-label for any legacy references; they are no longer rendered. */
+.enable { display: none; }
+.enable-label { display: none; }
 
 /* ==========================================================================
    7. Overview card
@@ -653,6 +760,12 @@ a:focus-visible,
 }
 .metric span { font-size: 11.5px; color: var(--text-3); font-weight: 500; }
 .metric-sep { width: 1px; align-self: stretch; margin: 6px; background: var(--stroke-soft); }
+/* Coloured metric accents: each data dimension gets a distinct hue so the
+   dashboard reads as four distinct things rather than one grey block. */
+.metric-subs b   { color: var(--accent); }
+.metric-enabled b{ color: var(--ok); }
+.metric-nodes b  { color: var(--id-tuic); }
+.metric-regions b{ color: var(--warn); }
 
 .overview-foot {
   display: flex;
@@ -794,19 +907,48 @@ a:focus-visible,
 .fact-sep { width: 1px; height: 11px; background: var(--stroke); }
 
 .traffic-track {
-  height: 6px;
-  border-radius: 3px;
+  height: 8px;
+  border-radius: 4px;
   background: var(--surface-3);
   overflow: hidden;
 }
 .traffic-fill {
   height: 100%;
-  border-radius: 3px;
-  background: var(--ok);
-  transition: width var(--disclose) var(--ease);
+  border-radius: 4px;
+  /* Smooth gradient: green → green for low usage */
+  background: linear-gradient(90deg, var(--ok) 0%, #4ade80 100%);
+  transition: width var(--disclose) var(--ease), background var(--select) var(--ease);
 }
-.traffic-fill.is-warn { background: var(--warn); }
-.traffic-fill.is-danger { background: var(--danger); }
+.traffic-fill.is-warn {
+  background: linear-gradient(90deg, var(--warn) 0%, #f59e0b 100%);
+}
+.traffic-fill.is-danger {
+  background: linear-gradient(90deg, var(--danger) 0%, #f87171 100%);
+}
+
+/* Expiring soon: card gets a warn-coloured border + a small corner badge */
+.source.expiring-soon {
+  border-color: var(--warn);
+  box-shadow: var(--shadow-card), 0 0 0 1px var(--warn-soft);
+  position: relative;
+}
+.expire-badge {
+  position: absolute;
+  top: -1px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 0 0 8px 8px;
+  background: var(--warn);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(194, 116, 10, 0.4);
+}
 
 .inline-alert {
   display: flex;
@@ -854,14 +996,37 @@ a:focus-visible,
   padding: 16px 18px;
   cursor: pointer;
   transition: border-color var(--select) var(--ease), background var(--select) var(--ease),
-              box-shadow var(--select) var(--ease);
+              box-shadow var(--select) var(--ease), transform var(--press-out) var(--ease);
 }
-.pick:hover { border-color: var(--stroke); box-shadow: var(--shadow-lift); }
-.pick.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: none; }
+.pick:hover { border-color: var(--stroke); box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+.pick:active { transform: scale(0.99); }
+.pick.selected {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--accent-soft) 0%, transparent 70%), var(--surface);
+  box-shadow: 0 0 0 1px var(--accent-soft-2), var(--shadow-card);
+}
 .pick-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .pick-title { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 650; }
 .pick-desc { margin: 0; font-size: 13px; line-height: 1.65; color: var(--text-2); }
 .pick-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+/* Recommendation/type badge above the rule card title */
+.pick-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: var(--r-pill);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+  width: fit-content;
+}
+.pick-badge.badge-recommend { background: var(--ok-soft); color: var(--ok); }
+.pick-badge.badge-lite     { background: var(--accent-soft); color: var(--accent); }
+.pick-badge.badge-full     { background: var(--id-vless-soft); color: var(--id-vless); }
+.pick-badge.badge-custom   { background: var(--surface-3); color: var(--text-3); }
 
 /* ==========================================================================
    11. Export
@@ -1040,14 +1205,60 @@ pre.code-block {
   width: 76px;
   height: 76px;
   border-radius: 50%;
-  background: var(--accent-soft);
+  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--id-vless-soft) 100%);
   color: var(--accent);
   font-size: 30px;
   margin-bottom: 4px;
+  box-shadow: 0 0 0 8px var(--accent-soft);
 }
 .empty h3 { margin: 0; font-size: 16px; font-weight: 650; }
 .empty p { margin: 0; font-size: 13px; color: var(--text-2); max-width: 42ch; line-height: 1.7; }
 .empty .btn { margin-top: 6px; }
+
+/* Onboarding three-step guide — shown in the empty state */
+.onboarding-steps {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+  width: 100%;
+  max-width: 520px;
+}
+.onboarding-step {
+  flex: 1 1 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 12px;
+  border: 1px solid var(--stroke-soft);
+  border-radius: var(--r-card-sm);
+  background: var(--surface-2);
+  text-align: center;
+}
+.onboarding-step .step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+.onboarding-step .step-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text);
+}
+.onboarding-step .step-desc {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
 
 .skel { gap: 12px; }
 .skel-line, .skel-box {
@@ -1358,7 +1569,11 @@ pre.code-block {
 
 @media (max-width: 720px) {
   .shell { padding: 20px 14px 72px; gap: 16px; }
-  .page-head h1 { font-size: 21px; }
+  /* Mobile: page-head uses smaller horizontal margin to match shell padding */
+  .page-head { margin: -20px -14px 0; padding: 10px 14px; }
+  .page-head h1 { font-size: 15px; }
+  .page-head p { display: none; } /* subtitle hidden on small screens */
+  .head-status-badge { display: none; } /* badge shown only on wider screens */
   .overview { padding: 18px; }
   .overview-top h2 { font-size: 16px; }
   .overview-top .tile-lg { width: 42px; height: 42px; border-radius: 13px; font-size: 16px; }
@@ -1372,6 +1587,9 @@ pre.code-block {
   .seg .el-tabs__nav { width: 100%; }
   .seg .el-tabs__item { flex: 1; padding: 0 8px; display: flex; justify-content: center; }
   .source, .result-card, .sub-address, .action-card { padding: 14px; }
+  /* On mobile, facts and actions stack vertically for breathing room */
+  .source-meta { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .source-actions { width: 100%; justify-content: flex-start; }
   .el-dialog__body { padding: 16px; }
   .el-dialog__footer { padding: 12px 16px; }
   .el-dialog { width: calc(100vw - 24px) !important; }
@@ -1381,6 +1599,8 @@ pre.code-block {
   .title-line .name { font-size: 14px; }
   .metric b { font-size: 17px; }
   .map-legend { gap: 8px; font-size: 10px; }
+  /* On very small screens hide the toggle label — the track alone is enough */
+  .toggle-label { display: none; }
 }
 </style>
 </head>
@@ -1389,10 +1609,19 @@ pre.code-block {
   <div class="shell">
     <!-- ============ Page head ============ -->
     <header class="page-head">
-      <div>
-        <h1>singbox-kit</h1>
-        <p>订阅 → 规则 → 导出 sing-box 配置</p>
+      <div class="logo-wrap">
+        <!-- Logo icon: gradient box with rocket icon -->
+        <span class="logo-icon" aria-hidden="true"><el-icon><promotion /></el-icon></span>
+        <div>
+          <h1>singbox-kit</h1>
+          <p>订阅 → 规则 → 导出 sing-box 配置</p>
+        </div>
       </div>
+      <!-- Live badge: only shown when there are enabled sources -->
+      <span class="head-status-badge" v-if="stats.enabled > 0" aria-live="polite">
+        <i class="dot-live" aria-hidden="true"></i>
+        {{ stats.enabled }} 个订阅已启用
+      </span>
       <div class="head-actions">
         <button class="icon-btn" type="button" @click="toggleTheme"
                 :title="isDark ? '切换到浅色模式' : '切换到深色模式'"
@@ -1407,6 +1636,7 @@ pre.code-block {
       </div>
     </header>
 
+
     <!-- ============ Overview ============ -->
     <section class="card overview" v-if="!pageLoading">
       <div class="overview-top">
@@ -1418,20 +1648,20 @@ pre.code-block {
       </div>
 
       <div class="metrics">
-        <button class="metric" type="button" @click="goTab('subs')" :disabled="!stats.sources">
+        <button class="metric metric-subs" type="button" @click="goTab('subs')" :disabled="!stats.sources">
           <b>{{ stats.sources }}</b><span>订阅源</span>
         </button>
         <i class="metric-sep"></i>
-        <button class="metric" type="button" @click="goTab('subs')" :disabled="!stats.enabled">
+        <button class="metric metric-enabled" type="button" @click="goTab('subs')" :disabled="!stats.enabled">
           <b>{{ stats.enabled }}</b><span>已启用</span>
         </button>
         <i class="metric-sep"></i>
-        <button class="metric" type="button" @click="goTab('export')" :disabled="!stats.nodes">
+        <button class="metric metric-nodes" type="button" @click="goTab('export')" :disabled="!stats.nodes">
           <b>{{ stats.nodes }}</b><span>节点</span>
         </button>
         <template v-if="stats.regions">
           <i class="metric-sep"></i>
-          <button class="metric" type="button" @click="goTab('export')">
+          <button class="metric metric-regions" type="button" @click="goTab('export')">
             <b>{{ stats.regions }}</b><span>地区</span>
           </button>
         </template>
@@ -1480,19 +1710,42 @@ pre.code-block {
             </div>
           </div>
 
-          <!-- Empty -->
+          <!-- Empty — first-run onboarding -->
           <div class="card empty" v-else-if="!sources.length">
-            <span class="empty-icon"><el-icon><tickets /></el-icon></span>
-            <h3>先添加一个来源</h3>
+            <span class="empty-icon" aria-hidden="true"><el-icon><tickets /></el-icon></span>
+            <h3>先添加一个订阅源</h3>
             <p>支持机场订阅链接，也可以直接粘贴 SS、VMess、VLESS、Trojan 等节点。</p>
             <button class="btn btn-primary btn-lg" type="button" @click="openAddForm">
               <el-icon><plus /></el-icon> 添加订阅源
             </button>
+            <!-- Three-step guide -->
+            <div class="onboarding-steps" aria-label="使用步骤">
+              <div class="onboarding-step">
+                <span class="step-num">1</span>
+                <span class="step-label">添加订阅源</span>
+                <span class="step-desc">粘贴机场链接或节点文本</span>
+              </div>
+              <div class="onboarding-step">
+                <span class="step-num">2</span>
+                <span class="step-label">选择分流规则</span>
+                <span class="step-desc">推荐使用 ACL4SSR 完整版</span>
+              </div>
+              <div class="onboarding-step">
+                <span class="step-num">3</span>
+                <span class="step-label">导出 / 订阅地址</span>
+                <span class="step-desc">复制链接到客户端即可</span>
+              </div>
+            </div>
           </div>
 
           <!-- List -->
           <div class="stack" v-else>
-            <article v-for="s in sources" :key="s.id" class="card source" :class="{ 'is-off': !s.enabled }">
+            <article v-for="s in sources" :key="s.id" class="card source"
+                     :class="{ 'is-off': !s.enabled, 'expiring-soon': usageOf(s) && usageOf(s).soon }">
+              <!-- Expiring soon corner badge -->
+              <span class="expire-badge" v-if="usageOf(s) && usageOf(s).soon" aria-label="即将到期">
+                <el-icon><clock /></el-icon> 即将到期
+              </span>
               <div class="source-main">
                 <span class="tile" :class="topProtocol(s) ? 'tile-f-' + familyOf(topProtocol(s)) : ''" aria-hidden="true">
                   <span class="tile-abbr" v-if="topProtocol(s)">{{ abbrOf(topProtocol(s)) }}</span>
@@ -1512,19 +1765,17 @@ pre.code-block {
                   <span class="subline mono">{{ hostOf(s) }}</span>
                 </button>
 
-                <button class="enable" type="button" role="switch"
+                <!-- iOS-style toggle switch -->
+                <button class="toggle-switch" type="button" role="switch"
                         :class="{ on: s.enabled }"
                         :aria-checked="s.enabled ? 'true' : 'false'"
                         :disabled="togglingId === s.id"
                         :title="s.enabled ? '点击停用：停用后不参与导出' : '点击启用：启用后合并进导出配置'"
                         @click="toggleEnabled(s, !s.enabled)">
-                  <span class="check" :class="{ on: s.enabled }" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4"
-                         stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M5 12.5l4.5 4.5L19 7" />
-                    </svg>
+                  <span class="toggle-track" aria-hidden="true">
+                    <span class="toggle-thumb"></span>
                   </span>
-                  <span class="enable-label">启用</span>
+                  <span class="toggle-label">{{ s.enabled ? '启用' : '停用' }}</span>
                   <span class="sr-only">{{ s.name }}</span>
                 </button>
 
@@ -1683,6 +1934,11 @@ pre.code-block {
                      stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7" /></svg>
               </span>
               <div class="pick-body">
+                <!-- Badge: shows rule type/recommendation -->
+                <span v-if="!r.custom && r.value === 'acl4ssr'" class="pick-badge badge-recommend">⭐ 推荐</span>
+                <span v-else-if="!r.custom && r.value === 'minimal'" class="pick-badge badge-lite">轻量</span>
+                <span v-else-if="!r.custom && r.value !== 'none'" class="pick-badge badge-full">完整</span>
+                <span v-else-if="r.custom" class="pick-badge badge-custom">自定义</span>
                 <div class="pick-title">
                   <span>{{ r.label }}</span>
                   <span class="chip chip-accent" v-if="acl === r.value">当前</span>
