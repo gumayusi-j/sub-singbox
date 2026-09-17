@@ -143,9 +143,69 @@ describe("ACL4SSR presets", function () {
         expect(config.route.final).to.equal("direct");
     });
 
+    it("emits low-multiplier url-test and high-multiplier selector groups when matching nodes exist", function () {
+        const testNodes = [
+            "香港 01 - 0.2x",
+            "台湾 02 [1x]",
+            "日本 03 1.0倍",
+            "省流 04",
+            "专线 05 - 1.5x",
+            "专线 06 [2X]",
+            "专线 07 10倍",
+            "高倍率 08",
+            "普通节点 09",
+        ];
+        for (const presetId of ["acl4ssr-default", "acl4ssr-full"]) {
+            const config = assembleAcl(parsed(testNodes), { aclPreset: presetId });
+            const outbounds = config.outbounds;
+            const tags = outbounds.map((o) => o.tag);
+
+            expect(tags, presetId).to.include("💰 低倍率节点");
+            const lowGroup = outbounds.find((o) => o.tag === "💰 低倍率节点");
+            expect(lowGroup.type, presetId).to.equal("urltest");
+            expect(lowGroup.outbounds, presetId).to.deep.equal([
+                "香港 01 - 0.2x",
+                "台湾 02 [1x]",
+                "日本 03 1.0倍",
+                "省流 04",
+            ]);
+
+            expect(tags, presetId).to.include("💎 高倍率节点");
+            const highGroup = outbounds.find((o) => o.tag === "💎 高倍率节点");
+            expect(highGroup.type, presetId).to.equal("selector");
+            expect(highGroup.outbounds, presetId).to.deep.equal([
+                "专线 05 - 1.5x",
+                "专线 06 [2X]",
+                "专线 07 10倍",
+                "高倍率 08",
+            ]);
+
+            const nodeSelect = outbounds.find((o) => o.tag === "🚀 节点选择");
+            expect(nodeSelect.outbounds, presetId).to.include("💰 低倍率节点");
+            expect(nodeSelect.outbounds, presetId).to.include("💎 高倍率节点");
+
+            assertReferencesResolve(config);
+        }
+    });
+
+    it("drops low/high multiplier groups cleanly when no nodes match", function () {
+        const noMultiplierNodes = ["香港 01", "日本 02", "台湾 03"];
+        for (const presetId of ["acl4ssr-default", "acl4ssr-full"]) {
+            const config = assembleAcl(parsed(noMultiplierNodes), { aclPreset: presetId });
+            const tags = config.outbounds.map((o) => o.tag);
+            expect(tags, presetId).to.not.include("💰 低倍率节点");
+            expect(tags, presetId).to.not.include("💎 高倍率节点");
+            const nodeSelect = config.outbounds.find((o) => o.tag === "🚀 节点选择");
+            expect(nodeSelect.outbounds, presetId).to.not.include("💰 低倍率节点");
+            expect(nodeSelect.outbounds, presetId).to.not.include("💎 高倍率节点");
+            assertReferencesResolve(config);
+        }
+    });
+
     it("rejects an unknown preset id", function () {
         expect(function () {
             assembleAcl(parsed(), { aclPreset: "bogus" });
         }).to.throw(/unknown ACL4SSR preset/);
     });
 });
+
