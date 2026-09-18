@@ -113,10 +113,21 @@ export default function ClashMeta_Producer() {
                         `Platform Mihomo does not support Snell shadow-tls with obfs for proxy ${proxy.name}. Proxy has been filtered.`,
                     );
                     return false;
+                } else if (
+                    proxy.type === 'ss' &&
+                    proxy.plugin === 'shadow-tls' &&
+                    proxy['plugin-opts']?.['skip-cert-verify']
+                ) {
+                    // Mihomo's ShadowTLS client does not offer skip-cert-verify.
+                    $.error(
+                        `Platform Mihomo does not support skip-cert-verify for SS+ShadowTLS proxy ${proxy.name}. Proxy has been filtered.`,
+                    );
+                    return false;
                 } else if (['juicity', 'naive'].includes(proxy.type)) {
                     return false;
                 } else if (
                     ['ss'].includes(proxy.type) &&
+
                     ![
                         'aes-128-ctr',
                         'aes-192-ctr',

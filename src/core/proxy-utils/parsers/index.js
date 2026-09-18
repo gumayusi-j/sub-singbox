@@ -424,20 +424,49 @@ function URI_SS() {
         const gostMatch = content.match(/[?&]gost=([^&]+)/);
 
         if (pluginMatch) {
-            const pluginInfo = (
-                'plugin=' + decodeURIComponent(pluginMatch[1])
-            ).split(';');
-            const params = {};
-            for (const item of pluginInfo) {
-                const separatorIndex = item.indexOf('=');
-                if (separatorIndex === -1) {
-                    if (item) params[item] = true; // some options like "tls" will not have value
-                    continue;
+            const pluginRaw = decodeURIComponent(pluginMatch[1]);
+            // SIP003: split on unescaped semicolons, then unescape \\ and \;
+            // in each field value. Simple plugins (obfs, v2ray) never produce
+            // escaped values, so the fast-path for them is unchanged.
+            const pluginName = pluginRaw.split(';')[0] ?? '';
+            let pluginFields;
+            if (pluginName === 'shadow-tls') {
+                // Parse with escape handling for shadow-tls SIP003 values.
+                const parts = [];
+                let part = '';
+                let escaped = false;
+                for (const ch of pluginRaw) {
+                    if (escaped) { part += ch; escaped = false; }
+                    else if (ch === '\\') { escaped = true; }
+                    else if (ch === ';') { parts.push(part); part = ''; }
+                    else { part += ch; }
                 }
-                const key = item.slice(0, separatorIndex);
-                const val = item.slice(separatorIndex + 1).replace(/\\=/g, '=');
-                if (key) params[key] = val || true;
+                parts.push(part);
+                pluginFields = {};
+                for (const field of parts.slice(1)) {
+                    const eqIdx = field.indexOf('=');
+                    if (eqIdx === -1) { pluginFields[field] = true; continue; }
+                    const k = field.slice(0, eqIdx);
+                    if (k) pluginFields[k] = field.slice(eqIdx + 1) || true;
+                }
+            } else {
+                const pluginInfo = ('plugin=' + pluginRaw).split(';');
+                const params = {};
+                for (const item of pluginInfo) {
+                    const separatorIndex = item.indexOf('=');
+                    if (separatorIndex === -1) {
+                        if (item) params[item] = true;
+                        continue;
+                    }
+                    const key = item.slice(0, separatorIndex);
+                    const val = item.slice(separatorIndex + 1).replace(/\\=/g, '=');
+                    if (key) params[key] = val || true;
+                }
+                pluginFields = params;
             }
+            const params = pluginName === 'shadow-tls'
+                ? { plugin: 'shadow-tls', ...pluginFields }
+                : pluginFields;
             switch (params.plugin) {
                 case 'obfs-local':
                 case 'simple-obfs':
@@ -475,6 +504,9 @@ function URI_SS() {
                         host: getIfNotBlank(params['host']),
                         password: getIfNotBlank(params['password']),
                         version: version ? parseInt(version, 10) : undefined,
+                        'skip-cert-verify': ['1', 'true', 1, true].includes(
+                            params['skip-cert-verify'],
+                        ) || undefined,
                     };
                     break;
                 }
@@ -484,6 +516,7 @@ function URI_SS() {
                     );
             }
         }
+
         // Shadowrocket
         if (shadowTlsMatch) {
             const params = JSON.parse(Base64.decode(shadowTlsMatch[1]));

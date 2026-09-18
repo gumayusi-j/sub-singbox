@@ -558,11 +558,20 @@ export default function Egern_Producer() {
                                 throw new Error(
                                     `shadow-tls version ${original['plugin-opts'].version} is not supported`,
                                 );
+                            if (original['plugin-opts']['skip-cert-verify'])
+                                throw new Error(
+                                    `Egern shadow_tls does not support skip-cert-verify`,
+                                );
+                            if (original['client-fingerprint'])
+                                throw new Error(
+                                    `Egern shadow_tls does not support client-fingerprint`,
+                                );
                             proxy.shadow_tls = {
                                 password: original['plugin-opts'].password,
                                 sni: original['plugin-opts'].host,
                             };
                         }
+
                     }
                     const fingerprintSha256 = getFingerprintSha256(original);
                     if (fingerprintSha256) {

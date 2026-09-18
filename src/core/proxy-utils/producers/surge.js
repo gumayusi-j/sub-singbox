@@ -293,7 +293,25 @@ function shadowsocks(proxy) {
                 `,obfs-uri=${proxy['plugin-opts'].path}`,
                 'plugin-opts.path',
             );
-        } else if (!['shadow-tls'].includes(proxy.plugin)) {
+        } else if (proxy.plugin === 'shadow-tls') {
+            // Surge does not support skip-cert-verify or client-fingerprint
+            // for SS+ShadowTLS, and 2022-blake3-chacha20-poly1305 is unsupported.
+            if (proxy['plugin-opts']?.['skip-cert-verify']) {
+                throw unsupported(
+                    `SS+ShadowTLS skip-cert-verify is not supported on Surge`,
+                );
+            }
+            if (proxy['client-fingerprint']) {
+                throw unsupported(
+                    `SS+ShadowTLS client-fingerprint is not supported on Surge`,
+                );
+            }
+            if (proxy.cipher === '2022-blake3-chacha20-poly1305') {
+                throw unsupported(
+                    `cipher 2022-blake3-chacha20-poly1305 is not supported for ShadowTLS on Surge`,
+                );
+            }
+        } else {
             throw unsupported(`plugin ${proxy.plugin} is not supported`);
         }
     }

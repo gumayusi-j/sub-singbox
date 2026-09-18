@@ -100,6 +100,21 @@ function appendShadowTLS(result, proxy) {
     const version = proxy['plugin-opts'].version;
     if (!password) return;
 
+    // Loon uses a bare (unquoted) positional password field. Characters that
+    // act as field delimiters in the Loon config format must not appear in the
+    // ShadowTLS password or SNI, or they would corrupt the parsed configuration.
+    const loonDelimiters = /[\s,\"'\\#;]/;
+    if (loonDelimiters.test(password)) {
+        throw new Error(
+            `SS+ShadowTLS password contains characters not safe for Loon config format`,
+        );
+    }
+    if (host && loonDelimiters.test(host)) {
+        throw new Error(
+            `SS+ShadowTLS host/SNI contains characters not safe for Loon config format`,
+        );
+    }
+
     result.append(`,shadow-tls-password=${password}`);
     if (host) result.append(`,shadow-tls-sni=${host}`);
     if (version) {

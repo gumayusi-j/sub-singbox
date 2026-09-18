@@ -58,10 +58,22 @@ function pickScalar(value, fallback) {
     return value === undefined || value === null ? fallback : value;
 }
 
+function isSelectableOutbound(o) {
+    if (!o || typeof o.tag !== "string") return false;
+    if (
+        o.type === "shadowtls" ||
+        o.tag.startsWith("§hide§") ||
+        o.tag.endsWith("_shadowtls")
+    ) {
+        return false;
+    }
+    return true;
+}
+
 function addProxyGroups(outbounds, options, existing) {
     const tags = [];
     for (const o of outbounds || []) {
-        if (o && typeof o.tag === "string") tags.push(o.tag);
+        if (isSelectableOutbound(o)) tags.push(o.tag);
     }
     const groups = [];
     let autoTag;
@@ -298,7 +310,7 @@ export default function assemble(parsed, options) {
         const directOutbound = system.find((o) => o.type === "direct");
         const autoGroup = groups.find((g) => g.type === "urltest");
         applyClashModes(config, {
-            nodeTags: outbounds.map((o) => o && o.tag).filter((t) => typeof t === "string"),
+            nodeTags: outbounds.filter(isSelectableOutbound).map((o) => o && o.tag).filter((t) => typeof t === "string"),
             autoTag: autoGroup ? autoGroup.tag : null,
             directTag: directOutbound ? directOutbound.tag : null,
             localDnsTag: localTag,

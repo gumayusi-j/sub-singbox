@@ -19,7 +19,28 @@ function JSON_Producer() {
     return { type, produce };
 }
 
+function Karing_Producer() {
+    const meta = ClashMeta_Producer();
+    const type = 'ALL';
+    const produce = (proxies, type, opts = {}) => {
+        const filtered = proxies.filter((proxy) => {
+            if (opts['include-unsupported-proxy']) return true;
+            if (
+                proxy?.plugin === 'shadow-tls' ||
+                proxy?.['obfs-opts']?.mode === 'shadow-tls'
+            ) {
+                return false;
+            }
+            return true;
+        });
+        return meta.produce(filtered, type, opts);
+    };
+    return { type, produce };
+}
+
 export default {
+    karing: Karing_Producer(),
+    Karing: Karing_Producer(),
     qx: QX_Producer(),
     QX: QX_Producer(),
     QuantumultX: QX_Producer(),

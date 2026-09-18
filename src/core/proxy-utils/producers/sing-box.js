@@ -517,14 +517,15 @@ const socks5Parser = (proxy = {}) => {
     return parsedProxy;
 };
 
-const shadowTLSParser = (proxy = {}) => {
+const shadowTLSParser = (proxy = {}, opts = {}) => {
     const pluginOpts = getShadowTLSPluginOpts(proxy);
+    const detourTag = (opts.hideHelpers ? '§hide§' : '') + getShadowTLSTag(proxy);
     const ssPart = {
         tag: proxy.name,
         type: 'shadowsocks',
         method: proxy.cipher,
         password: proxy.password,
-        detour: getShadowTLSTag(proxy),
+        detour: detourTag,
     };
     if (proxy.uot) ssPart.udp_over_tcp = true;
     if (proxy['udp-over-tcp']) {
@@ -542,7 +543,7 @@ const shadowTLSParser = (proxy = {}) => {
     return {
         type: 'ss-with-st',
         ssPart,
-        stPart: shadowTLSOutboundParser(proxy, pluginOpts),
+        stPart: shadowTLSOutboundParser(proxy, pluginOpts, detourTag),
     };
 };
 
@@ -574,12 +575,12 @@ const normalizeALPN = (alpn) => {
     return undefined;
 };
 
-const shadowTLSOutboundParser = (proxy = {}, pluginOpts) => {
+const shadowTLSOutboundParser = (proxy = {}, pluginOpts, overrideTag) => {
     if (!pluginOpts) throw new Error('shadow-tls plugin options are missing');
     const fingerprint = getSingBoxUtlsFingerprint(proxy['client-fingerprint']);
 
     const stPart = {
-        tag: getShadowTLSTag(proxy),
+        tag: overrideTag || getShadowTLSTag(proxy),
         type: 'shadowtls',
         server: proxy.server,
         server_port: parseInt(`${proxy.port}`, 10),
@@ -590,7 +591,9 @@ const shadowTLSOutboundParser = (proxy = {}, pluginOpts) => {
             server_name: pluginOpts.host,
         },
     };
-    if (proxy['skip-cert-verify']) stPart.tls.insecure = true;
+    if (proxy['skip-cert-verify'] || pluginOpts['skip-cert-verify']) {
+        stPart.tls.insecure = true;
+    }
     if (fingerprint) {
         stPart.tls.utls = {
             enabled: true,
@@ -733,7 +736,7 @@ const getSnellVersion = (version) => {
     return parseInt(normalized, 10);
 };
 
-const snellParser = (proxy = {}, includeUnsupportedProxy = false) => {
+const snellParser = (proxy = {}, includeUnsupportedProxy = false, detourTag) => {
     const version = getSnellVersion(proxy.version);
     const shadowTLSPluginOpts = getShadowTLSPluginOpts(proxy);
     const supportedVersions = includeUnsupportedProxy
@@ -781,7 +784,7 @@ const snellParser = (proxy = {}, includeUnsupportedProxy = false) => {
         parsedProxy.reuse = true;
     networkParser(proxy, parsedProxy);
     if (shadowTLSPluginOpts) {
-        parsedProxy.detour = getShadowTLSTag(proxy);
+        parsedProxy.detour = detourTag || getShadowTLSTag(proxy);
         delete parsedProxy.server;
         delete parsedProxy.server_port;
     } else {
@@ -1467,7 +1470,7 @@ export default function singbox_Producer() {
                             // }
                             if (proxy.plugin === 'shadow-tls') {
                                 const { ssPart, stPart } =
-                                    shadowTLSParser(proxy);
+                                    shadowTLSParser(proxy, opts);
                                 list.push(ssPart);
                                 list.push(stPart);
                             } else {
@@ -1484,10 +1487,14 @@ export default function singbox_Producer() {
                             }
                             break;
                         case 'snell': {
+                            const detourTag = opts.hideHelpers
+                                ? '§hide§' + getShadowTLSTag(proxy)
+                                : undefined;
                             list.push(
                                 snellParser(
                                     proxy,
                                     opts['include-unsupported-proxy'],
+                                    detourTag,
                                 ),
                             );
                             const shadowTLSPluginOpts =
@@ -1497,6 +1504,7 @@ export default function singbox_Producer() {
                                     shadowTLSOutboundParser(
                                         proxy,
                                         shadowTLSPluginOpts,
+                                        detourTag,
                                     ),
                                 );
                             }

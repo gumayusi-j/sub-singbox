@@ -65,9 +65,24 @@ export default function Clash_Producer() {
                         `Clash 不支持前置代理字段. 已过滤节点 ${proxy.name}`,
                     );
                     return false;
+                } else if (
+                    proxy.type === 'ss' &&
+                    proxy.plugin === 'shadow-tls' &&
+                    proxy['plugin-opts']
+                ) {
+                    const stVersion = proxy['plugin-opts'].version;
+                    // Clash (original, non-Meta) requires ShadowTLS v2+ and
+                    // does not support client-fingerprint.
+                    if (stVersion != null && stVersion < 2) {
+                        return false;
+                    }
+                    if (proxy['client-fingerprint']) {
+                        return false;
+                    }
                 }
                 return true;
             })
+
             .map((proxy) => {
                 if (proxy.type === 'vmess') {
                     // handle vmess aead

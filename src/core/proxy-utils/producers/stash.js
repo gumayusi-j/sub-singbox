@@ -1,6 +1,7 @@
 import {
     isPresent,
     produceProxyListOutput,
+    restoreShadowTLSProxyOpts,
     supportsShadowsocksV2rayPluginMode,
 } from '@/core/proxy-utils/producers/utils';
 import { normalizeClashVmessSecurity } from '../vmess-security';
@@ -90,10 +91,20 @@ export default function Stash_Producer() {
                     proxy['ws-opts']?.['v2ray-http-upgrade']
                 ) {
                     return false;
+                } else if (
+                    proxy.type === 'ss' &&
+                    proxy.plugin === 'shadow-tls' &&
+                    proxy['plugin-opts']
+                ) {
+                    const stVersion = proxy['plugin-opts'].version;
+                    if (stVersion != null && stVersion < 2) {
+                        return false;
+                    }
                 }
                 return true;
             })
             .map((proxy) => {
+                restoreShadowTLSProxyOpts(proxy);
                 if (proxy.type === 'vmess') {
                     // handle vmess aead
                     if (isPresent(proxy, 'aead')) {

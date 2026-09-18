@@ -58,6 +58,7 @@ export function tryLoadNodeDocument(text) {
 function produceToObject(nodes, opts) {
     const external = ProxyUtils.produce(nodes, "sing-box", "external", {
         "include-unsupported-proxy": !!(opts && opts.includeUnsupportedProxy),
+        hideHelpers: !!(opts && opts.hideHelpers),
     });
     return JSON.parse(external); // { outbounds, endpoints }
 }

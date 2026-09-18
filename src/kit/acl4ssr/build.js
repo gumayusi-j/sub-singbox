@@ -465,7 +465,16 @@ export function assembleAcl(parsed, options) {
         return migrateAndWarn(directOnly(options), options);
     }
 
-    const tags = nodes.map((o) => o && o.tag).filter((t) => typeof t === "string");
+    const tags = nodes
+        .filter(
+            (o) =>
+                o &&
+                typeof o.tag === "string" &&
+                o.type !== "shadowtls" &&
+                !o.tag.startsWith("§hide§") &&
+                !o.tag.endsWith("_shadowtls"),
+        )
+        .map((o) => o.tag);
     const { outbounds: groups, emitted } = buildGroups(preset, tags);
     const { route, warnings } = assembleRoute(preset, emitted, options);
 

@@ -56,9 +56,37 @@ export default function Shadowrocket_Producer() {
                         `VLESS XHTTP 结构复杂, Shadowrocket 可能无法完全兼容`,
                     );
                     return true;
+                } else if (
+                    proxy.type === 'ss' &&
+                    proxy.plugin === 'shadow-tls' &&
+                    proxy['plugin-opts']
+                ) {
+                    // Shadowrocket's official release notes confirm v3 only.
+                    // skip-cert-verify and client-fingerprint are not supported.
+                    const stVersion = proxy['plugin-opts'].version;
+                    if (stVersion !== 3) {
+                        $.error(
+                            `Platform Shadowrocket only supports SS+ShadowTLS v3 (got v${stVersion}) for proxy ${proxy.name}. Proxy has been filtered.`,
+                        );
+                        return false;
+                    }
+                    if (proxy['plugin-opts']['skip-cert-verify']) {
+                        $.error(
+                            `Platform Shadowrocket does not support skip-cert-verify for SS+ShadowTLS proxy ${proxy.name}. Proxy has been filtered.`,
+                        );
+                        return false;
+                    }
+                    if (proxy['client-fingerprint']) {
+                        $.error(
+                            `Platform Shadowrocket does not support client-fingerprint for SS+ShadowTLS proxy ${proxy.name}. Proxy has been filtered.`,
+                        );
+                        return false;
+                    }
+                    return true;
                 }
                 return true;
             })
+
             .map((proxy) => {
                 restoreShadowTLSProxyOpts(proxy);
 

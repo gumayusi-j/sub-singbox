@@ -95,7 +95,10 @@ function normalizeOptions(options, customSchemes) {
     // throwing on a stale saved value.
     const scheme = options.aclPreset ? findScheme(options.aclPreset, customSchemes) : null;
     return {
-        out: options.out === "outbounds" ? "outbounds" : "config",
+        out:
+            options.out === "outbounds" || options.content === "nodes"
+                ? "outbounds"
+                : "config",
         aclPreset: scheme !== null ? options.aclPreset : undefined,
         aclScheme: scheme || undefined,
         // A list of nodes to keep, by name. Distinct from a source's
@@ -217,11 +220,20 @@ export function renderSubscription(store, resolved, options) {
     }
 
     let body;
+    let contentType = target.contentType;
     const skippedNodes = [];
 
     try {
         if (target.mode === "singbox") {
-            const fromResults = parsedNodes.map((nodes) => fromNodes(nodes, normalized));
+            const isHiddify = target.id === "hiddify";
+            const isNodesOnly = normalized.out === "outbounds";
+            const fromResults = parsedNodes.map((nodes) => {
+                const opts =
+                    isHiddify && isNodesOnly
+                        ? Object.assign({}, normalized, { hideHelpers: true })
+                        : normalized;
+                return fromNodes(nodes, opts);
+            });
             // Collect skipped nodes from each source's fromNodes result.
             for (const result of fromResults) {
                 if (result && Array.isArray(result.skippedNodes)) {
@@ -229,12 +241,32 @@ export function renderSubscription(store, resolved, options) {
                 }
             }
             const parsed = mergeParsed(fromResults, warnings);
-            if (normalized.out === "outbounds") {
-                body = JSON.stringify(
-                    { outbounds: parsed.outbounds, endpoints: parsed.endpoints },
-                    null,
-                    2,
-                );
+            if (isNodesOnly) {
+                if (isHiddify) {
+                    const hasShadowTLS = parsedNodes.some((list) =>
+                        list.some((node) => node?.plugin === "shadow-tls"),
+                    );
+                    if (!hasShadowTLS) {
+                        // Ordinary list: plain URI list
+                        const nodes = dedupeNodeNames(parsedNodes, warnings);
+                        body = ProxyUtils.produce(nodes, "uri", "external");
+                        contentType = "text/plain; charset=utf-8";
+                    } else {
+                        // With ShadowTLS: outbounds-only JSON with §hide§
+                        body = JSON.stringify(
+                            { outbounds: parsed.outbounds },
+                            null,
+                            2,
+                        );
+                        contentType = "application/json; charset=utf-8";
+                    }
+                } else {
+                    body = JSON.stringify(
+                        { outbounds: parsed.outbounds, endpoints: parsed.endpoints },
+                        null,
+                        2,
+                    );
+                }
             } else {
                 const config = normalized.aclPreset
                     ? assembleAcl(parsed, normalized)
@@ -245,17 +277,45 @@ export function renderSubscription(store, resolved, options) {
             // Every other dialect keys entries by display name, so dedupe on
             // name rather than on the sing-box tag.
             const nodes = dedupeNodeNames(parsedNodes, warnings);
-            const produced = ProxyUtils.produce(nodes, target.produce, "external");
-            const raw = typeof produced === "string" ? produced : JSON.stringify(produced, null, 2);
+            const isNodesOnly = normalized.out === "outbounds";
+            if (target.id === "shadowrocket" && isNodesOnly) {
+                const hasShadowTLS = nodes.some(
+                    (node) => node?.plugin === "shadow-tls",
+                );
+                if (hasShadowTLS) {
+                    // Output proxies-only YAML
+                    const produced = ProxyUtils.produce(
+                        nodes,
+                        "shadowrocket",
+                        "external",
+                    );
+                    body =
+                        typeof produced === "string"
+                            ? produced
+                            : JSON.stringify(produced, null, 2);
+                    contentType = "text/yaml; charset=utf-8";
+                } else {
+                    // Output URI list
+                    const produced = ProxyUtils.produce(nodes, "uri", "external");
+                    body =
+                        typeof produced === "string"
+                            ? produced
+                            : JSON.stringify(produced, null, 2);
+                    contentType = "text/plain; charset=utf-8";
+                }
+            } else {
+                const produced = ProxyUtils.produce(nodes, target.produce, "external");
+                const raw = typeof produced === "string" ? produced : JSON.stringify(produced, null, 2);
 
-            // Clash-family targets (clash, stash, shadowrocket, karing) receive
-            // a complete config with dns, proxy-groups and rules — the same
-            // structure Tower exports.  Other dialects (surge, loon, …) already
-            // work as bare lists that their clients know how to merge.
-            const CLASH_IDS = new Set(["clash", "stash", "shadowrocket", "karing"]);
-            body = CLASH_IDS.has(target.id)
-                ? assembleClash(raw, normalized.aclScheme)
-                : raw;
+                // Clash-family targets (clash, stash, shadowrocket, karing) receive
+                // a complete config with dns, proxy-groups and rules — the same
+                // structure Tower exports. Other dialects (surge, loon, …) already
+                // work as bare lists that their clients know how to merge.
+                const CLASH_IDS = new Set(["clash", "stash", "shadowrocket", "karing"]);
+                body = CLASH_IDS.has(target.id) && !isNodesOnly
+                    ? assembleClash(raw, normalized.aclScheme)
+                    : raw;
+            }
         }
     } catch (e) {
         if (e instanceof CompatError) return errorResponse(422, e.message);
@@ -270,7 +330,7 @@ export function renderSubscription(store, resolved, options) {
     }
 
     const headers = {
-        "Content-Type": target.contentType,
+        "Content-Type": contentType,
         ETag: etagFor(body),
         "Cache-Control": "no-store",
     };
@@ -288,7 +348,7 @@ export function renderSubscription(store, resolved, options) {
         status: 200,
         headers,
         body,
-        content: target.contentType,
+        content: contentType,
         sources: withSnapshots.map((entry) => entry.source),
         usage,
         warnings,

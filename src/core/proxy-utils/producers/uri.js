@@ -868,11 +868,20 @@ export default function URI_Producer() {
                                 }${mux != null ? ';mux=' + mux : ''}`,
                             );
                             break;
-                        case 'shadow-tls':
-                            query += encodeURIComponent(
-                                `shadow-tls;host=${opts.host};password=${opts.password};version=${opts.version}`,
-                            );
+                        case 'shadow-tls': {
+                            // SIP003 requires semicolons and backslashes inside
+                            // option values to be backslash-escaped.
+                            const escapeSip003 = (v) =>
+                                `${v ?? ''}`
+                                    .replace(/\\/g, '\\\\')
+                                    .replace(/;/g, '\\;');
+                            let stPlugin = `shadow-tls;host=${escapeSip003(opts.host)};password=${escapeSip003(opts.password)};version=${opts.version}`;
+                            if (opts['skip-cert-verify']) {
+                                stPlugin += ';skip-cert-verify=true';
+                            }
+                            query += encodeURIComponent(stPlugin);
                             break;
+                        }
                         default:
                             throw new Error(
                                 `Unsupported plugin option: ${proxy.plugin}`,

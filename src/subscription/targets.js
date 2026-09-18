@@ -55,7 +55,7 @@ export const TARGETS = [
     {
         id: "karing",
         label: "Karing",
-        produce: "clashmeta",
+        produce: "karing",
         contentType: "text/yaml; charset=utf-8",
         ua: /karing/i,
     },
