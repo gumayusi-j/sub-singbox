@@ -6,6 +6,11 @@
 
 import { safeLoad } from "@/utils/yaml";
 import { LISTS } from "./acl4ssr/presets.generated";
+import {
+    LOW_RATE_GROUP,
+    NORMAL_RATE_GROUP,
+    resolveMultiplierGroupNodes,
+} from "./acl4ssr/multiplier";
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -85,21 +90,31 @@ function buildClashGroups(preset, nodeNames) {
         const nextEmitted = new Set();
 
         for (const spec of specs) {
-            const members = [];
-            for (const token of spec.memberTokens || []) {
-                if (!token) continue;
-                if (token.startsWith("[]")) {
-                    const ref = token.slice(2);
-                    if (/^DIRECT$/i.test(ref)) members.push("DIRECT");
-                    else if (/^REJECT$/i.test(ref)) members.push("REJECT");
-                    else if (emitted.has(ref)) members.push(ref);
-                    continue;
+            let unique;
+            const rateMatched = resolveMultiplierGroupNodes(spec.tag, nodeNames);
+            if (rateMatched !== undefined) {
+                if (!rateMatched || rateMatched.length === 0) continue;
+                unique = dedupe(rateMatched);
+            } else {
+                const members = [];
+                for (const token of spec.memberTokens || []) {
+                    if (!token) continue;
+                    if (token.startsWith("[]")) {
+                        const ref = token.slice(2);
+                        if (/^DIRECT$/i.test(ref)) members.push("DIRECT");
+                        else if (/^REJECT$/i.test(ref)) members.push("REJECT");
+                        else if (emitted.has(ref)) members.push(ref);
+                        else if (ref === LOW_RATE_GROUP && emitted.has(NORMAL_RATE_GROUP)) {
+                            if (!members.includes(NORMAL_RATE_GROUP)) members.push(NORMAL_RATE_GROUP);
+                        }
+                        continue;
+                    }
+                    // Regex pattern → match against node names
+                    members.push(...matchTags(token, nodeNames));
                 }
-                // Regex pattern → match against node names
-                members.push(...matchTags(token, nodeNames));
+                unique = dedupe(members);
+                if (unique.length === 0) continue;
             }
-            const unique = dedupe(members);
-            if (unique.length === 0) continue;
 
             if (spec.kind === "url-test") {
                 const url = (spec.memberTokens || [])[1] || "http://www.gstatic.com/generate_204";

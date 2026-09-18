@@ -175,10 +175,9 @@ describe("ACL4SSR presets", function () {
             expect(lowGroup.type, presetId).to.equal("urltest");
             expect(lowGroup.outbounds, presetId).to.deep.equal([
                 "香港 01 - 0.2x",
-                "台湾 02 [1x]",
-                "日本 03 1.0倍",
                 "省流 04",
             ]);
+            expect(tags, presetId).to.not.include("☕ 正常倍率（1x）");
 
             expect(tags, presetId).to.include("💎 高倍率节点");
             const highGroup = outbounds.find((o) => o.tag === "💎 高倍率节点");
@@ -193,21 +192,107 @@ describe("ACL4SSR presets", function () {
             const nodeSelect = outbounds.find((o) => o.tag === "🚀 节点选择");
             expect(nodeSelect.outbounds, presetId).to.include("💰 低倍率节点");
             expect(nodeSelect.outbounds, presetId).to.include("💎 高倍率节点");
+            expect(nodeSelect.outbounds, presetId).to.not.include("☕ 正常倍率（1x）");
 
             assertReferencesResolve(config);
         }
     });
 
-    it("drops low/high multiplier groups cleanly when no nodes match", function () {
+    it("drops low/high/normal multiplier groups cleanly when no nodes match", function () {
         const noMultiplierNodes = ["香港 01", "日本 02", "台湾 03"];
         for (const presetId of ["acl4ssr-default", "acl4ssr-full"]) {
             const config = assembleAcl(parsed(noMultiplierNodes), { aclPreset: presetId });
             const tags = config.outbounds.map((o) => o.tag);
             expect(tags, presetId).to.not.include("💰 低倍率节点");
+            expect(tags, presetId).to.not.include("☕ 正常倍率（1x）");
             expect(tags, presetId).to.not.include("💎 高倍率节点");
             const nodeSelect = config.outbounds.find((o) => o.tag === "🚀 节点选择");
             expect(nodeSelect.outbounds, presetId).to.not.include("💰 低倍率节点");
+            expect(nodeSelect.outbounds, presetId).to.not.include("☕ 正常倍率（1x）");
             expect(nodeSelect.outbounds, presetId).to.not.include("💎 高倍率节点");
+            assertReferencesResolve(config);
+        }
+    });
+
+    it("emits normal-multiplier group when no < 1x nodes exist and > 1x nodes exist", function () {
+        const testNodes = [
+            "台湾 02 [1x]",
+            "日本 03 1.0倍",
+            "专线 05 - 1.5x",
+            "专线 06 [2X]",
+            "普通节点 09",
+        ];
+        for (const presetId of ["acl4ssr-default", "acl4ssr-full", "acl4ssr-mini"]) {
+            const config = assembleAcl(parsed(testNodes), { aclPreset: presetId });
+            const outbounds = config.outbounds;
+            const tags = outbounds.map((o) => o.tag);
+
+            // < 1x does not exist -> low rate group dropped
+            expect(tags, presetId).to.not.include("💰 低倍率节点");
+
+            // Normal rate group emitted with explicit 1x nodes
+            expect(tags, presetId).to.include("☕ 正常倍率（1x）");
+            const normalGroup = outbounds.find((o) => o.tag === "☕ 正常倍率（1x）");
+            expect(normalGroup.type, presetId).to.equal("urltest");
+            expect(normalGroup.outbounds, presetId).to.deep.equal([
+                "台湾 02 [1x]",
+                "日本 03 1.0倍",
+            ]);
+
+            const nodeSelect = outbounds.find((o) => o.tag === "🚀 节点选择");
+            expect(nodeSelect.outbounds, presetId).to.include("☕ 正常倍率（1x）");
+            expect(nodeSelect.outbounds, presetId).to.not.include("💰 低倍率节点");
+
+            if (presetId !== "acl4ssr-mini") {
+                expect(tags, presetId).to.include("💎 高倍率节点");
+                expect(nodeSelect.outbounds, presetId).to.include("💎 高倍率节点");
+                const aiGroup = outbounds.find((o) => o.tag === "💬 Ai平台");
+                if (aiGroup) {
+                    expect(aiGroup.outbounds, presetId).to.include("☕ 正常倍率（1x）");
+                    expect(aiGroup.outbounds, presetId).to.not.include("💰 低倍率节点");
+                }
+            }
+
+            assertReferencesResolve(config);
+        }
+    });
+
+    it("falls back to ordinary nodes for normal-multiplier group when no explicit 1x labels exist", function () {
+        const testNodes = [
+            "香港 01",
+            "日本 02",
+            "专线 05 - 1.5x",
+            "专线 06 [2X]",
+        ];
+        for (const presetId of ["acl4ssr-default", "acl4ssr-full"]) {
+            const config = assembleAcl(parsed(testNodes), { aclPreset: presetId });
+            const outbounds = config.outbounds;
+            const tags = outbounds.map((o) => o.tag);
+
+            expect(tags, presetId).to.not.include("💰 低倍率节点");
+            expect(tags, presetId).to.include("☕ 正常倍率（1x）");
+            const normalGroup = outbounds.find((o) => o.tag === "☕ 正常倍率（1x）");
+            expect(normalGroup.outbounds, presetId).to.deep.equal([
+                "香港 01",
+                "日本 02",
+            ]);
+
+            assertReferencesResolve(config);
+        }
+    });
+
+    it("drops normal-multiplier group when no > 1x nodes exist", function () {
+        const testNodes = [
+            "香港 01",
+            "台湾 02 [1x]",
+            "日本 03 1.0倍",
+        ];
+        for (const presetId of ["acl4ssr-default", "acl4ssr-full", "acl4ssr-mini"]) {
+            const config = assembleAcl(parsed(testNodes), { aclPreset: presetId });
+            const tags = config.outbounds.map((o) => o.tag);
+            expect(tags, presetId).to.not.include("💰 低倍率节点");
+            expect(tags, presetId).to.not.include("☕ 正常倍率（1x）");
+            expect(tags, presetId).to.not.include("💎 高倍率节点");
             assertReferencesResolve(config);
         }
     });
@@ -223,15 +308,21 @@ describe("ACL4SSR presets", function () {
         const tags = config.outbounds.map((o) => o.tag);
         expect(tags).to.include("💰 低倍率节点");
         expect(tags).to.not.include("💎 高倍率节点");
+        expect(tags).to.not.include("☕ 正常倍率（1x）");
+        const lowGroup = config.outbounds.find((o) => o.tag === "💰 低倍率节点");
+        expect(lowGroup.outbounds).to.deep.equal(["香港 01 - 0.2x"]);
         const nodeSelect = config.outbounds.find((o) => o.tag === "🚀 节点选择");
         expect(nodeSelect.outbounds).to.include("💰 低倍率节点");
+        expect(nodeSelect.outbounds).to.not.include("☕ 正常倍率（1x）");
         const finalGroup = config.outbounds.find((o) => o.tag === "🐟 漏网之鱼");
         expect(finalGroup.outbounds).to.include("💰 低倍率节点");
+        expect(finalGroup.outbounds).to.not.include("☕ 正常倍率（1x）");
         assertReferencesResolve(config);
 
         // When no multiplier matches, mini drops low-multiplier group cleanly
         const noMatch = assembleAcl(parsed(["香港 01", "日本 02"]), { aclPreset: "acl4ssr-mini" });
         expect(noMatch.outbounds.map((o) => o.tag)).to.not.include("💰 低倍率节点");
+        expect(noMatch.outbounds.map((o) => o.tag)).to.not.include("☕ 正常倍率（1x）");
         assertReferencesResolve(noMatch);
     });
 

@@ -19,6 +19,11 @@
 // an aclPreset is selected.
 import { LISTS, PRESETS } from "./presets.generated";
 import {
+    LOW_RATE_GROUP,
+    NORMAL_RATE_GROUP,
+    resolveMultiplierGroupNodes,
+} from "./multiplier";
+import {
     defaultLog,
     defaultInbounds,
     defaultExperimental,
@@ -123,12 +128,13 @@ function buildGroups(preset, tags) {
     const outbounds = [];
 
     const resolveGroup = (spec, emittedNow) => {
+        let rateMatched = resolveMultiplierGroupNodes(spec.tag, tags);
         if (spec.kind === "url-test") {
             const nodeRegex = spec.memberTokens[0] || ".*";
             const url = spec.memberTokens[1];
             const param = spec.memberTokens[2] || "";
-            const matched = matchTags(nodeRegex, tags);
-            if (matched.length === 0) return null;
+            const matched = rateMatched !== undefined ? rateMatched : matchTags(nodeRegex, tags);
+            if (!matched || matched.length === 0) return null;
             const group = {
                 type: "urltest",
                 tag: spec.tag,
@@ -145,6 +151,10 @@ function buildGroups(preset, tags) {
         }
         // select: []ref members are group/builtin references, others are node
         // name regexes.
+        if (rateMatched !== undefined) {
+            if (!rateMatched || rateMatched.length === 0) return null;
+            return { type: "selector", tag: spec.tag, outbounds: dedupe(rateMatched) };
+        }
         const members = [];
         for (const token of spec.memberTokens) {
             if (!token) continue;
@@ -153,6 +163,9 @@ function buildGroups(preset, tags) {
                 if (/^DIRECT$/i.test(ref)) members.push("direct");
                 else if (/^REJECT$/i.test(ref)) continue;
                 else if (emittedNow.has(ref)) members.push(ref);
+                else if (ref === LOW_RATE_GROUP && emittedNow.has(NORMAL_RATE_GROUP)) {
+                    if (!members.includes(NORMAL_RATE_GROUP)) members.push(NORMAL_RATE_GROUP);
+                }
                 continue;
             }
             members.push(...matchTags(token, tags));
