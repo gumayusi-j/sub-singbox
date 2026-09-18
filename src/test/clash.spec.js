@@ -52,7 +52,7 @@ describe("assembleClash", function () {
 
         expect(yaml).to.include("name: \"💰 低倍率节点\"");
         expect(yaml).to.include("name: \"💎 高倍率节点\"");
-        expect(yaml).to.not.include("name: \"☕ 正常倍率（1x）\"");
+        expect(yaml).to.not.include("name: \"☕ 正常倍率节点\"");
         expect(yaml).to.include("name: \"💬 Ai平台\"");
 
         // Rules
@@ -60,7 +60,7 @@ describe("assembleClash", function () {
         expect(yaml).to.include("- MATCH,🐟 漏网之鱼");
     });
 
-    it("assembles clash config with ☕ 正常倍率（1x） when no < 1x nodes exist and > 1x nodes exist", function () {
+    it("assembles clash config with ☕ 正常倍率节点 when no < 1x nodes exist and > 1x nodes exist", function () {
         const NORMAL_RATE_PROXIES = `
 proxies:
   - name: "🇭🇰 香港-01"
@@ -87,18 +87,18 @@ proxies:
 
         // Low-rate is dropped, normal-rate is emitted, high-rate is emitted
         expect(yaml).to.not.include("name: \"💰 低倍率节点\"");
-        expect(yaml).to.include("name: \"☕ 正常倍率（1x）\"");
+        expect(yaml).to.include("name: \"☕ 正常倍率节点\"");
         expect(yaml).to.include("name: \"💎 高倍率节点\"");
 
-        // ☕ 正常倍率（1x） contains both plain standard node and explicit 1.0x node
+        // ☕ 正常倍率节点 contains both plain standard node and explicit 1.0x node
         expect(yaml).to.include("- \"🇭🇰 香港-01\"");
         expect(yaml).to.include("- \"🇯🇵 日本-01 1.0x\"");
 
-        // Ai platform and node select include ☕ 正常倍率（1x）
-        expect(yaml).to.include("- \"☕ 正常倍率（1x）\"");
+        // Ai platform and node select include ☕ 正常倍率节点
+        expect(yaml).to.include("- \"☕ 正常倍率节点\"");
     });
 
-    it("assembles clash config with ☕ 正常倍率（1x） for pure plain nodes without 1x label", function () {
+    it("assembles clash config with ☕ 正常倍率节点 for pure plain nodes without 1x label", function () {
         const PLAIN_PROXIES = `
 proxies:
   - name: "🇭🇰 香港-01"
@@ -130,7 +130,7 @@ proxies:
         const yaml = assembleClash(PLAIN_PROXIES, preset);
 
         expect(yaml).to.not.include("name: \"💰 低倍率节点\"");
-        expect(yaml).to.include("name: \"☕ 正常倍率（1x）\"");
+        expect(yaml).to.include("name: \"☕ 正常倍率节点\"");
         expect(yaml).to.include("name: \"💎 高倍率节点\"");
 
         expect(yaml).to.include("- \"🇭🇰 香港-01\"");
