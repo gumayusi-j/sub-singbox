@@ -2038,7 +2038,7 @@ pre.code-block {
 
             <!-- Gist file download links -->
             <div v-if="gistFiles.length" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke-soft)">
-              <p style="font-size:12.5px;font-weight:600;color:var(--text-2);margin:0 0 8px">Gist 文件下载直链</p>
+              <p style="font-size:12.5px;font-weight:600;color:var(--text-2);margin:0 0 8px">Gist 文件下载直链（永久最新）</p>
               <div v-for="f in gistFiles" :key="f.name"
                    style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px">
                 <span class="chip chip-accent" style="font-family:var(--font-mono)">{{ f.name }}</span>
@@ -3549,14 +3549,39 @@ var app = Vue.createApp({
         }
 
         var data = await res.json();
-        // Collect all files with raw_url from the Gist response
+        // Collect all files with permanent raw_url (without commit SHA) from the Gist response:
+        // https://gist.githubusercontent.com/用户名/GistID/raw/filename
         var files = [];
+        var ownerLogin = (data && data.owner && data.owner.login) ? data.owner.login : '';
+        var gid = (data && data.id) || (gistId.value || '').trim();
+
         if (data && data.files) {
           Object.keys(data.files).forEach(function(name) {
             var f = data.files[name];
+            var raw = f.raw_url || '';
+            var user = ownerLogin;
+            var id = gid;
+
+            if ((!user || !id) && raw) {
+              var m = raw.match(/^https?:\/\/gist\.githubusercontent\.com\/([^/]+)\/([^/]+)\/raw\//i);
+              if (m) {
+                if (!user) user = m[1];
+                if (!id) id = m[2];
+              }
+            }
+
+            var stableRawUrl = '';
+            if (user && id) {
+              stableRawUrl = 'https://gist.githubusercontent.com/' + user + '/' + id + '/raw/' + encodeURIComponent(name);
+            } else if (raw) {
+              stableRawUrl = raw.replace(/\/raw\/[0-9a-f]{40}\//i, '/raw/');
+            } else {
+              stableRawUrl = raw;
+            }
+
             files.push({
               name: name,
-              rawUrl: f.raw_url,
+              rawUrl: stableRawUrl,
               size: f.size
             });
           });
