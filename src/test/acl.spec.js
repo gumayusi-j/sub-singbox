@@ -233,7 +233,7 @@ describe("ACL4SSR presets", function () {
             // Normal rate group emitted with explicit 1x nodes
             expect(tags, presetId).to.include("☕ 正常倍率（1x）");
             const normalGroup = outbounds.find((o) => o.tag === "☕ 正常倍率（1x）");
-            expect(normalGroup.type, presetId).to.equal("urltest");
+            expect(normalGroup.type, presetId).to.equal("selector");
             expect(normalGroup.outbounds, presetId).to.deep.equal([
                 "台湾 02 [1x]",
                 "日本 03 1.0倍",
