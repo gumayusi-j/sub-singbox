@@ -90,10 +90,50 @@ proxies:
         expect(yaml).to.include("name: \"☕ 正常倍率（1x）\"");
         expect(yaml).to.include("name: \"💎 高倍率节点\"");
 
-        // ☕ 正常倍率（1x） contains 1.0x node
+        // ☕ 正常倍率（1x） contains both plain standard node and explicit 1.0x node
+        expect(yaml).to.include("- \"🇭🇰 香港-01\"");
         expect(yaml).to.include("- \"🇯🇵 日本-01 1.0x\"");
 
         // Ai platform and node select include ☕ 正常倍率（1x）
         expect(yaml).to.include("- \"☕ 正常倍率（1x）\"");
+    });
+
+    it("assembles clash config with ☕ 正常倍率（1x） for pure plain nodes without 1x label", function () {
+        const PLAIN_PROXIES = `
+proxies:
+  - name: "🇭🇰 香港-01"
+    type: ss
+    server: 1.2.3.4
+    port: 8388
+    cipher: aes-128-gcm
+    password: pass
+  - name: "🇯🇵 日本-01"
+    type: ss
+    server: 1.2.3.5
+    port: 8388
+    cipher: aes-128-gcm
+    password: pass
+  - name: "🇺🇲 美国-01 2.0x"
+    type: ss
+    server: 1.2.3.6
+    port: 8388
+    cipher: aes-128-gcm
+    password: pass
+  - name: "剩余流量 0.00x"
+    type: ss
+    server: 1.2.3.7
+    port: 8388
+    cipher: aes-128-gcm
+    password: pass
+`;
+        const preset = findPreset("acl4ssr-default");
+        const yaml = assembleClash(PLAIN_PROXIES, preset);
+
+        expect(yaml).to.not.include("name: \"💰 低倍率节点\"");
+        expect(yaml).to.include("name: \"☕ 正常倍率（1x）\"");
+        expect(yaml).to.include("name: \"💎 高倍率节点\"");
+
+        expect(yaml).to.include("- \"🇭🇰 香港-01\"");
+        expect(yaml).to.include("- \"🇯🇵 日本-01\"");
     });
 });

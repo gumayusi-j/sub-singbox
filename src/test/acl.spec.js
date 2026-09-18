@@ -237,6 +237,7 @@ describe("ACL4SSR presets", function () {
             expect(normalGroup.outbounds, presetId).to.deep.equal([
                 "台湾 02 [1x]",
                 "日本 03 1.0倍",
+                "普通节点 09",
             ]);
 
             const nodeSelect = outbounds.find((o) => o.tag === "🚀 节点选择");
@@ -257,7 +258,7 @@ describe("ACL4SSR presets", function () {
         }
     });
 
-    it("falls back to ordinary nodes for normal-multiplier group when no explicit 1x labels exist", function () {
+    it("falls back to ordinary plain nodes for normal-multiplier group when no explicit 1x labels exist", function () {
         const testNodes = [
             "香港 01",
             "日本 02",
@@ -276,6 +277,32 @@ describe("ACL4SSR presets", function () {
                 "香港 01",
                 "日本 02",
             ]);
+
+            assertReferencesResolve(config);
+        }
+    });
+
+    it("ignores announcement nodes like 0.0x / 0.00x when determining low-multiplier nodes", function () {
+        const testNodes = [
+            "香港 01",
+            "日本 02",
+            "专线 05 - 2.0x",
+            "剩余流量 0.00x",
+            "公告 0.0x",
+        ];
+        for (const presetId of ["acl4ssr-default", "acl4ssr-full"]) {
+            const config = assembleAcl(parsed(testNodes), { aclPreset: presetId });
+            const tags = config.outbounds.map((o) => o.tag);
+
+            // 0.00x announcements should NOT trigger low-multiplier group
+            expect(tags, presetId).to.not.include("💰 低倍率节点");
+
+            // Normal rate group should be formed
+            expect(tags, presetId).to.include("☕ 正常倍率（1x）");
+            const normalGroup = config.outbounds.find((o) => o.tag === "☕ 正常倍率（1x）");
+            expect(normalGroup.outbounds, presetId).to.include("香港 01");
+            expect(normalGroup.outbounds, presetId).to.include("日本 02");
+            expect(normalGroup.outbounds, presetId).to.not.include("专线 05 - 2.0x");
 
             assertReferencesResolve(config);
         }

@@ -9,9 +9,24 @@ export const LOW_RATE_GROUP = "💰 低倍率节点";
 export const NORMAL_RATE_GROUP = "☕ 正常倍率（1x）";
 export const HIGH_RATE_GROUP = "💎 高倍率节点";
 
-// Low rate: strictly < 1x (e.g. 0.2x, 0.5倍, 省流, 低倍)
+export function isLowRateGroup(tag) {
+    if (typeof tag !== "string") return false;
+    return tag === LOW_RATE_GROUP || /低倍率/.test(tag);
+}
+
+export function isNormalRateGroup(tag) {
+    if (typeof tag !== "string") return false;
+    return tag === NORMAL_RATE_GROUP || /正常倍率/.test(tag);
+}
+
+export function isHighRateGroup(tag) {
+    if (typeof tag !== "string") return false;
+    return tag === HIGH_RATE_GROUP || /高倍率/.test(tag);
+}
+
+// Low rate: strictly < 1x (e.g. 0.05x, 0.2x, 0.5倍, 省流, 低倍; ignores 0.0x / 0.00x notice nodes)
 export const LOW_RATE_REGEX =
-    "((?<!\\d)0\\.\\d+\\s*(?:x|倍)|低倍|省流)";
+    "((?<!\\d)0\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|低倍|省流)";
 
 // High rate: > 1x (e.g. 1.05x, 1.5x, 2x, 10x, 高倍)
 export const HIGH_RATE_REGEX =
@@ -20,6 +35,11 @@ export const HIGH_RATE_REGEX =
 // Explicit normal rate: 1x, 1.0x, 1倍, 标准, 正常
 export const EXPLICIT_NORMAL_REGEX =
     "((?<![\\d.])1(?:\\.0+)?\\s*(?:x|倍)(?![0-9a-zA-Z])|标准|正常)";
+
+// Negative lookahead regex for normal rate (used in static INIs and external parser fallbacks):
+// matches any node name that contains neither high rate (> 1x) nor low rate (< 1x) indicators.
+export const NORMAL_RATE_REGEX =
+    "^(?!.*(?:1\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|(?:[2-9]|[1-9]\\d+)(?:\\.\\d+)?\\s*(?:x|倍)|高倍|0\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|低倍|省流)).*$";
 
 export function matchTags(pattern, tags) {
     if (!pattern || pattern === ".*") return tags.slice();
@@ -42,22 +62,22 @@ export function matchTags(pattern, tags) {
  * @returns {string[] | null | undefined}
  */
 export function resolveMultiplierGroupNodes(tag, tags) {
-    if (tag !== LOW_RATE_GROUP && tag !== NORMAL_RATE_GROUP && tag !== HIGH_RATE_GROUP) {
+    if (!isLowRateGroup(tag) && !isNormalRateGroup(tag) && !isHighRateGroup(tag)) {
         return undefined;
     }
 
     const lowMatches = matchTags(LOW_RATE_REGEX, tags);
     const highMatches = matchTags(HIGH_RATE_REGEX, tags);
 
-    if (tag === LOW_RATE_GROUP) {
+    if (isLowRateGroup(tag)) {
         return lowMatches.length > 0 ? lowMatches : null;
     }
 
-    if (tag === HIGH_RATE_GROUP) {
+    if (isHighRateGroup(tag)) {
         return highMatches.length > 0 ? highMatches : null;
     }
 
-    if (tag === NORMAL_RATE_GROUP) {
+    if (isNormalRateGroup(tag)) {
         // Only generate normal rate group when:
         // 1. No < 1x nodes exist (lowMatches.length === 0)
         // 2. > 1x nodes exist (highMatches.length > 0)
@@ -65,16 +85,13 @@ export function resolveMultiplierGroupNodes(tag, tags) {
             return null;
         }
 
-        const explicitNormalMatches = matchTags(EXPLICIT_NORMAL_REGEX, tags);
-        if (explicitNormalMatches.length > 0) {
-            return explicitNormalMatches;
-        }
-
-        // Smart fallback: when no explicit 1x labels exist, include all ordinary nodes
-        // (excluding high-multiplier nodes)
+        // All standard nodes: every node that is neither high-rate nor low-rate.
+        // Plain node names (e.g. "香港 01") without explicit multiplier suffixes
+        // are standard 1x rate nodes by definition.
         const highSet = new Set(highMatches);
-        const nonHighNodes = tags.filter((t) => !highSet.has(t));
-        return nonHighNodes.length > 0 ? nonHighNodes : null;
+        const lowSet = new Set(lowMatches);
+        const normalNodes = tags.filter((t) => !highSet.has(t) && !lowSet.has(t));
+        return normalNodes.length > 0 ? normalNodes : null;
     }
 
     return undefined;

@@ -21,6 +21,8 @@ import { LISTS, PRESETS } from "./presets.generated";
 import {
     LOW_RATE_GROUP,
     NORMAL_RATE_GROUP,
+    isLowRateGroup,
+    isNormalRateGroup,
     resolveMultiplierGroupNodes,
 } from "./multiplier";
 import {
@@ -163,8 +165,9 @@ function buildGroups(preset, tags) {
                 if (/^DIRECT$/i.test(ref)) members.push("direct");
                 else if (/^REJECT$/i.test(ref)) continue;
                 else if (emittedNow.has(ref)) members.push(ref);
-                else if (ref === LOW_RATE_GROUP && emittedNow.has(NORMAL_RATE_GROUP)) {
-                    if (!members.includes(NORMAL_RATE_GROUP)) members.push(NORMAL_RATE_GROUP);
+                else if (isLowRateGroup(ref)) {
+                    const emittedNormal = Array.from(emittedNow).find(isNormalRateGroup);
+                    if (emittedNormal && !members.includes(emittedNormal)) members.push(emittedNormal);
                 }
                 continue;
             }

@@ -9,6 +9,8 @@ import { LISTS } from "./acl4ssr/presets.generated";
 import {
     LOW_RATE_GROUP,
     NORMAL_RATE_GROUP,
+    isLowRateGroup,
+    isNormalRateGroup,
     resolveMultiplierGroupNodes,
 } from "./acl4ssr/multiplier";
 
@@ -104,8 +106,11 @@ function buildClashGroups(preset, nodeNames) {
                         if (/^DIRECT$/i.test(ref)) members.push("DIRECT");
                         else if (/^REJECT$/i.test(ref)) members.push("REJECT");
                         else if (emitted.has(ref)) members.push(ref);
-                        else if (ref === LOW_RATE_GROUP && emitted.has(NORMAL_RATE_GROUP)) {
-                            if (!members.includes(NORMAL_RATE_GROUP)) members.push(NORMAL_RATE_GROUP);
+                        else if (isLowRateGroup(ref)) {
+                            const emittedNormal = Array.from(emitted).find(isNormalRateGroup);
+                            if (emittedNormal && !members.includes(emittedNormal)) {
+                                members.push(emittedNormal);
+                            }
                         }
                         continue;
                     }
