@@ -9,12 +9,18 @@ import { LISTS } from "./acl4ssr/presets.generated";
 import {
     LOW_RATE_GROUP,
     NORMAL_RATE_GROUP,
+    NOTICE_NODE_REGEX,
     isLowRateGroup,
     isNormalRateGroup,
     resolveMultiplierGroupNodes,
 } from "./acl4ssr/multiplier";
 
 // ── helpers ──────────────────────────────────────────────────────────
+
+function filterNoticeNodeNames(names) {
+    const re = new RegExp(NOTICE_NODE_REGEX, "iu");
+    return names.filter((n) => !re.test(n));
+}
 
 function extractNodeNames(proxyYaml) {
     try {
@@ -169,28 +175,116 @@ function listToClashRules(listName, groupName) {
     return rules;
 }
 
+// ── rule-providers ───────────────────────────────────────────────────
+
+export const DEFAULT_RULE_PROVIDERS = {
+    private: {
+        type: "http",
+        format: "mrs",
+        behavior: "domain",
+        interval: 86400,
+        url: "https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/private.mrs",
+        path: "./ruleset/private.mrs",
+    },
+    cn_ip: {
+        type: "http",
+        format: "mrs",
+        behavior: "ipcidr",
+        interval: 86400,
+        url: "https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geoip/cn.mrs",
+        path: "./ruleset/cn_ip.mrs",
+    },
+    "geolocation-cn": {
+        type: "http",
+        format: "mrs",
+        behavior: "domain",
+        interval: 86400,
+        url: "https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/geolocation-cn.mrs",
+        path: "./ruleset/geolocation-cn.mrs",
+    },
+    ai: {
+        type: "http",
+        format: "mrs",
+        behavior: "domain",
+        interval: 86400,
+        url: "https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/category-ai-!cn.mrs",
+        path: "./ruleset/ai.mrs",
+    },
+    youtube: {
+        type: "http",
+        format: "mrs",
+        behavior: "domain",
+        interval: 86400,
+        url: "https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/youtube.mrs",
+        path: "./ruleset/youtube.mrs",
+    },
+    telegram: {
+        type: "http",
+        format: "mrs",
+        behavior: "domain",
+        interval: 86400,
+        url: "https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/telegram.mrs",
+        path: "./ruleset/telegram.mrs",
+    },
+    netflix: {
+        type: "http",
+        format: "mrs",
+        behavior: "domain",
+        interval: 86400,
+        url: "https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/netflix.mrs",
+        path: "./ruleset/netflix.mrs",
+    },
+    steam: {
+        type: "http",
+        format: "mrs",
+        behavior: "domain",
+        interval: 86400,
+        url: "https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/geosite/steam.mrs",
+        path: "./ruleset/steam.mrs",
+    },
+};
+
+function formatRuleProviders(providers) {
+    const lines = ["rule-providers:"];
+    for (const [key, p] of Object.entries(providers)) {
+        lines.push("  " + key + ":");
+        lines.push("    type: " + p.type);
+        lines.push("    format: " + p.format);
+        lines.push("    behavior: " + p.behavior);
+        lines.push("    interval: " + p.interval);
+        lines.push("    url: " + q(p.url));
+        lines.push("    path: " + q(p.path));
+    }
+    return lines.join("\n");
+}
+
 // ── main ─────────────────────────────────────────────────────────────
 
 /**
- * assembleClash(proxyYaml, preset?)
+ * assembleClash(proxyYaml, preset?, options?)
  *
  * @param {string} proxyYaml  YAML text from ProxyUtils.produce (proxies section).
  * @param {object} [preset]   Optional ACL4SSR preset object with { groups, rules }.
+ * @param {object} [options]  Optional assembly options (tun, ruleProviders, etc.).
  * @returns {string}          Complete clash YAML config.
  */
-export default function assembleClash(proxyYaml, preset) {
+export default function assembleClash(proxyYaml, preset, options) {
+    const opts = options || {};
     const nodeNames = extractNodeNames(proxyYaml);
 
     if (nodeNames.length === 0) {
-        return header() + "proxies:\n  []\n";
+        return header(opts) + "proxies:\n  []\n";
     }
+
+    const filteredNames = filterNoticeNodeNames(nodeNames);
+    const effectiveNodeNames = filteredNames.length > 0 ? filteredNames : nodeNames;
 
     let proxyGroups;
     let ruleLines;
 
     if (preset && Array.isArray(preset.groups) && Array.isArray(preset.rules)) {
         // ── ACL4SSR preset mode ───────────────────────────────────
-        const { groupLines, emitted } = buildClashGroups(preset, nodeNames);
+        const { groupLines, emitted } = buildClashGroups(preset, effectiveNodeNames);
         proxyGroups = groupLines.join("\n\n");
 
         // Build rules from the preset's .list → group mappings.
@@ -216,7 +310,8 @@ export default function assembleClash(proxyYaml, preset) {
         }
 
         // Reject foreign QUIC (UDP 443) before MATCH fallback to force TCP fallback
-        rules.push("  - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT");
+        // Exempt CN IP so domestic HTTP/3 traffic stays fast
+        rules.push("  - AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((GEOIP,CN)))),REJECT");
 
         // Final catch-all
         const finalName = finalGroup || "🚀 节点选择";
@@ -232,8 +327,8 @@ export default function assembleClash(proxyYaml, preset) {
 
         proxyGroups = [
             selectGroup(SELECT, [AUTO, DIRECT, MANUAL]),
-            selectGroup(MANUAL, nodeNames),
-            urlTestGroup(AUTO, "http://www.gstatic.com/generate_204", 300, 50, nodeNames),
+            selectGroup(MANUAL, effectiveNodeNames),
+            urlTestGroup(AUTO, "http://www.gstatic.com/generate_204", 300, 50, effectiveNodeNames),
             selectGroup(DIRECT, ["DIRECT"], { hidden: true }),
         ].join("\n\n");
 
@@ -245,25 +340,55 @@ export default function assembleClash(proxyYaml, preset) {
             "  - IP-CIDR,192.168.0.0/16," + DIRECT + ",no-resolve",
             "  - IP-CIDR,10.0.0.0/8," + DIRECT + ",no-resolve",
             "  - GEOIP,CN," + DIRECT + ",no-resolve",
-            "  - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT",
+            "  - AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((GEOIP,CN)))),REJECT",
             "  - MATCH," + SELECT,
         ].join("\n");
     }
 
-    return header() + "\n" + proxyYaml.trimEnd() + "\n\nproxy-groups:\n" + proxyGroups + "\n\nrules:\n" + ruleLines + "\n";
+    let ruleProvidersSection = "";
+    if (opts.ruleProviders === true) {
+        ruleProvidersSection = "\n" + formatRuleProviders(DEFAULT_RULE_PROVIDERS) + "\n";
+    }
+
+    return header(opts) + "\n" + proxyYaml.trimEnd() + "\n\nproxy-groups:\n" + proxyGroups + "\n" + (ruleProvidersSection ? ruleProvidersSection + "\n" : "\n") + "rules:\n" + ruleLines + "\n";
 }
 
-function header() {
+export function header(options) {
+    const opts = options || {};
+    const tunEnabled = opts.tun === true;
     return [
-        "# Generated by singbox-kit",
+        "# Generated by sub-singbox (Clash/Mihomo edition)",
         "mixed-port: 7890",
-        "allow-lan: false",
+        "allow-lan: " + (opts.allowLan === true ? "true" : "false"),
+        "bind-address: '*'",
         "mode: rule",
-        "log-level: warning",
-        "ipv6: true",
+        "log-level: " + (opts.logLevel || "warning"),
+        "ipv6: " + (opts.ipv6 !== false ? "true" : "false"),
+        "tcp-concurrent: true",
+        "unified-delay: true",
+        "keep-alive-interval: 60",
+        "find-process-mode: strict",
+        "global-client-fingerprint: chrome",
+        "",
+        "profile:",
+        "  store-selected: true",
+        "  store-fake-ip: true",
+        "",
+        "tun:",
+        "  enable: " + (tunEnabled ? "true" : "false"),
+        "  stack: mixed",
+        "  auto-route: true",
+        "  strict-route: true",
+        "  auto-detect-interface: true",
+        "  dns-hijack:",
+        '    - "any:53"',
+        '    - "tcp://any:53"',
         "",
         "hosts:",
         "  'services.googleapis.cn': 'services.googleapis.com'",
+        "  'dns.google': ['8.8.8.8', '8.8.4.4']",
+        "  'cloudflare-dns.com': ['1.1.1.1', '1.0.0.1']",
+        "  'doh.pub': ['1.12.12.12', '120.53.53.53']",
         "  '+.mcdn.bilivideo.com': '0.0.0.0'",
         "  '+.mcdn.bilivideo.cn': '0.0.0.0'",
         "  '+.edge.mountaintoys.cn': '0.0.0.0'",
@@ -271,27 +396,45 @@ function header() {
         "",
         "dns:",
         "  enable: true",
+        "  ipv6: " + (opts.ipv6 !== false ? "true" : "false"),
+        "  use-hosts: true",
+        "  use-system-hosts: true",
+        "  cache-algorithm: arc",
         "  enhanced-mode: fake-ip",
-        "  fake-ip-range: 198.18.0.1/16",
+        "  fake-ip-range: 198.18.0.1/15",
+        "  fake-ip-range6: 2001:2::1/48",
         "  fake-ip-filter:",
         '    - "*.lan"',
         '    - "+.local"',
         '    - "+.msftconnecttest.com"',
         '    - "+.msftncsi.com"',
+        '    - "rule-set:private"',
+        '    - "rule-set:geolocation-cn"',
+        '    - "rule-set:fakeip_filter"',
+        '    - "geosite:private"',
+        '    - "geosite:cn"',
         "  default-nameserver:",
-        "    - 223.5.5.5",
-        "    - 119.29.29.29",
+        "    - 223.5.5.5#DIRECT",
+        "    - 119.29.29.29#DIRECT",
         "  proxy-server-nameserver:",
-        "    - https://223.5.5.5/dns-query",
+        "    - 223.5.5.5#DIRECT",
+        "    - 119.29.29.29#DIRECT",
+        "  direct-nameserver:",
+        "    - 223.5.5.5#DIRECT",
+        "    - 119.29.29.29#DIRECT",
         "  nameserver:",
-        "    - https://223.5.5.5/dns-query",
-        "    - https://doh.pub/dns-query",
+        "    - https://cloudflare-dns.com/dns-query",
+        "    - https://dns.google/dns-query",
         "  fallback:",
         "    - https://1.1.1.1/dns-query",
         "    - https://dns.google/dns-query",
         "  fallback-filter:",
         "    geoip: true",
         "    geoip-code: CN",
+        "  nameserver-policy:",
+        "    'geosite:cn,private':",
+        "      - 223.5.5.5#DIRECT",
+        "      - 119.29.29.29#DIRECT",
         "",
     ].join("\n") + "\n";
 }

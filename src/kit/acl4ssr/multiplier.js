@@ -34,7 +34,7 @@ export const HIGH_RATE_REGEX =
 
 // Notice/announcement nodes (e.g. 剩余流量, 套餐到期, 官网, 0.0x) that should not enter proxy groups
 export const NOTICE_NODE_REGEX =
-    "(?:剩余流量|剩余|到期|过期|重置|官网|网址|官方|通知|公告|提示|traffic|expire|remaining|reset|0\\.0+x)";
+    "(?:剩余流量|剩余|到期|过期|重置|官网|网址|网站|客服|官方|通知|公告|提示|traffic|expire|remaining|reset|0\\.0+x|工单|贩卖|群|频道|返利|循环|备用|说明|教程|关注|更新|作者|加入|超时|优惠|福利|邀请|失联|发布|永久|余额|刷新|导航|建议|⚠️|@|t\\.me/)";
 
 // Explicit normal rate: 1x, 1.0x, 1倍, 标准, 正常
 export const EXPLICIT_NORMAL_REGEX =
@@ -43,7 +43,7 @@ export const EXPLICIT_NORMAL_REGEX =
 // Negative lookahead regex for normal rate (used in static INIs and external parser fallbacks):
 // matches any node name that contains neither high rate (> 1x) nor low rate (< 1x) nor notice indicators.
 export const NORMAL_RATE_REGEX =
-    "^(?!.*(?:1\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|(?:[2-9]|[1-9]\\d+)(?:\\.\\d+)?\\s*(?:x|倍)|高倍|0\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|低倍|省流|剩余流量|剩余|到期|过期|重置|官网|网址|官方|通知|公告|提示|traffic|expire|remaining|reset|0\\.0+x)).*$";
+    "^(?!.*(?:1\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|(?:[2-9]|[1-9]\\d+)(?:\\.\\d+)?\\s*(?:x|倍)|高倍|0\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|低倍|省流|剩余流量|剩余|到期|过期|重置|官网|网址|网站|客服|官方|通知|公告|提示|traffic|expire|remaining|reset|0\\.0+x|工单|贩卖|群|频道|返利|循环|备用|说明|教程|关注|更新|作者|加入|超时|优惠|福利|邀请|失联|发布|永久|余额|刷新|导航|建议|⚠️|@|t\\.me/)).*$";
 
 export function matchTags(pattern, tags) {
     if (!pattern || pattern === ".*") return tags.slice();
