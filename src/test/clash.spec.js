@@ -72,6 +72,32 @@ describe("assembleClash", function () {
         expect(yaml).to.include("- MATCH,🐟 漏网之鱼");
     });
 
+    it("assembles clash config with ACL4SSR default preset, dual-level region groups and multiplier groups", function () {
+        const preset = findPreset("acl4ssr-default");
+        const yaml = assembleClash(DUMMY_PROXIES, preset);
+
+        // Proxy groups
+        expect(yaml).to.include("name: \"🇭🇰 香港自动\"");
+        expect(yaml).to.include("type: url-test");
+        expect(yaml).to.include("name: \"🇭🇰 香港节点\"");
+        expect(yaml).to.include("- \"🇭🇰 香港自动\"");
+        expect(yaml).to.include("- \"🇭🇰 香港-01\"");
+        expect(yaml).to.include("name: \"🇯🇵 日本节点\"");
+        expect(yaml).to.include("name: \"🇺🇲 美国节点\"");
+
+        // Multiplier groups
+        expect(yaml).to.include("name: \"💰 低倍率节点\"");
+        expect(yaml).to.include("name: \"💎 高倍率节点\"");
+
+        // Node select contains country groups
+        expect(yaml).to.include("- \"🇭🇰 香港节点\"");
+        expect(yaml).to.include("- \"🇯🇵 日本节点\"");
+        expect(yaml).to.include("- \"🇺🇲 美国节点\"");
+
+        // Rules
+        expect(yaml).to.include("- MATCH,🐟 漏网之鱼");
+    });
+
     it("assembles clash config with ☕ 正常倍率节点 when no < 1x nodes exist and > 1x nodes exist", function () {
         const NORMAL_RATE_PROXIES = `
 proxies:

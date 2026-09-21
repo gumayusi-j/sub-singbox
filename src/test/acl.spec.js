@@ -69,7 +69,7 @@ describe("ACL4SSR presets", function () {
         assertReferencesResolve(config);
     });
 
-    it("adds service groups for the default preset", function () {
+    it("adds service groups and matching region groups for the default preset", function () {
         const config = assembleAcl(parsed(), { aclPreset: "acl4ssr-default" });
         const tags = config.outbounds.map((o) => o.tag);
         expect(tags).to.include("🌍 国外媒体");
@@ -77,8 +77,30 @@ describe("ACL4SSR presets", function () {
         expect(tags).to.include("Ⓜ️ 微软服务");
         expect(tags).to.include("🍎 苹果服务");
         expect(tags).to.include("💬 Ai平台");
-        // no region groups in the default preset
-        expect(tags).to.not.include("🇭🇰 香港节点");
+        // region groups are now supported in the default preset with dual-level tiering
+        expect(tags).to.include("🇭🇰 香港节点");
+        expect(tags).to.include("🇭🇰 香港自动");
+        expect(tags).to.include("🇯🇵 日本节点");
+        expect(tags).to.include("🇯🇵 日本自动");
+        expect(tags).to.include("🇺🇲 美国节点");
+        expect(tags).to.include("🇺🇲 美国自动");
+        // un-matched region groups are cleanly dropped
+        expect(tags).to.not.include("🇨🇳 台湾节点");
+        expect(tags).to.not.include("🇨🇳 台湾自动");
+        expect(tags).to.not.include("🇬🇧 英国节点");
+
+        const nodeSelect = config.outbounds.find((o) => o.tag === "🚀 节点选择");
+        expect(nodeSelect.outbounds).to.include("🇭🇰 香港节点");
+        expect(nodeSelect.outbounds).to.include("🇯🇵 日本节点");
+        expect(nodeSelect.outbounds).to.include("🇺🇲 美国节点");
+        expect(nodeSelect.outbounds).to.not.include("🇨🇳 台湾节点");
+        expect(nodeSelect.outbounds).to.not.include("🇬🇧 英国节点");
+
+        const hk = config.outbounds.find((o) => o.tag === "🇭🇰 香港节点");
+        expect(hk.outbounds).to.deep.equal(["🇭🇰 香港自动", "🇭🇰 香港-01"]);
+        const hkAuto = config.outbounds.find((o) => o.tag === "🇭🇰 香港自动");
+        expect(hkAuto.outbounds).to.deep.equal(["🇭🇰 香港-01"]);
+
         assertReferencesResolve(config);
     });
 
@@ -109,6 +131,54 @@ describe("ACL4SSR presets", function () {
         expect(hkAuto.outbounds).to.deep.equal(["🇭🇰 香港-01"]);
         expect(hkAuto.type).to.equal("urltest");
         assertReferencesResolve(config);
+    });
+
+    it("supports expanded countries (UK, DE, FR, CA, AU, KR, SG, TW) with modern regex in default and full presets", function () {
+        const testNodes = [
+            "🇬🇧 英国 01",
+            "🇩🇪 法兰克福 02",
+            "France 03",
+            "🇨🇦 04",
+            "🇦🇺 悉尼 05",
+            "🇹🇼 台北 06",
+            "🇸🇬 新加坡 07",
+            "🇰🇷 首尔 08",
+        ];
+        for (const presetId of ["acl4ssr-default", "acl4ssr-full"]) {
+            const config = assembleAcl(parsed(testNodes), { aclPreset: presetId });
+            const tags = config.outbounds.map((o) => o.tag);
+
+            expect(tags, presetId).to.include("🇬🇧 英国节点");
+            expect(tags, presetId).to.include("🇬🇧 英国自动");
+            expect(tags, presetId).to.include("🇩🇪 德国节点");
+            expect(tags, presetId).to.include("🇩🇪 德国自动");
+            expect(tags, presetId).to.include("🇫🇷 法国节点");
+            expect(tags, presetId).to.include("🇫🇷 法国自动");
+            expect(tags, presetId).to.include("🇨🇦 加拿大节点");
+            expect(tags, presetId).to.include("🇨🇦 加拿大自动");
+            expect(tags, presetId).to.include("🇦🇺 澳洲节点");
+            expect(tags, presetId).to.include("🇦🇺 澳洲自动");
+            expect(tags, presetId).to.include("🇨🇳 台湾节点");
+            expect(tags, presetId).to.include("🇨🇳 台湾自动");
+            expect(tags, presetId).to.include("🇸🇬 狮城节点");
+            expect(tags, presetId).to.include("🇸🇬 狮城自动");
+            expect(tags, presetId).to.include("🇰🇷 韩国节点");
+            expect(tags, presetId).to.include("🇰🇷 韩国自动");
+
+            // HK and US nodes were not provided -> cleanly dropped
+            expect(tags, presetId).to.not.include("🇭🇰 香港节点");
+            expect(tags, presetId).to.not.include("🇺🇲 美国节点");
+
+            const nodeSelect = config.outbounds.find((o) => o.tag === "🚀 节点选择");
+            expect(nodeSelect.outbounds, presetId).to.include("🇬🇧 英国节点");
+            expect(nodeSelect.outbounds, presetId).to.include("🇩🇪 德国节点");
+            expect(nodeSelect.outbounds, presetId).to.include("🇫🇷 法国节点");
+            expect(nodeSelect.outbounds, presetId).to.include("🇨🇦 加拿大节点");
+            expect(nodeSelect.outbounds, presetId).to.include("🇦🇺 澳洲节点");
+            expect(nodeSelect.outbounds, presetId).to.not.include("🇭🇰 香港节点");
+
+            assertReferencesResolve(config);
+        }
     });
 
     // The parser rewrite must not cost the folding pass. A snapshot holds

@@ -25,14 +25,14 @@ const PRESET_DEFS = [
         ini: "ACL4SSR_Online.ini",
         id: "acl4ssr-default",
         name: "ACL4SSR 默认",
-        summary: "去广告、自动测速，含国外媒体、电报、微软和苹果分流。",
+        summary: "去广告、自动测速，含多国地区二级分组与高低倍率，及国外媒体、电报、微软和苹果分流。",
     },
     {
         ini: "ACL4SSR_Online_Full.ini",
         id: "acl4ssr-full",
         name: "ACL4SSR 全分组",
         summary:
-            "最完整分组：流媒体、AI、游戏、音乐，并按节点名自动分出香港/日本/美国/台湾/狮城/韩国地区组（完整 GFW 列表）。",
+            "最完整分组：流媒体、AI、游戏、音乐，含多国地区自动/手动二级分组与高低倍率（完整 GFW 列表）。",
     },
     {
         ini: "ACL4SSR_Online_Mini.ini",
