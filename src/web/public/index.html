@@ -2572,7 +2572,7 @@ var app = Vue.createApp({
     var gistSyncing = Vue.ref(false);
     var gistStatus = Vue.ref('');
     var gistStatusType = Vue.ref('');
-    var gistFiles = Vue.ref([]); // [{ name, rawUrl, size }]
+    var gistFiles = Vue.ref(lsLoad('sbx:gistFiles', [])); // [{ name, rawUrl, size }]
     var activeOutTab = Vue.ref('node');
     var regionFilter = Vue.ref('');
     var skippedExpanded = Vue.ref(false);
@@ -3587,6 +3587,8 @@ var app = Vue.createApp({
           });
         }
         gistFiles.value = files;
+        // Save persisted gist files list to localStorage for later reload
+        lsSave('sbx:gistFiles', files);
         gistStatus.value = '已同步 ' + fileName + ' 到 Gist。';
         gistStatusType.value = 'ok';
       } catch (e) {
