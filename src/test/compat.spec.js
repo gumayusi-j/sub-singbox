@@ -507,4 +507,68 @@ describe("compat layer", function () {
             }),
         ).to.throw(CompatError);
     });
+
+    it("detects and migrates dangling and bare-direct outbounds detours (R10)", function () {
+        const cfg = baseConfig({
+            outbounds: [
+                { type: "direct", tag: "direct" },
+                { type: "selector", tag: "proxy", outbounds: ["direct"] },
+                { type: "shadowsocks", tag: "ss-dangling", detour: "前置中转" },
+                { type: "shadowsocks", tag: "ss-bare-direct", detour: "direct" },
+                { type: "shadowsocks", tag: "ss-valid", detour: "proxy" },
+            ],
+        });
+        const report = analyzeConfig(cfg);
+        expect(report.warnings.some((w) => w.code === "outbound_dangling_detour")).to.equal(true);
+        expect(report.warnings.some((w) => w.code === "outbound_bare_direct_detour")).to.equal(true);
+
+        const { config: migrated } = migrateConfig(cfg);
+        const ssDangling = migrated.outbounds.find((o) => o.tag === "ss-dangling");
+        const ssBareDirect = migrated.outbounds.find((o) => o.tag === "ss-bare-direct");
+        const ssValid = migrated.outbounds.find((o) => o.tag === "ss-valid");
+
+        expect(ssDangling.detour).to.equal(undefined);
+        expect(ssBareDirect.detour).to.equal(undefined);
+        expect(ssValid.detour).to.equal("proxy");
+    });
+
+    it("detects and migrates dangling DNS server detours (R11)", function () {
+        const cfg = baseConfig({
+            dns: {
+                servers: [
+                    { type: "tls", tag: "dns-bad", server: "8.8.8.8", detour: "non-existent-proxy" },
+                    { type: "tls", tag: "dns-good", server: "8.8.8.8", detour: "proxy" },
+                ],
+                rules: [],
+                final: "dns-good",
+            },
+        });
+        const report = analyzeConfig(cfg);
+        expect(report.warnings.some((w) => w.code === "dns_server_dangling_detour")).to.equal(true);
+
+        const { config: migrated } = migrateConfig(cfg);
+        const bad = migrated.dns.servers.find((s) => s.tag === "dns-bad");
+        const good = migrated.dns.servers.find((s) => s.tag === "dns-good");
+        expect(bad.detour).to.equal(undefined);
+        expect(good.detour).to.equal("proxy");
+    });
+
+    it("cleans dangling dialer-proxy / detour in fromNodes without dropping valid detours", function () {
+        const nodeWithDangling = {
+            name: "naiyun-node",
+            type: "ss",
+            server: "1.2.3.4",
+            port: 8388,
+            cipher: "aes-128-gcm",
+            password: "p",
+            "dialer-proxy": "前置中转",
+        };
+        const parsed = fromNodes([nodeWithDangling]);
+        expect(parsed.outbounds.length).to.equal(1);
+        expect(parsed.outbounds[0].detour).to.equal(undefined);
+
+        const assembled = assemble(parsed);
+        const targetNode = assembled.outbounds.find((o) => o.tag === "naiyun-node");
+        expect(targetNode.detour).to.equal(undefined);
+    });
 });

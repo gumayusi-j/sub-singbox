@@ -290,7 +290,65 @@ const INSPECTIONS = [
     inspectLegacyDnsServer,
     inspectLegacyAddressFilter,
     inspectDnsOutbound,
+    inspectOutboundDetour,
+    inspectDnsServerDetour,
 ];
+
+// R10 — dangling or bare-direct detour in outbounds.
+function inspectOutboundDetour(config, out) {
+    const outbounds = config.outbounds;
+    if (!Array.isArray(outbounds)) return;
+    const tags = outboundTags(config);
+    outbounds.forEach((o, i) => {
+        if (!isPlainObject(o) || typeof o.detour !== "string") return;
+        const detour = o.detour;
+        const path = "outbounds[" + i + "].detour";
+        if (!tags.has(detour)) {
+            out.push(
+                finding(
+                    "outbound_dangling_detour",
+                    "warn",
+                    path,
+                    "detour '" + detour + "' references an outbound that does not exist; sing-box refuses to start with dangling dependencies.",
+                    "Remove the detour field so the outbound connects directly."
+                )
+            );
+        } else if (isBareDirectTag(config, detour)) {
+            out.push(
+                finding(
+                    "outbound_bare_direct_detour",
+                    "warn",
+                    path,
+                    "detour '" + detour + "' points to a bare direct outbound; sing-box rejects 'detour to an empty direct outbound makes no sense'.",
+                    "Remove the detour field so the outbound connects directly."
+                )
+            );
+        }
+    });
+}
+
+// R11 — dangling detour on DNS servers.
+function inspectDnsServerDetour(config, out) {
+    const dns = config.dns;
+    if (!isPlainObject(dns) || !Array.isArray(dns.servers)) return;
+    const tags = outboundTags(config);
+    dns.servers.forEach((s, i) => {
+        if (!isPlainObject(s) || typeof s.detour !== "string") return;
+        const detour = s.detour;
+        const path = "dns.servers[" + i + "].detour";
+        if (!tags.has(detour)) {
+            out.push(
+                finding(
+                    "dns_server_dangling_detour",
+                    "warn",
+                    path,
+                    "detour '" + detour + "' references an outbound that does not exist; sing-box refuses to start.",
+                    "Remove or correct the detour field."
+                )
+            );
+        }
+    });
+}
 
 // ---------------------------------------------------------------------------
 // Migration (mutates a draft copy).
@@ -465,6 +523,30 @@ function applyLegacyDnsServer(cfg) {
     if (changed) dns.servers = servers;
 }
 
+function applyOutboundDetour(cfg) {
+    const outbounds = cfg.outbounds;
+    if (!Array.isArray(outbounds)) return;
+    const tags = outboundTags(cfg);
+    outbounds.forEach((o) => {
+        if (!isPlainObject(o) || typeof o.detour !== "string") return;
+        if (!tags.has(o.detour) || isBareDirectTag(cfg, o.detour)) {
+            delete o.detour;
+        }
+    });
+}
+
+function applyDnsServerDetour(cfg) {
+    const dns = cfg.dns;
+    if (!isPlainObject(dns) || !Array.isArray(dns.servers)) return;
+    const tags = outboundTags(cfg);
+    dns.servers.forEach((s) => {
+        if (!isPlainObject(s) || typeof s.detour !== "string") return;
+        if (!tags.has(s.detour)) {
+            delete s.detour;
+        }
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -492,6 +574,8 @@ export function migrateConfig(config) {
     applyDnsRuleSetAcceptEmpty(draft);
     applyIndependentCache(draft);
     applyStoreRdrc(draft);
+    applyOutboundDetour(draft);
+    applyDnsServerDetour(draft);
     const post = analyzeConfig(draft);
     return { config: draft, findings: post.findings, warnings: pre.warnings, errors: post.errors };
 }

@@ -138,6 +138,19 @@ function collectSkipped(nodes, parsed) {
     return skipped;
 }
 
+export function cleanDanglingOutboundDetours(outbounds) {
+    if (!Array.isArray(outbounds)) return;
+    const tags = new Set();
+    for (const o of outbounds) {
+        if (o && typeof o.tag === "string") tags.add(o.tag);
+    }
+    for (const o of outbounds) {
+        if (o && typeof o.detour === "string" && !tags.has(o.detour)) {
+            delete o.detour;
+        }
+    }
+}
+
 // nodes: array of mihomo-style proxy objects (already parsed/normalized).
 // Returns { outbounds, endpoints, skippedNodes }.
 export function fromNodes(nodes, opts) {
@@ -147,6 +160,7 @@ export function fromNodes(nodes, opts) {
     if (nodes.length === 0) return { outbounds: [], endpoints: [], skippedNodes: [] };
     const parsed = produceToObject(nodes, opts);
     const skippedNodes = collectSkipped(nodes, parsed);
+    cleanDanglingOutboundDetours(parsed.outbounds);
     return { outbounds: parsed.outbounds, endpoints: parsed.endpoints, skippedNodes };
 }
 
@@ -172,6 +186,7 @@ export function fromText(text, opts) {
     }
     const parsed = produceToObject(nodes, opts);
     const skippedNodes = collectSkipped(nodes, parsed);
+    cleanDanglingOutboundDetours(parsed.outbounds);
     return { outbounds: parsed.outbounds, endpoints: parsed.endpoints, skippedNodes };
 }
 
