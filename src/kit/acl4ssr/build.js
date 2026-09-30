@@ -397,18 +397,61 @@ function buildDns(options, context) {
     const routeRules = context && Array.isArray(context.routeRules) ? context.routeRules : [];
     const outbounds = context ? context.outbounds : [];
     const directFinal = context ? defaultsToDirect(context.final, outbounds) : false;
+    const dnsRules = projectDnsRules(routeRules, outbounds, { localServer: "local" });
+    const finalServer = directFinal ? "local" : "remote";
+
+    // China-resolver hint: for domains not covered by any explicit rule, ask
+    // the remote DNS with a Chinese ECS client subnet and keep the answer only
+    // when it resolves to a Chinese address, so the route can match geoip-cn
+    // and go direct. Domains whose CDN is outside China fall through to `final`
+    // unchanged (still answered by the regular remote resolver via the proxy).
+    //
+    // Uses sing-box 1.14's `evaluate` + `match_response` DNS actions, which
+    // replace the deprecated legacy address filter; this eliminates the
+    // "your profile is outdated" warning in sing-box clients.
+    //
+    // Mirrors Tower SingBoxDNSPolicy.swift:119-175.
+    // Default: on. Opt out with options.chinaResolverHint = false.
+    const useChina = options.chinaResolverHint !== false && finalServer === "remote";
+
+    if (useChina) {
+        // Google's DoH supports ECS; Cloudflare ignores it.
+        // Tower (SingBoxDNSPolicy.swift:122-125) uses the same endpoint.
+        servers.push({
+            type: "https",
+            tag: "remote-cn",
+            server: "8.8.8.8",
+            server_port: 443,
+            path: "/dns-query",
+            tls: { enabled: true, server_name: "dns.google" },
+            detour: AUTO_GROUP,
+        });
+
+        // Only A/AAAA queries carry addresses to test against a geoip rule-set.
+        // Step 1 — evaluate: ask remote-cn with CN ECS, hold the response as
+        //           a candidate.
+        // Step 2 — match_response: if the candidate is a CN address, respond
+        //           with it (the client gets a local CDN edge and routes direct);
+        //           otherwise fall through to dns.final (regular remote resolver).
+        dnsRules.push(
+            { query_type: ["A", "AAAA"], action: "evaluate", server: "remote-cn",
+              client_subnet: "114.114.114.0/24" },
+            { match_response: true, rule_set: ["geoip-cn"], action: "respond" },
+        );
+    }
 
     return {
         servers,
-        rules: projectDnsRules(routeRules, outbounds, { localServer: "local" }),
+        rules: dnsRules,
         // The fallthrough has to agree with the route's too. A preset whose
         // final group ships selecting DIRECT should not resolve the rest of
         // the world through the proxy.
-        final: directFinal ? "local" : "remote",
+        final: finalServer,
         strategy: dnsStrategy(options),
         reverse_mapping: true,
     };
 }
+
 
 // IPv6 is opt-in, and off unless asked for. On a network that advertises IPv6
 // without carrying it, a dual-stack tunnel hands the client an address family

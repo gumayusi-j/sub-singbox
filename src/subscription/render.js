@@ -106,6 +106,10 @@ function normalizeOptions(options, customSchemes) {
         nodeFilter: normalizeNodeFilter(options.nodeFilter),
         ipv6Enabled: options.ipv6Enabled === true ? true : options.ipv6Enabled === false ? false : undefined,
         remoteDns: options.remoteDns || undefined,
+        // Domestic DNS servers (direct-connect). Corresponds to Tower 1.0.22's
+        // "国内 DNS（直连）" setting. Accepts a comma-separated list or a single
+        // address; default is the resolver each builder uses (223.5.5.5).
+        localDns: options.localDns || undefined,
         // Everything below is only ever read by assemble()/assembleAcl().
         final: options.final || undefined,
         proxyGroupTag: options.proxyGroupTag || undefined,

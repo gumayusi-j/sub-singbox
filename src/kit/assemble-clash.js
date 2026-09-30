@@ -60,6 +60,19 @@ function dedupe(list) {
 
 function q(s) { return '"' + s + '"'; }
 
+// Parse options.localDns into an array of server addresses.
+// Accepts a comma-separated string ("223.5.5.5,119.29.29.29") or a single
+// address. Defaults to Alibaba + Tencent domestic resolvers when not set.
+// Mirrors Tower 1.0.22's "国内 DNS（直连）" setting.
+function localDnsLines(opts) {
+    const raw = opts && typeof opts.localDns === "string" && opts.localDns.trim()
+        ? opts.localDns.trim()
+        : null;
+    if (!raw) return ["223.5.5.5", "119.29.29.29"];
+    return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+
 function selectGroup(name, members, opts) {
     const lines = [];
     lines.push("  - name: " + q(name));
@@ -413,18 +426,21 @@ export function header(options) {
         '    - "rule-set:fakeip_filter"',
         '    - "geosite:private"',
         '    - "geosite:cn"',
+        // Domestic DNS servers: used for direct-connect resolution only.
+        // Supports options.localDns as a comma-separated list or a single address.
+        // Mirrors Tower 1.0.22 splitting DNS into "国内 DNS（直连）" and "远程 DNS（经代理）".
         "  default-nameserver:",
-        "    - 223.5.5.5#DIRECT",
-        "    - 119.29.29.29#DIRECT",
+        ...localDnsLines(opts).map((s) => "    - " + s + "#DIRECT"),
         "  proxy-server-nameserver:",
-        "    - 223.5.5.5#DIRECT",
-        "    - 119.29.29.29#DIRECT",
+        ...localDnsLines(opts).map((s) => "    - " + s + "#DIRECT"),
         "  direct-nameserver:",
-        "    - 223.5.5.5#DIRECT",
-        "    - 119.29.29.29#DIRECT",
+        ...localDnsLines(opts).map((s) => "    - " + s + "#DIRECT"),
+        // Remote (proxy-side) DoH resolvers: queries go through the proxy.
+        // No direct-connect servers here; Tower 1.0.22 fixed exactly this —
+        // Clash used to simultaneously query foreign DNS directly.
         "  nameserver:",
-        "    - https://cloudflare-dns.com/dns-query",
         "    - https://dns.google/dns-query",
+        "    - https://cloudflare-dns.com/dns-query",
         "  fallback:",
         "    - https://1.1.1.1/dns-query",
         "    - https://dns.google/dns-query",
@@ -433,8 +449,7 @@ export function header(options) {
         "    geoip-code: CN",
         "  nameserver-policy:",
         "    'geosite:cn,private':",
-        "      - 223.5.5.5#DIRECT",
-        "      - 119.29.29.29#DIRECT",
+        ...localDnsLines(opts).map((s) => "      - " + s + "#DIRECT"),
         "",
     ].join("\n") + "\n";
 }

@@ -330,4 +330,93 @@ describe("rules/import", function () {
             ).to.deep.equal(["DOMAIN-SUFFIX,a.example"]);
         });
     });
+
+    // ── mihomo SUB-RULE / sub-rules (Tower 1.0.22) ─────────────────────────
+    describe("mihomo SUB-RULE / sub-rules expansion", function () {
+        function mihomoYaml(rules, subRules) {
+            const lines = ["rules:"];
+            for (const r of rules) lines.push("  - " + r);
+            if (subRules && Object.keys(subRules).length > 0) {
+                lines.push("sub-rules:");
+                for (const [k, entries] of Object.entries(subRules)) {
+                    lines.push("  " + k + ":");
+                    for (const e of entries) lines.push("    - " + e);
+                }
+            }
+            return lines.join("\n") + "\n";
+        }
+
+        it("expands a basic SUB-RULE by wrapping each entry with AND", function () {
+            // sing-box logical rules only support domain/network/port conditions,
+            // not GEOIP. So AND,((GEOIP,CN),(DOMAIN-SUFFIX,...)) is correctly
+            // dropped by toRouteRule. Use domain-only conditions to test AND wrapping.
+            const yaml = mihomoYaml(
+                ["SUB-RULE,(DOMAIN-SUFFIX,cn),cn-list", "MATCH,proxy"],
+                { "cn-list": ["DOMAIN,inside.cn,DIRECT", "MATCH,proxy"] },
+            );
+            const result = importRules(yaml);
+            // The DOMAIN entry should produce AND,((DOMAIN-SUFFIX,cn),(DOMAIN,inside.cn)),DIRECT
+            const andRule = result.rules.find(
+                (r) => r.type === "AND" && Array.isArray(r.children),
+            );
+            expect(andRule).to.exist;
+            const types = andRule.children.map((c) => c.type + "," + c.content);
+            expect(types).to.include("DOMAIN-SUFFIX,cn");
+            expect(types).to.include("DOMAIN,inside.cn");
+            // MATCH line inside sub-list emits a flat rule: DOMAIN-SUFFIX,cn,proxy
+            const flat = result.rules.find(
+                (r) => r.type === "DOMAIN-SUFFIX" && r.content === "cn" && r.outbound === "proxy",
+            );
+            expect(flat).to.exist;
+        });
+
+        it("handles MATCH line in sub-rules: emits condition+policy as flat rule", function () {
+            const yaml = mihomoYaml(
+                ["SUB-RULE,(DOMAIN,test.cn),my-list"],
+                { "my-list": ["MATCH,DIRECT"] },
+            );
+            const result = importRules(yaml);
+            const flat = result.rules.find((r) => r.type === "DOMAIN" && r.content === "test.cn");
+            expect(flat).to.exist;
+            expect(flat.outbound).to.equal("direct");
+        });
+
+        it("skips SUB-RULE with a missing or unknown sub-rules key", function () {
+            const yaml = mihomoYaml(
+                ["SUB-RULE,(GEOIP,CN),nonexistent"],
+                {},
+            );
+            const result = importRules(yaml);
+            // When the sub-rules key is not found, expandSubRule returns early
+            // without adding any rule; the outer loop does not increment stats.skipped
+            // because the name+condition are valid - we just have an empty expansion.
+            expect(result.rules).to.have.length(0);
+        });
+
+        it("ignores SUB-RULE with no condition or name (malformed)", function () {
+            const yaml = mihomoYaml(
+                ["SUB-RULE,,"],  // empty condition and name
+                {},
+            );
+            const result = importRules(yaml);
+            expect(result.rules).to.have.length(0);
+        });
+
+        it("processes regular rules before and after SUB-RULE unchanged", function () {
+            const yaml = mihomoYaml(
+                [
+                    "DOMAIN-SUFFIX,before.com,proxy",
+                    "SUB-RULE,(DOMAIN-SUFFIX,cn),cn-list",
+                    "DOMAIN-SUFFIX,after.com,DIRECT",
+                ],
+                { "cn-list": ["DOMAIN,inside.cn,DIRECT"] },
+            );
+            const result = importRules(yaml);
+            const types = result.rules.map((r) => r.type + ":" + r.content);
+            expect(types).to.include("DOMAIN-SUFFIX:before.com");
+            expect(types).to.include("DOMAIN-SUFFIX:after.com");
+            // The sub-rule entry should appear as an AND rule (domain conditions are supported)
+            expect(result.rules.some((r) => r.type === "AND" && Array.isArray(r.children))).to.equal(true);
+        });
+    });
 });

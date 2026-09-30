@@ -346,10 +346,99 @@ export function importMihomoDocument(doc, options) {
         return result;
     }
 
+    // Parse sub-rules map: { name: string[] }
+    // Mirrors Tower RuleSchemeParser.swift:367
+    const rawSubRules = isPlainObject(doc["sub-rules"]) ? doc["sub-rules"] : {};
+    const subRulesMap = {};
+    for (const key of Object.keys(rawSubRules)) {
+        const val = rawSubRules[key];
+        subRulesMap[key] = Array.isArray(val)
+            ? val.filter((v) => typeof v === "string")
+            : [];
+    }
+
     const defaultOutbound = options.defaultOutbound || "proxy";
+
+    // Expand a SUB-RULE entry into flat rules.
+    // condition: the raw condition string (no outer parens), e.g. "GEOIP,CN"
+    // name:      the sub-rules key to look up
+    // depth:     recursion guard (max 8, same as Tower)
+    // Mirrors Tower RuleSchemeParser.swift:368-394
+    function expandSubRule(condition, name, depth) {
+        if (depth >= 8) return;
+        const entries = subRulesMap[name];
+        if (!Array.isArray(entries)) return;
+
+        for (const entry of entries) {
+            if (typeof entry !== "string") continue;
+            const parsed = parseRuleLine(entry);
+            if (parsed === null) continue;
+
+            if (parsed.condition === null) {
+                // MATCH / FINAL line: emit condition as rule with the named policy
+                // e.g. condition="GEOIP,CN" policy="直连" → "GEOIP,CN,直连"
+                if (parsed.policy !== null) {
+                    const flatLine = condition + "," + parsed.policy;
+                    addRule(result, flatLine, defaultOutbound, options);
+                }
+            } else if (parsed.condition.type === "SUB-RULE") {
+                // Nested SUB-RULE: AND the outer condition with the inner one
+                // and recurse into the named sub-list.
+                // Same layout as the outer case: content has outer parens, name is in policy.
+                const rawInner = String(parsed.condition.content || "");
+                const innerCondition =
+                    rawInner.startsWith("(") && rawInner.endsWith(")")
+                        ? rawInner.slice(1, -1)
+                        : rawInner;
+                const innerName = typeof parsed.policy === "string" && parsed.policy !== ""
+                    ? parsed.policy : null;
+                if (innerCondition && innerName) {
+                    expandSubRule(
+                        "AND,((" + condition + "),(" + innerCondition + "))",
+                        innerName,
+                        depth + 1,
+                    );
+                }
+            } else {
+                // Regular rule: wrap as AND,((condition),(entry_condition)),policy
+                const policy = parsed.policy !== null ? parsed.policy : defaultOutbound;
+                const entryBody = parsed.condition.type + "," + parsed.condition.content;
+                const wrapped = "AND,((" + condition + "),(" + entryBody + "))," + policy;
+                addRule(result, wrapped, defaultOutbound, options);
+            }
+        }
+    }
+
     for (const raw of rules) {
         if (typeof raw !== "string") continue;
         const parsed = parseRuleLine(raw);
+
+        // SUB-RULE,(condition),name — mihomo sub-rules extension
+        // parseRuleLine treats the parenthesised group as condition.content
+        // (including its surrounding parens) and puts the sub-rules name in
+        // parsed.policy (the third comma-separated field).
+        // Mirrors Tower RuleSchemeParser.swift:395-405
+        if (
+            parsed !== null &&
+            parsed.condition !== null &&
+            parsed.condition.type === "SUB-RULE"
+        ) {
+            // condition.content is "(GEOIP,CN)" — strip the outer parens.
+            const raw = String(parsed.condition.content || "");
+            const condition =
+                raw.startsWith("(") && raw.endsWith(")")
+                    ? raw.slice(1, -1)
+                    : raw;
+            // The third field (sub-rules key) ends up in parsed.policy.
+            const name = typeof parsed.policy === "string" && parsed.policy !== "" ? parsed.policy : null;
+            if (condition && name) {
+                expandSubRule(condition, name, 0);
+            } else {
+                result.stats.skipped += 1;
+            }
+            continue;
+        }
+
         if (parsed !== null && parsed.condition !== null && parsed.condition.type === "RULE-SET") {
             importRuleSet(result, parsed, providers, defaultOutbound, options);
             continue;
