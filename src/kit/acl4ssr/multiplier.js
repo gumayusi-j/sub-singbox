@@ -24,9 +24,10 @@ export function isHighRateGroup(tag) {
     return tag === HIGH_RATE_GROUP || /高倍率/.test(tag);
 }
 
-// Low rate: strictly < 1x (e.g. 0.05x, 0.2x, 0.5倍, 省流, 低倍; ignores 0.0x / 0.00x notice nodes)
+// Low rate: strictly < 1x (e.g. 0.05x, 0.2x, 0.5倍, ×0, 省流, 低倍, 免费, free;
+// ignores 0.0x / 0.00x notice nodes; decimal capped at 0.[0-5] so 0.6x~0.9x are excluded)
 export const LOW_RATE_REGEX =
-    "((?<!\\d)0\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|低倍|省流)";
+    "((?<!\\d)0\\.(?:0[1-9]\\d*|[1-5]\\d*)\\s*(?:x|倍)|[*×✕✖⨯⨉x]0(?!\\d)|低倍|省流|免费|(?<![A-Za-z])free(?![A-Za-z]))";
 
 // High rate: > 1x (e.g. 1.05x, 1.5x, 2x, 10x, 高倍)
 export const HIGH_RATE_REGEX =
@@ -43,7 +44,7 @@ export const EXPLICIT_NORMAL_REGEX =
 // Negative lookahead regex for normal rate (used in static INIs and external parser fallbacks):
 // matches any node name that contains neither high rate (> 1x) nor low rate (< 1x) nor notice indicators.
 export const NORMAL_RATE_REGEX =
-    "^(?!.*(?:1\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|(?:[2-9]|[1-9]\\d+)(?:\\.\\d+)?\\s*(?:x|倍)|高倍|0\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|低倍|省流|剩余流量|剩余|到期|过期|重置|官网|网址|网站|客服|官方|通知|公告|提示|traffic|expire|remaining|reset|0\\.0+x|工单|贩卖|群|频道|返利|循环|备用|说明|教程|关注|更新|作者|加入|超时|优惠|福利|邀请|失联|发布|永久|余额|刷新|导航|建议|⚠️|@|t\\.me/)).*$";
+    "^(?!.*(?:1\\.(?!0+(?:x|倍|\\s|\\b))\\d+\\s*(?:x|倍)|(?:[2-9]|[1-9]\\d+)(?:\\.\\d+)?\\s*(?:x|倍)|高倍|0\\.(?:0[1-9]\\d*|[1-5]\\d*)\\s*(?:x|倍)|[*×✕✖⨯⨉x]0(?!\\d)|低倍|省流|免费|free|剩余流量|剩余|到期|过期|重置|官网|网址|网站|客服|官方|通知|公告|提示|traffic|expire|remaining|reset|0\\.0+x|工单|贩卖|群|频道|返利|循环|备用|说明|教程|关注|更新|作者|加入|超时|优惠|福利|邀请|失联|发布|永久|余额|刷新|导航|建议|⚠️|@|t\\.me/)).*$";
 
 export function matchTags(pattern, tags) {
     if (!pattern || pattern === ".*") return tags.slice();

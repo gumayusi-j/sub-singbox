@@ -421,6 +421,56 @@ describe("ACL4SSR presets", function () {
         assertReferencesResolve(noMatch);
     });
 
+    it("classifies ×0, 免费, free nodes as low-multiplier", function () {
+        const testNodes = [
+            "香港 01 ×0",        // ×0 style
+            "日本 02 *0",         // *0 style
+            "免费节点 03",        // 免费 keyword
+            "Free HK 04",        // free keyword (word boundary)
+            "专线 05 - 2x",
+            "普通节点 06",
+        ];
+        for (const presetId of ["acl4ssr-default", "acl4ssr-full"]) {
+            const config = assembleAcl(parsed(testNodes), { aclPreset: presetId });
+            const outbounds = config.outbounds;
+            const tags = outbounds.map((o) => o.tag);
+
+            expect(tags, presetId).to.include("💰 低倍率节点");
+            const lowGroup = outbounds.find((o) => o.tag === "💰 低倍率节点");
+            expect(lowGroup.outbounds, presetId).to.include("香港 01 ×0");
+            expect(lowGroup.outbounds, presetId).to.include("日本 02 *0");
+            expect(lowGroup.outbounds, presetId).to.include("免费节点 03");
+            expect(lowGroup.outbounds, presetId).to.include("Free HK 04");
+            expect(lowGroup.outbounds, presetId).to.not.include("专线 05 - 2x");
+            expect(lowGroup.outbounds, presetId).to.not.include("普通节点 06");
+            assertReferencesResolve(config);
+        }
+    });
+
+    it("does not classify 0.6x~0.9x nodes as low-multiplier", function () {
+        // Only 0.[0-5]x is low rate; 0.6x~0.9x are treated as normal
+        const testNodes = [
+            "香港 01 0.6x",
+            "日本 02 0.7倍",
+            "台湾 03 0.9x",
+            "专线 04 2x",      // triggers high-rate so normal group is generated
+        ];
+        for (const presetId of ["acl4ssr-default", "acl4ssr-full"]) {
+            const config = assembleAcl(parsed(testNodes), { aclPreset: presetId });
+            const tags = config.outbounds.map((o) => o.tag);
+
+            expect(tags, presetId).to.not.include("💰 低倍率节点");
+            // 0.6x~0.9x nodes should appear in normal group
+            const normalGroup = config.outbounds.find((o) => o.tag === "☕ 正常倍率节点");
+            if (normalGroup) {
+                expect(normalGroup.outbounds, presetId).to.include("香港 01 0.6x");
+                expect(normalGroup.outbounds, presetId).to.include("日本 02 0.7倍");
+                expect(normalGroup.outbounds, presetId).to.include("台湾 03 0.9x");
+            }
+            assertReferencesResolve(config);
+        }
+    });
+
     it("rejects an unknown preset id", function () {
         expect(function () {
             assembleAcl(parsed(), { aclPreset: "bogus" });
