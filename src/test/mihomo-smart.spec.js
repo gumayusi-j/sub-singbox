@@ -149,6 +149,19 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference)", function () {
             expect(config.route).to.be.an("object");
             expect(config.route.rules).to.be.an("array");
             expect(config.route.final).to.equal("🐟 漏网之鱼");
+
+            // geoip-cn rule-set must be defined because dns.rules uses it (and geoCn routes direct)
+            expect(config.route.rule_set).to.be.an("array");
+            const ruleSetTags = config.route.rule_set.map((r) => r.tag);
+            expect(ruleSetTags).to.include("geoip-cn");
+
+            // Direct route rules and geoip-cn route rule should be present
+            const geoipRule = config.route.rules.find((r) => r.rule_set === "geoip-cn");
+            expect(geoipRule).to.not.equal(undefined);
+            expect(geoipRule.outbound).to.equal("direct");
+
+            const directRules = config.route.rules.filter((r) => r.outbound === "direct");
+            expect(directRules.length).to.be.greaterThan(0);
         });
     });
 });

@@ -215,8 +215,11 @@ function assembleRoute(preset, emitted, options) {
     const warnings = [];
     let skipped = 0;
     let usedGeoCn = false;
-
-    const anchor = (group) => (emitted.has(group) ? group : null);
+    const anchor = (group) => {
+        if (typeof group !== "string" || group === "") return null;
+        if (/^direct$/i.test(group)) return "direct";
+        return emitted.has(group) ? group : null;
+    };
     const rules = [];
 
     // User-supplied extra rules go first so they can override the preset.
@@ -553,6 +556,26 @@ export function assembleAcl(parsed, options) {
         outbounds,
         final: route.final,
     });
+    const dnsUsesGeoCn = (dns.rules || []).some((r) =>
+        Array.isArray(r.rule_set) ? r.rule_set.includes("geoip-cn") : r.rule_set === "geoip-cn"
+    );
+    if (dnsUsesGeoCn) {
+        if (!Array.isArray(route.rule_set)) {
+            route.rule_set = [];
+        }
+        if (!route.rule_set.some((r) => r && r.tag === "geoip-cn")) {
+            route.rule_set.push({
+                type: "remote",
+                tag: "geoip-cn",
+                format: "binary",
+                url: CN_GEOIP_URL,
+                http_client: "default-client",
+            });
+        }
+        if (!route.default_http_client) {
+            route.default_http_client = "default-client";
+        }
+    }
     const config = {
         log: defaultLog(options),
         dns,
