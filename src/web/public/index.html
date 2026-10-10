@@ -1935,7 +1935,7 @@ pre.code-block {
               </span>
               <div class="pick-body">
                 <!-- Badge: shows rule type/recommendation -->
-                <span v-if="!r.custom && r.value === 'acl4ssr'" class="pick-badge badge-recommend">⭐ 推荐</span>
+                <span v-if="!r.custom && (r.value === 'mihomo-smart' || r.value === 'acl4ssr')" class="pick-badge badge-recommend">⭐ 推荐</span>
                 <span v-else-if="!r.custom && r.value === 'minimal'" class="pick-badge badge-lite">轻量</span>
                 <span v-else-if="!r.custom && r.value !== 'none'" class="pick-badge badge-full">完整</span>
                 <span v-else-if="r.custom" class="pick-badge badge-custom">自定义</span>
@@ -2510,7 +2510,7 @@ var PROTO_ABBR = {
 };
 
 var STORE = { apiToken:"sbx:apiToken", exportTarget:"sbx:exportTarget", legacySubs:"sbx:subs", legacyEnabled:"sbx:enabledIds", shape:"sbx:shape", acl:"sbx:acl", theme:"sbx:theme" };
-var ACL_NAME = { "acl4ssr-default":"ACL4SSR 默认", "acl4ssr-full":"ACL4SSR 全分组", "acl4ssr-mini":"ACL4SSR 精简", none:"默认分域模板" };
+var ACL_NAME = { "mihomo-smart":"Mihomo 现代智能分组", "acl4ssr-default":"ACL4SSR 默认", "acl4ssr-full":"ACL4SSR 全分组", "acl4ssr-mini":"ACL4SSR 精简", none:"默认分域模板" };
 
 function lsLoad(key, fb) { try { var v=localStorage.getItem(key); return v?JSON.parse(v):fb; } catch(e){return fb;} }
 function lsSave(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch(e){} }
@@ -2606,6 +2606,7 @@ var app = Vue.createApp({
     var rulesHint = Vue.ref('');
     var rulesHintType = Vue.ref('');
     var BUILTIN_RULES = [
+      { value:'mihomo-smart', label:'Mihomo 现代智能分组', desc:'参考 AIsouler/MyClash：精美 SVG 图标、负载均衡、地区双层分组（自动+手动）、高低倍率与 20+ 精细化服务分流。', tags:['⭐ 推荐','SVG 图标','负载均衡','双层地区'] },
       { value:'acl4ssr-default', label:'ACL4SSR 默认', desc:'去广告、自动测速，含多国地区与高低倍率二级分组，及国外媒体、电报、微软和苹果分流。', tags:['去广告','自动测速','地区分组','倍率分组'] },
       { value:'acl4ssr-full', label:'ACL4SSR 全分组', desc:'最完整分组：流媒体、AI、游戏、音乐，含多国地区自动/手动二级分组与高低倍率（完整 GFW 列表）。', tags:['流媒体','AI','游戏','音乐','地区分组'] },
       { value:'acl4ssr-mini', label:'ACL4SSR 精简', desc:'只保留节点选择、自动选择、全球直连与拦截，策略组最少、规则最省。', tags:['最省规则','4 个策略组'] },

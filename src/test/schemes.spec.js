@@ -159,13 +159,17 @@ describe("kit/schemes", function () {
         it("lists the presets and then the custom schemes", function () {
             const scheme = buildScheme();
             const list = listSchemes([scheme], presetList);
-            expect(list.slice(0, 3).map((s) => s.custom)).to.deep.equal([false, false, false]);
-            expect(list[3].id).to.equal(scheme.id);
-            expect(list[3].custom).to.equal(true);
+            const numPresets = presetList().length;
+            expect(list.slice(0, numPresets).map((s) => s.custom)).to.deep.equal(
+                Array(numPresets).fill(false)
+            );
+            expect(list[numPresets].id).to.equal(scheme.id);
+            expect(list[numPresets].custom).to.equal(true);
         });
 
         it("omits a corrupt entry", function () {
-            expect(listSchemes([{ id: "custom:bad" }], presetList)).to.have.length(3);
+            const numPresets = presetList().length;
+            expect(listSchemes([{ id: "custom:bad" }], presetList)).to.have.length(numPresets);
         });
     });
 

@@ -14,6 +14,7 @@ import {
     isNormalRateGroup,
     resolveMultiplierGroupNodes,
 } from "./acl4ssr/multiplier";
+import { buildMihomoSmartClash } from "./mihomo-smart/builder";
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -283,6 +284,14 @@ function formatRuleProviders(providers) {
  */
 export default function assembleClash(proxyYaml, preset, options) {
     const opts = options || {};
+
+    if (
+        (preset && preset.id === "mihomo-smart") ||
+        (opts && opts.aclPreset === "mihomo-smart")
+    ) {
+        return buildMihomoSmartClash(proxyYaml, opts);
+    }
+
     const nodeNames = extractNodeNames(proxyYaml);
 
     if (nodeNames.length === 0) {

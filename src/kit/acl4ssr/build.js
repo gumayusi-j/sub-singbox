@@ -69,12 +69,22 @@ function dropGroupTarget(group) {
     return members.some((token) => /^\[\]REJECT/i.test(token)) ? "REJECT" : "direct";
 }
 
+import { MIHOMO_SMART_PRESET } from "../mihomo-smart/builder";
+
 export function findPreset(id) {
+    if (id === MIHOMO_SMART_PRESET.id) return MIHOMO_SMART_PRESET;
     return PRESETS.find((p) => p.id === id) || null;
 }
 
 export function presetList() {
-    return PRESETS.map((p) => ({ id: p.id, name: p.name, summary: p.summary }));
+    return [
+        ...PRESETS.map((p) => ({ id: p.id, name: p.name, summary: p.summary })),
+        {
+            id: MIHOMO_SMART_PRESET.id,
+            name: MIHOMO_SMART_PRESET.name,
+            summary: MIHOMO_SMART_PRESET.summary,
+        },
+    ];
 }
 
 // Parse a ".list" snapshot into condition descriptors (cached).
