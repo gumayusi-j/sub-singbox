@@ -1,5 +1,5 @@
 // Constants and configurations for Mihomo Smart Preset
-// Referenced from AIsouler/MyClash (https://github.com/AIsouler/MyClash)
+// 精简现代成熟设计：精美 SVG 图标、负载均衡、单层地区自动优选、高低倍率与核心服务精准分流
 
 export const ICON_BASE_URL = "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/";
 export const RULE_SET_BASE_URL = "https://cdn.jsdmirror.com/gh/appshubcc/bett-rules@meta/geo/";
@@ -79,7 +79,7 @@ const ruleProviderCommonIpcidr = {
     behavior: "ipcidr",
 };
 
-// Base rule providers
+// Base rule providers for direct connections and foundational routing
 export const BASE_RULE_PROVIDERS = {
     private: {
         ...ruleProviderCommonDomain,
@@ -138,46 +138,18 @@ export const BASE_RULE_PROVIDERS = {
     },
 };
 
-// Direct proxies definitions for Clash
-export const DIRECT_PROXIES = [
-    {
-        name: "🇨🇳 直连 | 双栈",
-        type: "direct",
-    },
-    {
-        name: "🇨🇳 直连 | IPv4优先",
-        type: "direct",
-        "ip-version": "ipv4-prefer",
-    },
-    {
-        name: "🇨🇳 直连 | IPv6优先",
-        type: "direct",
-        "ip-version": "ipv6-prefer",
-    },
-    {
-        name: "🇨🇳 直连 | 仅IPv4",
-        type: "direct",
-        "ip-version": "ipv4",
-    },
-    {
-        name: "🇨🇳 直连 | 仅IPv6",
-        type: "direct",
-        "ip-version": "ipv6",
-    },
-];
-
-// Prefix routing rules
+// Prefix routing rules: internal & CN services routed directly
 export const PREFIX_RULES = [
-    "RULE-SET,private,直连",
-    "RULE-SET,private_ip,直连",
-    "RULE-SET,geolocation-cn,直连",
-    "RULE-SET,games_cn,直连",
-    "RULE-SET,epicgames,直连",
-    "RULE-SET,nvidia_cn,直连",
-    "RULE-SET,apple_cn,直连",
-    "RULE-SET,microsoft_cn,直连",
-    "DOMAIN,fsend.cn,直连",
-    "DOMAIN,international-gfe.download.nvidia.com,直连",
+    "RULE-SET,private,DIRECT",
+    "RULE-SET,private_ip,DIRECT",
+    "RULE-SET,geolocation-cn,DIRECT",
+    "RULE-SET,games_cn,DIRECT",
+    "RULE-SET,epicgames,DIRECT",
+    "RULE-SET,nvidia_cn,DIRECT",
+    "RULE-SET,apple_cn,DIRECT",
+    "RULE-SET,microsoft_cn,DIRECT",
+    "DOMAIN,fsend.cn,DIRECT",
+    "DOMAIN,international-gfe.download.nvidia.com,DIRECT",
 ];
 
 // Foreign QUIC blocking rule
@@ -187,47 +159,22 @@ export const BLOCK_FOREIGN_QUIC = [
 
 // Fallback routing rules
 export const FALLBACK_RULES = [
-    "RULE-SET,geolocation-!cn,默认代理",
-    "RULE-SET,cn_ip,直连",
-    "RULE-SET,private_ip,直连",
-    "MATCH,漏网之鱼",
+    "RULE-SET,geolocation-!cn,🚀 节点选择",
+    "RULE-SET,cn_ip,DIRECT",
+    "RULE-SET,private_ip,DIRECT",
+    "MATCH,🐟 漏网之鱼",
 ];
 
 // Common options for proxy groups
 export const GROUP_BASE_OPTION = {
-    interval: 600,
+    interval: 300,
     timeout: 3000,
-    url: "https://www.apple.com/library/test/success.html",
+    url: "http://www.gstatic.com/generate_204",
     lazy: true,
     "max-failed-times": 3,
-    "empty-fallback": "REJECT",
 };
 
-// Base groups
-export const BASE_GROUPS = [
-    {
-        name: "手动选择",
-        type: "select",
-        includeAll: true,
-        icon: `${ICON_BASE_URL}Static.svg`,
-    },
-    {
-        name: "自动选择",
-        type: "url-test",
-        includeAll: true,
-        tolerance: 50,
-        icon: `${ICON_BASE_URL}Auto.svg`,
-    },
-    {
-        name: "负载均衡",
-        type: "load-balance",
-        strategy: "sticky-sessions",
-        includeAll: true,
-        icon: `${ICON_BASE_URL}RoundRobin.svg`,
-    },
-];
-
-// 21 Detailed Service Routing Configs
+// Core high-value service routing configs (精炼成熟的 5 大业务)
 export const SERVICE_CONFIGS = [
     {
         name: "AdBlock",
@@ -244,52 +191,6 @@ export const SERVICE_CONFIGS = [
         rules: ["RULE-SET,category-ads,AdBlock"],
     },
     {
-        name: "FCM",
-        type: "select",
-        direct: true,
-        defaultSelected: "直连",
-        icon: `${ICON_BASE_URL}Fcm.svg`,
-        providers: {
-            googlefcm: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/googlefcm.mrs`,
-                path: "./ruleset/googlefcm.mrs",
-            },
-        },
-        rules: ["RULE-SET,googlefcm,FCM"],
-    },
-    {
-        name: "YouTube",
-        type: "select",
-        icon: `${ICON_BASE_URL}YouTube.svg`,
-        providers: {
-            youtube: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/youtube.mrs`,
-                path: "./ruleset/youtube.mrs",
-            },
-        },
-        rules: ["RULE-SET,youtube,YouTube"],
-    },
-    {
-        name: "Google",
-        type: "select",
-        icon: `${ICON_BASE_URL}Google.svg`,
-        providers: {
-            google: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/google.mrs`,
-                path: "./ruleset/google.mrs",
-            },
-            google_ip: {
-                ...ruleProviderCommonIpcidr,
-                url: `${RULE_SET_BASE_URL}geoip/google.mrs`,
-                path: "./ruleset/google_ip.mrs",
-            },
-        },
-        rules: ["RULE-SET,google,Google", "RULE-SET,google_ip,Google,no-resolve"],
-    },
-    {
         name: "AI",
         type: "select",
         defaultSelected: "美国",
@@ -304,156 +205,17 @@ export const SERVICE_CONFIGS = [
         rules: ["RULE-SET,ai,AI"],
     },
     {
-        name: "Microsoft",
+        name: "YouTube",
         type: "select",
-        direct: true,
-        icon: `${ICON_BASE_URL}Microsoft.svg`,
+        icon: `${ICON_BASE_URL}YouTube.svg`,
         providers: {
-            github: {
+            youtube: {
                 ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/github.mrs`,
-                path: "./ruleset/github.mrs",
-            },
-            microsoft: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/microsoft.mrs`,
-                path: "./ruleset/microsoft.mrs",
-            },
-            microsoft_ip: {
-                ...ruleProviderCommonIpcidr,
-                url: `${RULE_SET_BASE_URL}geoip/microsoft.mrs`,
-                path: "./ruleset/microsoft_ip.mrs",
+                url: `${RULE_SET_BASE_URL}geosite/youtube.mrs`,
+                path: "./ruleset/youtube.mrs",
             },
         },
-        rules: [
-            "RULE-SET,github,默认代理",
-            "RULE-SET,microsoft,Microsoft",
-            "RULE-SET,microsoft_ip,Microsoft,no-resolve",
-        ],
-    },
-    {
-        name: "Apple",
-        type: "select",
-        direct: true,
-        icon: `${ICON_BASE_URL}Apple.svg`,
-        providers: {
-            apple: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/apple.mrs`,
-                path: "./ruleset/apple.mrs",
-            },
-            apple_ip: {
-                ...ruleProviderCommonIpcidr,
-                url: `${RULE_SET_BASE_URL}geoip/apple.mrs`,
-                path: "./ruleset/apple_ip.mrs",
-            },
-        },
-        rules: ["RULE-SET,apple,Apple", "RULE-SET,apple_ip,Apple,no-resolve"],
-    },
-    {
-        name: "Telegram",
-        type: "select",
-        icon: `${ICON_BASE_URL}Telegram.svg`,
-        providers: {
-            telegram: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/telegram.mrs`,
-                path: "./ruleset/telegram.mrs",
-            },
-            telegram_ip: {
-                ...ruleProviderCommonIpcidr,
-                url: `${RULE_SET_BASE_URL}geoip/telegram.mrs`,
-                path: "./ruleset/telegram_ip.mrs",
-            },
-        },
-        rules: ["RULE-SET,telegram,Telegram", "RULE-SET,telegram_ip,Telegram,no-resolve"],
-    },
-    {
-        name: "Steam",
-        type: "select",
-        direct: true,
-        icon: `${ICON_BASE_URL}Steam.svg`,
-        providers: {
-            steam: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/steam.mrs`,
-                path: "./ruleset/steam.mrs",
-            },
-            steam_ip: {
-                ...ruleProviderCommonIpcidr,
-                url: `${RULE_SET_BASE_URL}geoip/steam.mrs`,
-                path: "./ruleset/steam_ip.mrs",
-            },
-        },
-        rules: ["RULE-SET,steam,Steam", "RULE-SET,steam_ip,Steam,no-resolve"],
-    },
-    {
-        name: "TikTok",
-        type: "select",
-        defaultSelected: "日本",
-        icon: `${ICON_BASE_URL}TikTok.svg`,
-        providers: {
-            tiktok: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/tiktok.mrs`,
-                path: "./ruleset/tiktok.mrs",
-            },
-            tiktok_ip: {
-                ...ruleProviderCommonIpcidr,
-                url: `${RULE_SET_BASE_URL}geoip/tiktok.mrs`,
-                path: "./ruleset/tiktok_ip.mrs",
-            },
-        },
-        rules: ["RULE-SET,tiktok,TikTok", "RULE-SET,tiktok_ip,TikTok,no-resolve"],
-    },
-    {
-        name: "Twitter",
-        type: "select",
-        icon: `${ICON_BASE_URL}Twitter.svg`,
-        providers: {
-            twitter: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/twitter.mrs`,
-                path: "./ruleset/twitter.mrs",
-            },
-            twitter_ip: {
-                ...ruleProviderCommonIpcidr,
-                url: `${RULE_SET_BASE_URL}geoip/twitter.mrs`,
-                path: "./ruleset/twitter_ip.mrs",
-            },
-        },
-        rules: ["RULE-SET,twitter,Twitter", "RULE-SET,twitter_ip,Twitter,no-resolve"],
-    },
-    {
-        name: "Meta",
-        type: "select",
-        icon: `${ICON_BASE_URL}Meta.svg`,
-        providers: {
-            meta: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/meta.mrs`,
-                path: "./ruleset/meta.mrs",
-            },
-            facebook_ip: {
-                ...ruleProviderCommonIpcidr,
-                url: `${RULE_SET_BASE_URL}geoip/facebook.mrs`,
-                path: "./ruleset/facebook_ip.mrs",
-            },
-        },
-        rules: ["RULE-SET,meta,Meta", "RULE-SET,facebook_ip,Meta,no-resolve"],
-    },
-    {
-        name: "Line",
-        type: "select",
-        icon: `${ICON_BASE_URL}Line.svg`,
-        providers: {
-            line: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/line.mrs`,
-                path: "./ruleset/line.mrs",
-            },
-        },
-        rules: ["RULE-SET,line,Line"],
+        rules: ["RULE-SET,youtube,YouTube"],
     },
     {
         name: "Netflix",
@@ -474,125 +236,21 @@ export const SERVICE_CONFIGS = [
         rules: ["RULE-SET,netflix,Netflix", "RULE-SET,netflix_ip,Netflix,no-resolve"],
     },
     {
-        name: "Emby",
+        name: "Telegram",
         type: "select",
-        direct: true,
-        icon: `${ICON_BASE_URL}Emby.svg`,
+        icon: `${ICON_BASE_URL}Telegram.svg`,
         providers: {
-            emby: {
+            telegram: {
                 ...ruleProviderCommonDomain,
-                url: "https://cdn.jsdmirror.com/gh/666OS/rules@release/mihomo/domain/Emby.mrs",
-                path: "./ruleset/emby.mrs",
+                url: `${RULE_SET_BASE_URL}geosite/telegram.mrs`,
+                path: "./ruleset/telegram.mrs",
             },
-            emos: {
-                ...ruleProviderCommonDomain,
-                url: "https://cdn.jsdmirror.com/gh/binaryu/emos-proxy-rule@main/rules/emos-mihomo.mrs",
-                path: "./ruleset/emos.mrs",
-            },
-        },
-        rules: [
-            "RULE-SET,emby,Emby",
-            "RULE-SET,emos,Emby",
-            "DOMAIN-SUFFIX,mb3admin.com,Emby",
-            "DOMAIN-SUFFIX,nubebelle.com,Emby",
-            "DOMAIN-KEYWORD,emby,Emby",
-            "PROCESS-NAME,com.mb.android,Emby",
-            "PROCESS-NAME,tv.emby.embyatv,Emby",
-            "PROCESS-NAME,com.hush.yamby,Emby",
-            "PROCESS-NAME,com.jellycine.app,Emby",
-            "PROCESS-NAME,com.mountains.hills,Emby",
-            "PROCESS-NAME,RodelPlayer.App.exe,Emby",
-            "PROCESS-NAME,com.feifeiduck.capyplayer,Emby",
-        ],
-    },
-    {
-        name: "PikPak",
-        type: "select",
-        direct: true,
-        icon: `${ICON_BASE_URL}PikPak.svg`,
-        providers: {
-            pikpak: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/pikpak.mrs`,
-                path: "./ruleset/pikpak.mrs",
-            },
-        },
-        rules: ["RULE-SET,pikpak,PikPak"],
-    },
-    {
-        name: "Spotify",
-        type: "select",
-        direct: true,
-        icon: `${ICON_BASE_URL}Spotify.svg`,
-        providers: {
-            spotify: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/spotify.mrs`,
-                path: "./ruleset/spotify.mrs",
-            },
-            spotify_ip: {
+            telegram_ip: {
                 ...ruleProviderCommonIpcidr,
-                url: `${RULE_SET_BASE_URL}geoip/spotify.mrs`,
-                path: "./ruleset/spotify_ip.mrs",
+                url: `${RULE_SET_BASE_URL}geoip/telegram.mrs`,
+                path: "./ruleset/telegram_ip.mrs",
             },
         },
-        rules: ["RULE-SET,spotify,Spotify", "RULE-SET,spotify_ip,Spotify,no-resolve"],
-    },
-    {
-        name: "Crypto",
-        type: "select",
-        defaultSelected: "日本",
-        icon: `${ICON_BASE_URL}Bitcoin.svg`,
-        providers: {
-            cryptocurrency: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/category-cryptocurrency.mrs`,
-                path: "./ruleset/cryptocurrency.mrs",
-            },
-        },
-        rules: ["RULE-SET,cryptocurrency,Crypto"],
-    },
-    {
-        name: "PayPal",
-        type: "select",
-        defaultSelected: "美国",
-        icon: `${ICON_BASE_URL}PayPal.svg`,
-        providers: {
-            paypal: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/paypal.mrs`,
-                path: "./ruleset/paypal.mrs",
-            },
-        },
-        rules: ["RULE-SET,paypal,PayPal"],
-    },
-    {
-        name: "Patreon",
-        type: "select",
-        defaultSelected: "香港",
-        icon: `${ICON_BASE_URL}Patreon.svg`,
-        providers: {
-            patreon: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/patreon.mrs`,
-                path: "./ruleset/patreon.mrs",
-            },
-        },
-        rules: ["RULE-SET,patreon,Patreon"],
-    },
-    {
-        name: "EHentai",
-        type: "select",
-        direct: true,
-        defaultSelected: "美国",
-        icon: `${ICON_BASE_URL}EHentai.svg`,
-        providers: {
-            ehentai: {
-                ...ruleProviderCommonDomain,
-                url: `${RULE_SET_BASE_URL}geosite/ehentai.mrs`,
-                path: "./ruleset/ehentai.mrs",
-            },
-        },
-        rules: ["RULE-SET,ehentai,EHentai"],
+        rules: ["RULE-SET,telegram,Telegram", "RULE-SET,telegram_ip,Telegram,no-resolve"],
     },
 ];

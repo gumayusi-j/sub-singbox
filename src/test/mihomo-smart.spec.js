@@ -48,7 +48,7 @@ const SAMPLE_PROXIES_YAML = `proxies:
     password: test
 `;
 
-describe("Mihomo Smart Preset (AIsouler/MyClash reference)", function () {
+describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", function () {
     it("is exposed in findPreset and presetList", function () {
         const preset = findPreset("mihomo-smart");
         expect(preset).to.not.equal(null);
@@ -60,17 +60,17 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference)", function () {
     });
 
     describe("Clash / Mihomo configuration assembly", function () {
-        it("assembles complete config with modern SVG icons, load balancing, and dual-layer region groups", function () {
+        it("assembles complete config with modern SVG icons, load balancing, and single-layer flat region groups", function () {
             const preset = findPreset("mihomo-smart");
             const configYaml = assembleClash(SAMPLE_PROXIES_YAML, preset);
 
             // 1. Notice/expired junk node should be filtered out from proxy groups
             expect(configYaml).to.not.include("剩余流量");
 
-            // 2. Base groups
-            expect(configYaml).to.include('- name: "手动选择"');
-            expect(configYaml).to.include('- name: "自动选择"');
-            expect(configYaml).to.include('- name: "负载均衡"');
+            // 2. Base groups (unified, clean 🚀 节点选择, ♻️ 自动选择, ⚖️ 负载均衡)
+            expect(configYaml).to.include('- name: "🚀 节点选择"');
+            expect(configYaml).to.include('- name: "♻️ 自动选择"');
+            expect(configYaml).to.include('- name: "⚖️ 负载均衡"');
             expect(configYaml).to.include("type: load-balance");
             expect(configYaml).to.include("strategy: sticky-sessions");
 
@@ -79,30 +79,24 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference)", function () {
             expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/RoundRobin.svg"');
             expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/HongKong.svg"');
             expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/OpenAI.svg"');
-            expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/Global.svg"');
 
-            // 4. Dual-layer region groups (auto url-test + manual select)
-            expect(configYaml).to.include('- name: "香港-自动选择"');
+            // 4. Single-layer flat region groups (clean url-test, no redundant dual-layer nesting)
             expect(configYaml).to.include('- name: "香港"');
-            expect(configYaml).to.include('- name: "日本-自动选择"');
             expect(configYaml).to.include('- name: "日本"');
-            expect(configYaml).to.include('- name: "美国-自动选择"');
             expect(configYaml).to.include('- name: "美国"');
-            expect(configYaml).to.include('- name: "新加坡-自动选择"');
             expect(configYaml).to.include('- name: "新加坡"');
-            expect(configYaml).to.include('- name: "台湾-自动选择"');
             expect(configYaml).to.include('- name: "台湾"');
-            expect(configYaml).to.include('- name: "其他节点-自动选择"');
             expect(configYaml).to.include('- name: "其他节点"');
+            expect(configYaml).to.not.include('- name: "香港-自动选择"');
+            expect(configYaml).to.not.include('- name: "其他节点-自动选择"');
 
             // 5. Rate groups
             expect(configYaml).to.include('- name: "低倍率节点"');
             expect(configYaml).to.include('- name: "高倍率节点"');
 
-            // 6. Service routing groups
+            // 6. Core service routing groups (streamlined high-value groups)
             expect(configYaml).to.include('- name: "AI"');
             expect(configYaml).to.include('- name: "YouTube"');
-            expect(configYaml).to.include('- name: "Google"');
             expect(configYaml).to.include('- name: "Telegram"');
             expect(configYaml).to.include('- name: "Netflix"');
             expect(configYaml).to.include('- name: "AdBlock"');
@@ -114,7 +108,7 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference)", function () {
             expect(configYaml).to.include("rules:");
             expect(configYaml).to.include("- RULE-SET,ai,AI");
             expect(configYaml).to.include("- RULE-SET,category-ads,AdBlock");
-            expect(configYaml).to.include("- MATCH,漏网之鱼");
+            expect(configYaml).to.include("- MATCH,🐟 漏网之鱼");
             expect(configYaml).to.include("AND,((NETWORK,UDP),(DST-PORT,443)");
         });
 
@@ -122,7 +116,7 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference)", function () {
             const configYaml = assembleClash(SAMPLE_PROXIES_YAML, null, {
                 aclPreset: "mihomo-smart",
             });
-            expect(configYaml).to.include('- name: "负载均衡"');
+            expect(configYaml).to.include('- name: "⚖️ 负载均衡"');
             expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/OpenAI.svg"');
         });
     });
@@ -136,8 +130,7 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference)", function () {
             expect(config.outbounds).to.be.an("array");
             const tags = config.outbounds.map((o) => o.tag);
 
-            expect(tags).to.include("🚀 默认代理");
-            expect(tags).to.include("🚀 手动选择");
+            expect(tags).to.include("🚀 节点选择");
             expect(tags).to.include("♻️ 自动选择");
             expect(tags).to.include("🇭🇰 香港");
             expect(tags).to.include("🇯🇵 日本");
