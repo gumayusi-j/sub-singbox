@@ -80,19 +80,19 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
             expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/HongKong.svg"');
             expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/OpenAI.svg"');
 
-            // 4. Single-layer flat region groups (clean url-test, no redundant dual-layer nesting)
-            expect(configYaml).to.include('- name: "香港"');
-            expect(configYaml).to.include('- name: "日本"');
-            expect(configYaml).to.include('- name: "美国"');
-            expect(configYaml).to.include('- name: "新加坡"');
-            expect(configYaml).to.include('- name: "台湾"');
-            expect(configYaml).to.include('- name: "其他节点"');
+            // 4. Single-layer flat region groups with flag emojis
+            expect(configYaml).to.include('- name: "🇭🇰 香港"');
+            expect(configYaml).to.include('- name: "🇯🇵 日本"');
+            expect(configYaml).to.include('- name: "🇺🇸 美国"');
+            expect(configYaml).to.include('- name: "🇸🇬 新加坡"');
+            expect(configYaml).to.include('- name: "🇹🇼 台湾"');
+            expect(configYaml).to.include('- name: "🌍 其他节点"');
             expect(configYaml).to.not.include('- name: "香港-自动选择"');
             expect(configYaml).to.not.include('- name: "其他节点-自动选择"');
 
             // 5. Rate groups
-            expect(configYaml).to.include('- name: "低倍率节点"');
-            expect(configYaml).to.include('- name: "高倍率节点"');
+            expect(configYaml).to.include('- name: "💰 低倍率节点"');
+            expect(configYaml).to.include('- name: "💎 高倍率节点"');
 
             // 6. Core service routing groups (streamlined high-value groups)
             expect(configYaml).to.include('- name: "AI"');

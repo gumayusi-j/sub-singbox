@@ -189,13 +189,13 @@ export function buildMihomoSmartClash(proxyYaml, options) {
     if (otherNodes.length > 0) {
         generatedRegionGroups.push({
             ...GROUP_BASE_OPTION,
-            name: "其他节点",
+            name: "🌍 其他节点",
             type: "url-test",
             tolerance: 50,
             icon: `${ICON_BASE_URL}WorldMap.svg`,
             proxies: otherNodes,
         });
-        availableRegionNames.push("其他节点");
+        availableRegionNames.push("🌍 其他节点");
     }
 
     // Rate groups if present

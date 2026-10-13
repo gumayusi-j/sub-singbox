@@ -11,32 +11,32 @@ export const EXCLUDE_FILTER =
 // Region definitions with SVG icons and matching regexes
 export const REGION_DEFINITIONS = [
     {
-        name: "香港",
+        name: "🇭🇰 香港",
         flag: "🇭🇰",
         regex: /🇭🇰|香港|(?<![A-Za-z])HKG?(?![A-Za-z])|hong\s*kong/i,
         icon: `${ICON_BASE_URL}HongKong.svg`,
     },
     {
-        name: "日本",
+        name: "🇯🇵 日本",
         flag: "🇯🇵",
         regex: /🇯🇵|日本|东京|大阪|京都|(?<![A-Za-z])JPN?(?![A-Za-z])|japan/i,
         icon: `${ICON_BASE_URL}Japan.svg`,
     },
     {
-        name: "美国",
+        name: "🇺🇸 美国",
         flag: "🇺🇸",
         regex:
             /🇺🇸|美国|纽约|洛杉矶|旧金山|芝加哥|休斯顿|迈阿密|西雅图|波士顿|华盛顿|拉斯维加斯|圣何塞|圣地亚哥|(?<![A-Za-z])USA?(?![A-Za-z])|america|united\s*states/i,
         icon: `${ICON_BASE_URL}America.svg`,
     },
     {
-        name: "新加坡",
+        name: "🇸🇬 新加坡",
         flag: "🇸🇬",
         regex: /🇸🇬|新加坡|狮城|(?<![A-Za-z])SGP?(?![A-Za-z])|singapore/i,
         icon: `${ICON_BASE_URL}Singapore.svg`,
     },
     {
-        name: "台湾",
+        name: "🇹🇼 台湾",
         flag: "🇹🇼",
         regex: /🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan/i,
         icon: `${ICON_BASE_URL}Taiwan.svg`,
@@ -44,8 +44,8 @@ export const REGION_DEFINITIONS = [
 ];
 
 // Rate region definitions
-export const LOW_RATE_REGION_NAME = "低倍率节点";
-export const HIGH_RATE_REGION_NAME = "高倍率节点";
+export const LOW_RATE_REGION_NAME = "💰 低倍率节点";
+export const HIGH_RATE_REGION_NAME = "💎 高倍率节点";
 
 export const RATE_REGION_DEFINITIONS = [
     {
@@ -193,7 +193,7 @@ export const SERVICE_CONFIGS = [
     {
         name: "AI",
         type: "select",
-        defaultSelected: "美国",
+        defaultSelected: "🇺🇸 美国",
         icon: `${ICON_BASE_URL}OpenAI.svg`,
         providers: {
             ai: {
