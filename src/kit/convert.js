@@ -55,6 +55,51 @@ export function tryLoadNodeDocument(text) {
     return undefined;
 }
 
+// Parse subscription text and extract nodes together with dns and hosts metadata.
+export function parseSubscriptionDoc(text) {
+    if (typeof text !== "string") return { nodes: [], dns: null, hosts: null, rawDoc: null };
+    const trimmed = text.trim();
+    if (!trimmed) return { nodes: [], dns: null, hosts: null, rawDoc: null };
+
+    let value;
+    try {
+        value = JSON.parse(trimmed);
+    } catch (_e) {
+        try {
+            value = safeLoad(trimmed);
+        } catch (_e2) {
+            value = null;
+        }
+    }
+
+    if (value && typeof value === "object") {
+        let nodes;
+        if (Array.isArray(value)) nodes = value;
+        else if (Array.isArray(value.proxies)) nodes = value.proxies;
+        if (
+            !Array.isArray(nodes) ||
+            nodes.length === 0 ||
+            !nodes.every((n) => n && typeof n === "object" && !Array.isArray(n))
+        ) {
+            nodes = ProxyUtils.parse(text);
+        }
+        return {
+            nodes: Array.isArray(nodes) ? nodes : [],
+            dns: value.dns && typeof value.dns === "object" ? value.dns : null,
+            hosts: value.hosts && typeof value.hosts === "object" ? value.hosts : null,
+            rawDoc: value,
+        };
+    }
+
+    const parsed = ProxyUtils.parse(text);
+    return {
+        nodes: Array.isArray(parsed) ? parsed : [],
+        dns: null,
+        hosts: null,
+        rawDoc: null,
+    };
+}
+
 function produceToObject(nodes, opts) {
     const external = ProxyUtils.produce(nodes, "sing-box", "external", {
         "include-unsupported-proxy": !!(opts && opts.includeUnsupportedProxy),

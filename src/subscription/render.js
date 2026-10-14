@@ -8,7 +8,8 @@
 
 import crypto from "crypto";
 import { ProxyUtils } from "@/core/proxy-utils";
-import { fromNodes, parseNodes } from "../kit/convert";
+import { fromNodes, parseNodes, parseSubscriptionDoc } from "../kit/convert";
+import { applyHostsToProxies, extractPrivateDns } from "../kit/common-dns";
 import { mergeParsed, dedupeNodeNames } from "../kit/merge";
 import assemble from "../kit/assemble";
 import assembleClash from "../kit/assemble-clash";
@@ -176,11 +177,35 @@ export function renderSubscription(store, resolved, options) {
 
     const warnings = [];
     const normalized = normalizeOptions(options, (store.getSettings() || {}).customSchemes);
-    // Each body is parsed twice on the sing-box path (once into nodes, once
-    // into outbounds); parseNodes is the expensive half and is memoised by the
-    // caller's snapshot, so keep one list and reuse it.
+    const allPrivateDns = [];
+    const aggregatedProxyPolicy = {};
+    const aggregatedProxyFakeIpFilter = [];
+
+    // Each body is parsed into nodes and metadata (dns / hosts).
+    // Hosts rewriting applies to nodes directly so that IPs are used with original SNI preserved.
     const parsedNodes = withSnapshots.map((entry) => {
-        let nodes = parseNodes(entry.text);
+        const docInfo = parseSubscriptionDoc(entry.text);
+        let nodes = docInfo.nodes;
+
+        // Apply hosts mapping to nodes if present in subscription doc (safe IP rewriting preserving SNI)
+        if (docInfo.hosts) {
+            nodes = applyHostsToProxies(nodes, docInfo.hosts);
+        }
+
+        // Extract genuine private DNS and node policies from this source
+        if (docInfo.dns) {
+            const extracted = extractPrivateDns(docInfo.dns, nodes, docInfo.hosts);
+            if (extracted.privateDNS && extracted.privateDNS.length > 0) {
+                allPrivateDns.push(...extracted.privateDNS);
+            }
+            if (extracted.proxyServerPolicy) {
+                Object.assign(aggregatedProxyPolicy, extracted.proxyServerPolicy);
+            }
+            if (extracted.proxyFakeIpFilter) {
+                aggregatedProxyFakeIpFilter.push(...extracted.proxyFakeIpFilter);
+            }
+        }
+
         // Filter out excluded nodes for this source
         const excluded = entry.source.excludedNodes;
         if (Array.isArray(excluded) && excluded.length > 0) {
@@ -218,6 +243,13 @@ export function renderSubscription(store, resolved, options) {
         }
         return nodes;
     });
+
+    normalized.extractedDns = {
+        privateDNS: [...new Set(allPrivateDns)],
+        proxyServerPolicy: aggregatedProxyPolicy,
+        proxyFakeIpFilter: [...new Set(aggregatedProxyFakeIpFilter)],
+    };
+
     const nodeCount = parsedNodes.reduce((sum, list) => sum + list.length, 0);
     if (nodeCount === 0) {
         return errorResponse(409, "stored snapshot contains no supported nodes");

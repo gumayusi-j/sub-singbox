@@ -136,6 +136,16 @@ export const BASE_RULE_PROVIDERS = {
         url: "https://static-file-global.353355.xyz/rules/cn-additional-list.mrs",
         path: "./ruleset/cn-additional-list.mrs",
     },
+    fakeip_filter: {
+        ...ruleProviderCommonDomain,
+        url: `${RULE_SET_BASE_URL}geosite/fakeip-filter.mrs`,
+        path: "./ruleset/fakeip-filter.mrs",
+    },
+    douyin: {
+        ...ruleProviderCommonDomain,
+        url: `${RULE_SET_BASE_URL}geosite/douyin.mrs`,
+        path: "./ruleset/douyin.mrs",
+    },
 };
 
 // Prefix routing rules: internal & CN services routed directly
