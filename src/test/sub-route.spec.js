@@ -58,7 +58,20 @@ function listen(server) {
 }
 
 function closeServer(server) {
-    return new Promise((resolve) => server.close(resolve));
+    if (!server) return Promise.resolve();
+    if (typeof server.closeAllConnections === "function") {
+        server.closeAllConnections();
+    }
+    if (typeof server.closeIdleConnections === "function") {
+        server.closeIdleConnections();
+    }
+    return new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(), 1000);
+        server.close(() => {
+            clearTimeout(timer);
+            resolve();
+        });
+    });
 }
 
 // A live server over a temp store, pre-seeded with one refreshed source.
