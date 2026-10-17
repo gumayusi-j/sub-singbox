@@ -1,4 +1,8 @@
+packages:
+  - '.'
+
 # pnpm >=10 settings live here (not in package.json).
 # esbuild ships a platform binary via a postinstall script; allow it.
 allowBuilds:
   esbuild: true
+
