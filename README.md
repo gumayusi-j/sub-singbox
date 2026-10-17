@@ -1,5 +1,9 @@
 # sub-singbox
 
+[![CI](https://github.com/gumayusi-j/sub-singbox/actions/workflows/ci.yml/badge.svg)](https://github.com/gumayusi-j/sub-singbox/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
+
 把 Sub-Store 的代理解析/归一化内核抽出来，加上"完整 sing-box 配置"拼装能力的最小独立工具（Node 库 + Web）。
 
 链路：`导入(HTTP 订阅 / 粘贴文本 / YAML·JSON 节点列表)` → `解析+隐式归一化修复` → `sing-box outbounds/endpoints` → `拼装完整 sing-box 配置`。

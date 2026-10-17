@@ -157,4 +157,63 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
             expect(directRules.length).to.be.greaterThan(0);
         });
     });
+
+    describe("Zero-width character stripping & rate matching precision", function () {
+        it("strips invisible characters while preserving emoji presentation", function () {
+            const { toMatchableName } = require("@/kit/mihomo-smart/constants");
+            expect(toMatchableName("H\u200BK\u200B 01")).to.equal("HK 01");
+            expect(toMatchableName("\u3164SG\uFFA0 03")).to.equal("SG 03");
+            expect(toMatchableName("\uFEFFHK\u2060 01")).to.equal("HK 01");
+            expect(toMatchableName("H\u200CK\u200DJ")).to.equal("H\u200CK\u200DJ"); // ZWJ / ZWNJ preserved
+            expect(toMatchableName("❤️\uFE0F HK")).to.equal("❤️\uFE0F HK"); // Variation selector preserved
+        });
+
+        it("correctly classifies proxies with zero-width characters and preserves raw name", function () {
+            const zwHk = "H\u200BK\u200B 01";
+            const zwNotice = "官\u200B网\u200B公\u200B告：剩余流量";
+            const zwProxiesYaml = `proxies:
+  - name: "${zwHk}"
+    type: ss
+    server: 1.1.1.1
+    port: 8388
+    cipher: aes-128-gcm
+    password: test
+  - name: "${zwNotice}"
+    type: ss
+    server: 2.2.2.2
+    port: 8388
+    cipher: aes-128-gcm
+    password: test
+  - name: "🇯🇵 节点 1.0倍率"
+    type: ss
+    server: 3.3.3.3
+    port: 8388
+    cipher: aes-128-gcm
+    password: test
+  - name: "🇺🇸 节点 0.2x 省流"
+    type: ss
+    server: 4.4.4.4
+    port: 8388
+    cipher: aes-128-gcm
+    password: test
+`;
+            const preset = findPreset("mihomo-smart");
+            const configYaml = assembleClash(zwProxiesYaml, preset);
+
+            // Notice with zero-width chars should still be dropped
+            expect(configYaml).to.not.include("剩余流量");
+            expect(configYaml).to.not.include("官网公告");
+
+            // Zero-width node name should be matched to HK region group, preserving raw name with \u200B
+            expect(configYaml).to.include('- name: "🇭🇰 香港"');
+            const hkSection = configYaml.split('- name: "🇭🇰 香港"')[1]?.split('- name:')[0] || "";
+            expect(hkSection).to.include(`- "${zwHk}"`);
+
+            // 1.0x should NOT be classified as low-rate node
+            const lowRateSection = configYaml.split('- name: "💰 低倍率节点"')[1]?.split('- name:')[0] || "";
+            expect(lowRateSection).to.not.include("1.0倍率");
+            expect(lowRateSection).to.include("0.2x 省流");
+        });
+    });
 });
+

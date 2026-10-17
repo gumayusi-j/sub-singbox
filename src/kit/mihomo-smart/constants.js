@@ -43,6 +43,17 @@ export const REGION_DEFINITIONS = [
     },
 ];
 
+// Invisible / zero-width characters: some airports insert these to disrupt regex matching.
+// Intentionally preserves semantic characters:
+// - U+200C / U+200D (ZWNJ / ZWJ): emoji sequences and cursive joins
+// - U+FE00–U+FE0F: emoji variation selectors
+export const INVISIBLE_CHARS_REGEX =
+    /[\u00AD\u180E\u200B\u200E\u200F\u202A-\u202E\u2060-\u206F\uFEFF\u115F\u1160\u3164\uFFA0]/g;
+
+export function toMatchableName(name) {
+    return typeof name === "string" ? name.replace(INVISIBLE_CHARS_REGEX, "") : name;
+}
+
 // Rate region definitions
 export const LOW_RATE_REGION_NAME = "💰 低倍率节点";
 export const HIGH_RATE_REGION_NAME = "💎 高倍率节点";
@@ -51,7 +62,7 @@ export const RATE_REGION_DEFINITIONS = [
     {
         name: LOW_RATE_REGION_NAME,
         regex:
-            /^(?!.*(?:剩|期)).*(?:(?<!\d)0(\.[0-5]|[*×✕✖⨯⨉x倍]))|(?:[*×✕✖⨯⨉x]0)|^(?!.*(?:客户端|软件)).*下载|低倍|免费|(?<![A-Za-z])free(?![A-Za-z])/i,
+            /^(?!.*(?:剩|期)).*(?:(?<![\d.])0(\.[0-5]|[*×✕✖⨯⨉x倍]))|(?:[*×✕✖⨯⨉x]0)|^(?!.*(?:客户端|软件)).*下载|低倍|免费|(?<![A-Za-z])free(?![A-Za-z])/i,
         icon: `${ICON_BASE_URL}Available.svg`,
     },
     {

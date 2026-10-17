@@ -18,6 +18,7 @@ import {
     GROUP_BASE_OPTION,
     LOW_RATE_REGION_NAME,
     HIGH_RATE_REGION_NAME,
+    toMatchableName,
 } from "./constants";
 
 function q(s) {
@@ -38,7 +39,8 @@ function dedupe(arr) {
 export function filterNodeNames(nodeNames) {
     return (nodeNames || []).filter((name) => {
         if (!name || typeof name !== "string") return false;
-        return !EXCLUDE_FILTER.test(name);
+        const matchableName = toMatchableName(name);
+        return !EXCLUDE_FILTER.test(matchableName);
     });
 }
 
@@ -75,18 +77,19 @@ function classifyNodes(nodeNames) {
     const highRateDef = RATE_REGION_DEFINITIONS.find((r) => r.name === HIGH_RATE_REGION_NAME);
 
     for (const name of nodeNames) {
+        const matchableName = toMatchableName(name);
         let matchedRegion = false;
         for (const r of REGION_DEFINITIONS) {
-            if (r.regex.test(name)) {
+            if (r.regex.test(matchableName)) {
                 regionMap[r.name].push(name);
                 matchedRegion = true;
             }
         }
 
-        if (lowRateDef && lowRateDef.regex.test(name)) {
+        if (lowRateDef && lowRateDef.regex.test(matchableName)) {
             lowRateNodes.push(name);
         }
-        if (highRateDef && highRateDef.regex.test(name)) {
+        if (highRateDef && highRateDef.regex.test(matchableName)) {
             highRateNodes.push(name);
         }
 
