@@ -54,9 +54,9 @@ export function toMatchableName(name) {
     return typeof name === "string" ? name.replace(INVISIBLE_CHARS_REGEX, "") : name;
 }
 
-// Rate region definitions
 export const LOW_RATE_REGION_NAME = "💰 低倍率节点";
 export const HIGH_RATE_REGION_NAME = "💎 高倍率节点";
+export const MANUAL_SELECT_NAME = "🎯 手动选择";
 
 export const RATE_REGION_DEFINITIONS = [
     {

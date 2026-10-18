@@ -69,6 +69,7 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
 
             // 2. Base groups (unified, clean 🚀 节点选择, ♻️ 自动选择, ⚖️ 负载均衡)
             expect(configYaml).to.include('- name: "🚀 节点选择"');
+            expect(configYaml).to.include('- name: "🎯 手动选择"');
             expect(configYaml).to.include('- name: "♻️ 自动选择"');
             expect(configYaml).to.include('- name: "⚖️ 负载均衡"');
             expect(configYaml).to.include("type: load-balance");
@@ -131,6 +132,7 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
             const tags = config.outbounds.map((o) => o.tag);
 
             expect(tags).to.include("🚀 节点选择");
+            expect(tags).to.include("🎯 手动选择");
             expect(tags).to.include("♻️ 自动选择");
             expect(tags).to.include("🇭🇰 香港");
             expect(tags).to.include("🇯🇵 日本");

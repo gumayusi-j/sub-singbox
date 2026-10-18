@@ -18,6 +18,7 @@ import {
     GROUP_BASE_OPTION,
     LOW_RATE_REGION_NAME,
     HIGH_RATE_REGION_NAME,
+    MANUAL_SELECT_NAME,
     toMatchableName,
 } from "./constants";
 
@@ -247,7 +248,7 @@ export function buildMihomoSmartClash(proxyYaml, options) {
         availableRegionNames.push(HIGH_RATE_REGION_NAME);
     }
 
-    // 2. Base Groups (🚀 节点选择, ♻️ 自动选择, ⚖️ 负载均衡)
+    // 2. Base Groups (🚀 节点选择, 🎯 手动选择, ♻️ 自动选择, ⚖️ 负载均衡)
     const baseGroupObjects = [
         {
             ...GROUP_BASE_OPTION,
@@ -258,8 +259,15 @@ export function buildMihomoSmartClash(proxyYaml, options) {
                 "♻️ 自动选择",
                 "⚖️ 负载均衡",
                 ...availableRegionNames,
-                ...validNames,
+                MANUAL_SELECT_NAME,
             ]),
+        },
+        {
+            ...GROUP_BASE_OPTION,
+            name: MANUAL_SELECT_NAME,
+            type: "select",
+            icon: `${ICON_BASE_URL}Static.svg`,
+            proxies: validNames,
         },
         {
             ...GROUP_BASE_OPTION,
@@ -521,8 +529,13 @@ export const MIHOMO_SMART_PRESET = {
                 "[]🇺🇸 美国",
                 "[]🇸🇬 新加坡",
                 "[]🇹🇼 台湾",
-                ".*",
+                "[]🎯 手动选择",
             ],
+        },
+        {
+            tag: "🎯 手动选择",
+            kind: "select",
+            memberTokens: [".*"],
         },
         {
             tag: "♻️ 自动选择",
