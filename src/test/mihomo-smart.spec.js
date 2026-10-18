@@ -86,7 +86,7 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
             expect(configYaml).to.include('- name: "🇯🇵 日本"');
             expect(configYaml).to.include('- name: "🇺🇸 美国"');
             expect(configYaml).to.include('- name: "🇸🇬 新加坡"');
-            expect(configYaml).to.include('- name: "🇹🇼 台湾"');
+            expect(configYaml).to.include('- name: "🧋 台湾"');
             expect(configYaml).to.include('- name: "🌍 其他节点"');
             expect(configYaml).to.not.include('- name: "香港-自动选择"');
             expect(configYaml).to.not.include('- name: "其他节点-自动选择"');
@@ -137,6 +137,7 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
             expect(tags).to.include("🇭🇰 香港");
             expect(tags).to.include("🇯🇵 日本");
             expect(tags).to.include("🇺🇸 美国");
+            expect(tags).to.include("🧋 台湾");
             expect(tags).to.include("💬 AI");
             expect(tags).to.include("📹 YouTube");
             expect(tags).to.include("direct");

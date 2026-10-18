@@ -528,7 +528,7 @@ export const MIHOMO_SMART_PRESET = {
                 "[]🇯🇵 日本",
                 "[]🇺🇸 美国",
                 "[]🇸🇬 新加坡",
-                "[]🇹🇼 台湾",
+                "[]🧋 台湾",
                 "[]🎯 手动选择",
             ],
         },
@@ -579,10 +579,10 @@ export const MIHOMO_SMART_PRESET = {
             ],
         },
         {
-            tag: "🇹🇼 台湾",
+            tag: "🧋 台湾",
             kind: "url-test",
             memberTokens: [
-                "🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan",
+                "🧋|🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan",
                 "http://www.gstatic.com/generate_204",
                 "300,,50",
             ],

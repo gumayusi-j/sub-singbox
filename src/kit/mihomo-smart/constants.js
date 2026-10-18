@@ -36,9 +36,9 @@ export const REGION_DEFINITIONS = [
         icon: `${ICON_BASE_URL}Singapore.svg`,
     },
     {
-        name: "🇹🇼 台湾",
-        flag: "🇹🇼",
-        regex: /🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan/i,
+        name: "🧋 台湾",
+        flag: "🧋",
+        regex: /🧋|🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan/i,
         icon: `${ICON_BASE_URL}Taiwan.svg`,
     },
 ];
