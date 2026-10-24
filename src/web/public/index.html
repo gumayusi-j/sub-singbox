@@ -2481,18 +2481,33 @@ var COUNTRY_MAP = {
 var CLIENT_PROTOCOLS = {
   "sing-box":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls","snell","socks","http"],
   "clash":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
-  "surge":["shadowsocks","vmess","vless","trojan","tuic","wireguard","snell","socks","http"],
-  "loon":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard","socks","http"],
-  "quantumultx":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","http"],
-  "shadowrocket":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
+  "surge":["shadowsocks","vmess","vless","trojan","tuic","wireguard","snell","socks","http","anytls"],
+  "loon":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard","socks","http","anytls"],
+  "quantumultx":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","http","anytls"],
+  "shadowrocket":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http","anytls"],
   "stash":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
   "surfboard":["shadowsocks","vmess","vless","trojan","tuic","wireguard","socks","http"],
   "v2ray":["shadowsocks","vmess","vless","trojan"],
-  "egern":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard"],
-  "hiddify":["shadowsocks","vmess","vless","trojan","hysteria2","tuic","wireguard"],
+  "egern":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard","anytls","snell","ssh","socks","http"],
+  "hiddify":["shadowsocks","vmess","vless","trojan","hysteria2","tuic","wireguard","anytls"],
   "karing":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"],
-  "uri":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"]
+  "uri":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls"]
 };
+
+function isClientSupportingProto(client, type) {
+  if (!client) return true;
+  var supported = CLIENT_PROTOCOLS[client];
+  if (!supported) return true;
+  if (!type) return false;
+  if (supported.indexOf(type) !== -1) return true;
+  var norm = type;
+  if (norm === 'ss') norm = 'shadowsocks';
+  else if (norm === 'shadowsocks') norm = 'ss';
+  else if (norm === 'ssr') norm = 'shadowsocksr';
+  else if (norm === 'socks5') norm = 'socks';
+  else if (norm === 'https') norm = 'http';
+  return supported.indexOf(norm) !== -1;
+}
 
 // Protocol -> identity family and short label. The family picks the colour on
 // chips and tiles; the label is what fits inside a 38px tile.
@@ -2663,10 +2678,7 @@ var app = Vue.createApp({
     var filteredNodes = Vue.computed(function() {
       var nodes = (last.value && last.value.nodes) || [];
       if (!exportTarget.value) return nodes;
-      var supported = CLIENT_PROTOCOLS[exportTarget.value];
-      if (!supported) return nodes;
-      var set = {}; supported.forEach(function(p){ set[p]=true; });
-      return nodes.filter(function(n){ return set[n.type]; });
+      return nodes.filter(function(n){ return isClientSupportingProto(exportTarget.value, n.type); });
     });
     var hasPing = Vue.computed(function() { return Object.keys(pingResults).length > 0; });
     var cfgJson = Vue.computed(function() {
@@ -2690,12 +2702,8 @@ var app = Vue.createApp({
         last.value.warnings.forEach(function(w) { warns.push(w && w.message ? w.message : w); });
       }
       if (exportTarget.value && last.value && last.value.nodes) {
-        var supported = CLIENT_PROTOCOLS[exportTarget.value];
-        if (supported) {
-          var set = {}; supported.forEach(function(p){ set[p]=true; });
-          var removed = last.value.nodes.filter(function(n){ return !set[n.type]; }).length;
-          if (removed > 0) warns.push('客户端「' + exportTarget.value + '」不支持 ' + removed + ' 个节点的协议，已自动过滤。');
-        }
+        var removed = last.value.nodes.filter(function(n){ return !isClientSupportingProto(exportTarget.value, n.type); }).length;
+        if (removed > 0) warns.push('客户端「' + exportTarget.value + '」不支持 ' + removed + ' 个节点的协议，已自动过滤。');
       }
       return warns;
     });
@@ -2721,11 +2729,7 @@ var app = Vue.createApp({
       var serverSkipped = ((last.value && last.value.skippedNodes) || []).length;
       var clientFiltered = 0;
       if (exportTarget.value && last.value && last.value.nodes) {
-        var supported = CLIENT_PROTOCOLS[exportTarget.value];
-        if (supported) {
-          var set = {}; supported.forEach(function(p){ set[p]=true; });
-          clientFiltered = last.value.nodes.filter(function(n){ return !set[n.type]; }).length;
-        }
+        clientFiltered = last.value.nodes.filter(function(n){ return !isClientSupportingProto(exportTarget.value, n.type); }).length;
       }
       return serverSkipped + clientFiltered;
     });
@@ -3451,11 +3455,7 @@ var app = Vue.createApp({
         regionFilter.value = '';
         var removed = 0;
         if (exportTarget.value && last.value.nodes) {
-          var supported = CLIENT_PROTOCOLS[exportTarget.value];
-          if (supported) {
-            var set = {}; supported.forEach(function(p){ set[p]=true; });
-            removed = last.value.nodes.filter(function(n){ return !set[n.type]; }).length;
-          }
+          removed = last.value.nodes.filter(function(n){ return !isClientSupportingProto(exportTarget.value, n.type); }).length;
         }
         var serverSkipped = (last.value.skippedNodes || []).length;
         var parts = ['完成：' + filteredNodes.value.length + ' 个节点'];
