@@ -2175,9 +2175,17 @@ function URI_AnyTLS() {
                 }
             }
         }
-        if (['tcp'].includes(proxy.network) && !proxy['reality-opts']) {
+        // anytls has no transport-layer switching; strip any network value the
+        // VLESS parser may have left behind (e.g. type=tcp from the query
+        // string). Keep network only when it carries reality-opts, which some
+        // implementations encode under a "tcp" network key.
+        if (!proxy['reality-opts']) {
             delete proxy.network;
             delete proxy.security;
+        } else if (proxy.network === 'tcp') {
+            // reality-opts present but network is explicitly tcp: clear network
+            // so downstream producers see an unambiguous bare-tcp+reality node.
+            delete proxy.network;
         }
         return proxy;
     };

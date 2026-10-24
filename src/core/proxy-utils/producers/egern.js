@@ -93,12 +93,9 @@ export default function Egern_Producer() {
                 ) {
                     return false;
                 } else if (
-                    ['anytls'].includes(proxy.type) &&
-                    proxy.network &&
-                    !['tcp'].includes(proxy.network)
-                ) {
-                    return false;
-                } else if (
+                    // anytls has no transport-layer switching; a non-tcp
+                    // network field is invalid data from the source — the node
+                    // is kept and the bad field is stripped in the map step.
                     ['ws'].includes(proxy.network) &&
                     proxy['ws-opts']?.['v2ray-http-upgrade']
                 ) {
@@ -274,6 +271,9 @@ export default function Egern_Producer() {
                             websocket: proxy.websocket,
                         };
                     } else if (proxy.type === 'anytls') {
+                        // anytls has no transport-layer switching; strip any
+                        // network value that leaked in from the source document
+                        // (e.g. a Clash YAML with a stray `network:` field).
                         proxy = {
                             type: 'anytls',
                             name: proxy.name,
