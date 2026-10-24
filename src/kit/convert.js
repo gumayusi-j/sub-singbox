@@ -7,7 +7,7 @@ import { safeLoad } from "@/utils/yaml";
 // ingest), while a Clash client UA yields a Clash `proxies:` node list - the
 // format this tool parses. Aligned with upstream Sub-Store's default
 // (backend/src/utils/download.js). Override via options.userAgent.
-export const DEFAULT_USER_AGENT = "clash.meta/v1.19.23";
+export const DEFAULT_USER_AGENT = "clash.meta/v1.19.33";
 
 export const DEFAULT_TIMEOUT_MS = 30000;
 

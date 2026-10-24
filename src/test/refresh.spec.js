@@ -177,7 +177,7 @@ describe("subscription refresh — User-Agent fallback", function () {
         const result = await refreshSource(ctx.store, source.id, ctx.deps);
         expect(result.ok).to.equal(true);
         expect(fetchImpl.calls).to.have.length(2);
-        expect(fetchImpl.calls[0].headers[UA_HEADER]).to.equal("clash.meta/v1.19.23");
+        expect(fetchImpl.calls[0].headers[UA_HEADER]).to.equal("clash.meta/v1.19.33");
         expect(fetchImpl.calls[1].headers[UA_HEADER]).to.match(/^Shadowrocket\//);
         expect(ctx.store.get(source.id).lastError).to.equal(null);
     });
