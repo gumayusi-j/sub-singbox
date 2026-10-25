@@ -19,6 +19,7 @@ import {
     LOW_RATE_REGION_NAME,
     HIGH_RATE_REGION_NAME,
     MANUAL_SELECT_NAME,
+    OTHER_REGION_NAME,
     toMatchableName,
 } from "./constants";
 
@@ -215,13 +216,13 @@ export function buildMihomoSmartClash(proxyYaml, options) {
     if (otherNodes.length > 0) {
         generatedRegionGroups.push({
             ...GROUP_BASE_OPTION,
-            name: "🌍 其他节点",
+            name: OTHER_REGION_NAME,
             type: "url-test",
             tolerance: 50,
             icon: `${ICON_BASE_URL}WorldMap.svg`,
             proxies: otherNodes,
         });
-        availableRegionNames.push("🌍 其他节点");
+        availableRegionNames.push(OTHER_REGION_NAME);
     }
 
     // Rate groups if present
@@ -529,6 +530,8 @@ export const MIHOMO_SMART_PRESET = {
                 "[]🇺🇸 美国",
                 "[]🇸🇬 新加坡",
                 "[]🧋 台湾",
+                "[]🇰🇷 韩国",
+                "[]🌍 其他地区",
                 "[]🎯 手动选择",
             ],
         },
@@ -588,6 +591,24 @@ export const MIHOMO_SMART_PRESET = {
             ],
         },
         {
+            tag: "🇰🇷 韩国",
+            kind: "url-test",
+            memberTokens: [
+                "🇰🇷|韩国|韓國|首尔|首爾|(?<![A-Za-z])(KOR?|KR)(?![A-Za-z])|korea",
+                "http://www.gstatic.com/generate_204",
+                "300,,50",
+            ],
+        },
+        {
+            tag: "🌍 其他地区",
+            kind: "url-test",
+            memberTokens: [
+                "^(?!.*(?:🇭🇰|香港|(?<![A-Za-z])HKG?(?![A-Za-z])|hong\\s*kong|🇯🇵|日本|东京|大阪|京都|(?<![A-Za-z])JPN?(?![A-Za-z])|japan|🇺🇸|美国|纽约|洛杉矶|旧金山|芝加哥|休斯顿|迈阿密|西雅图|波士顿|华盛顿|(?<![A-Za-z])USA?(?![A-Za-z])|america|🇸🇬|新加坡|狮城|(?<![A-Za-z])SGP?(?![A-Za-z])|singapore|🧋|🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan|🇰🇷|韩国|韓國|首尔|首爾|(?<![A-Za-z])(KOR?|KR)(?![A-Za-z])|korea)).*$",
+                "http://www.gstatic.com/generate_204",
+                "300,,50",
+            ],
+        },
+        {
             tag: "💬 AI",
             kind: "select",
             memberTokens: ["[]🇺🇸 美国", "[]🇯🇵 日本", "[]🇸🇬 新加坡", "[]🚀 节点选择", "[]♻️ 自动选择"],
@@ -600,7 +621,7 @@ export const MIHOMO_SMART_PRESET = {
         {
             tag: "🎥 Netflix",
             kind: "select",
-            memberTokens: ["[]🚀 节点选择", "[]🇸🇬 新加坡", "[]🇭🇰 香港", "[]🇯🇵 日本", "[]🇺🇸 美国"],
+            memberTokens: ["[]🚀 节点选择", "[]🇸🇬 新加坡", "[]🇭🇰 香港", "[]🇯🇵 日本", "[]🇺🇸 美国", "[]🇰🇷 韩国"],
         },
         {
             tag: "📲 Telegram",

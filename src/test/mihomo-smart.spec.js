@@ -34,6 +34,12 @@ const SAMPLE_PROXIES_YAML = `proxies:
     port: 8388
     cipher: aes-128-gcm
     password: test
+  - name: "🇰🇷 韩国 01"
+    type: ss
+    server: 8.8.8.8
+    port: 8388
+    cipher: aes-128-gcm
+    password: test
   - name: "德国 01"
     type: ss
     server: 6.6.6.6
@@ -87,7 +93,9 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
             expect(configYaml).to.include('- name: "🇺🇸 美国"');
             expect(configYaml).to.include('- name: "🇸🇬 新加坡"');
             expect(configYaml).to.include('- name: "🧋 台湾"');
-            expect(configYaml).to.include('- name: "🌍 其他节点"');
+            expect(configYaml).to.include('- name: "🇰🇷 韩国"');
+            expect(configYaml).to.include('- name: "🌍 其他地区"');
+            expect(configYaml).to.not.include('- name: "🌍 其他节点"');
             expect(configYaml).to.not.include('- name: "香港-自动选择"');
             expect(configYaml).to.not.include('- name: "其他节点-自动选择"');
 
@@ -137,7 +145,10 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
             expect(tags).to.include("🇭🇰 香港");
             expect(tags).to.include("🇯🇵 日本");
             expect(tags).to.include("🇺🇸 美国");
+            expect(tags).to.include("🇸🇬 新加坡");
             expect(tags).to.include("🧋 台湾");
+            expect(tags).to.include("🇰🇷 韩国");
+            expect(tags).to.include("🌍 其他地区");
             expect(tags).to.include("💬 AI");
             expect(tags).to.include("📹 YouTube");
             expect(tags).to.include("direct");

@@ -41,6 +41,12 @@ export const REGION_DEFINITIONS = [
         regex: /🧋|🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan/i,
         icon: `${ICON_BASE_URL}Taiwan.svg`,
     },
+    {
+        name: "🇰🇷 韩国",
+        flag: "🇰🇷",
+        regex: /🇰🇷|韩国|韓國|首尔|首爾|(?<![A-Za-z])(KOR?|KR)(?![A-Za-z])|korea/i,
+        icon: "https://cdn.jsdmirror.com/gh/Koolson/Qure@master/IconSet/Color/Korea.png",
+    },
 ];
 
 // Invisible / zero-width characters: some airports insert these to disrupt regex matching.
@@ -57,6 +63,7 @@ export function toMatchableName(name) {
 export const LOW_RATE_REGION_NAME = "💰 低倍率节点";
 export const HIGH_RATE_REGION_NAME = "💎 高倍率节点";
 export const MANUAL_SELECT_NAME = "🎯 手动选择";
+export const OTHER_REGION_NAME = "🌍 其他地区";
 
 export const RATE_REGION_DEFINITIONS = [
     {
