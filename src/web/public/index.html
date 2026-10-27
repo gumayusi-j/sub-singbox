@@ -2167,7 +2167,7 @@ pre.code-block {
               <div class="ctrl-group">
                 <span class="ctrl-label">输出形态</span>
                 <el-radio-group v-model="exportOut" @change="onOutModeChange">
-                  <el-radio-button value="config">完整配置 (含规则与分组)</el-radio-button>
+                  <el-radio-button value="config" :disabled="isTargetInherentlyNodeOnly(exportTarget)">完整配置 (含规则与分组)</el-radio-button>
                   <el-radio-button value="outbounds">仅节点列表 (Provider)</el-radio-button>
                 </el-radio-group>
               </div>
@@ -3745,10 +3745,7 @@ var app = Vue.createApp({
         genStatus.value = '生成失败：'+(e.message||e); genStatusType.value = 'err';
       }
       generating.value = false;
-      // Auto-sync to Gist if configured
-      if (gistId.value && githubToken.value && last.value) {
-        syncToGist();
-      }
+      // Gist sync is manually triggered by user via syncToGist() button to prevent unwanted duplicate file pushes during option toggling
     }
 
     // === GitHub Gist Sync ===
@@ -3757,11 +3754,11 @@ var app = Vue.createApp({
       'sing-box': 'singbox-config.json',
       'clash': 'clash-config.yaml',
       'surge': 'surge-config.sgmodule',
-      'loon': 'loon-config.conf',
-      'quantumultx': 'qx-config.conf',
+      'loon': 'loon-nodes.conf',
+      'quantumultx': 'qx-nodes.conf',
       'shadowrocket': 'shadowrocket-config.conf',
       'stash': 'stash-config.yaml',
-      'surfboard': 'surfboard-config.conf',
+      'surfboard': 'surfboard-nodes.conf',
       'v2ray': 'v2ray-config.json',
       'egern': 'egern-config.yaml',
       'hiddify': 'hiddify-config.json',
@@ -3801,7 +3798,7 @@ var app = Vue.createApp({
       gistStatusType.value = '';
 
       var targetKey = exportTarget.value || 'sing-box';
-      var isOutbounds = exportOut.value === 'outbounds';
+      var isOutbounds = exportOut.value === 'outbounds' || isTargetInherentlyNodeOnly(targetKey);
       var map = isOutbounds ? GIST_NODES_FILE_MAP : GIST_FILE_MAP;
       var baseName = map[targetKey] || (isOutbounds ? targetKey + '-nodes.yaml' : targetKey + '-config.json');
       // Prefix with source name so different subscriptions don't overwrite each other.
@@ -4037,7 +4034,7 @@ var app = Vue.createApp({
     function downloadConfig() {
       if (!last.value) return;
       var targetKey = exportTarget.value || 'sing-box';
-      var isOutbounds = exportOut.value === 'outbounds';
+      var isOutbounds = exportOut.value === 'outbounds' || isTargetInherentlyNodeOnly(targetKey);
       var map = isOutbounds ? GIST_NODES_FILE_MAP : GIST_FILE_MAP;
       var baseName = map[targetKey] || (isOutbounds ? targetKey + '-nodes.yaml' : targetKey + '-config.json');
       var sourceName = '';
@@ -4107,6 +4104,10 @@ var app = Vue.createApp({
         publicUrlHint.value = '已改为按客户端 User-Agent 自动识别。';
       }
       publicUrlHintType.value = '';
+      if (isTargetInherentlyNodeOnly(exportTarget.value)) {
+        exportOut.value = 'outbounds';
+        lsSave(STORE.exportOut, 'outbounds');
+      }
       // Auto-regenerate when target changes and there are enabled sources.
       if (last.value && enabledSubs.value.length > 0) {
         generate();
