@@ -548,7 +548,9 @@ html[data-theme="dark"] .page-head h1 {
   border-color: transparent;
   color: var(--on-accent);
 }
-.btn-primary:hover { background: var(--accent-hover); }
+.btn-danger-soft { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+    .btn-danger-soft:hover { background: var(--danger); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
 
 .btn-ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
@@ -2464,14 +2466,18 @@ pre.code-block {
                :class="gistStatusType === 'ok' ? 'is-ok' : gistStatusType === 'err' ? 'is-danger' : ''">{{ gistStatus }}</p>
 
             <!-- Gist file download links -->
-            <div v-if="gistFiles.length" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke-soft)">
-              <p style="font-size:12.5px;font-weight:600;color:var(--text-2);margin:0 0 8px">Gist 文件下载直链（永久最新）</p>
+            <div v-if="gistFiles.length || gistId" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke-soft)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 8px">
+                <p style="font-size:12.5px;font-weight:600;color:var(--text-2);margin:0">Gist 文件下载直链（永久最新）</p>
+                <button v-if="gistId" class="btn btn-xs" type="button" @click="refreshGistFiles" :disabled="gistSyncing" title="从 GitHub 刷新获取当前 Gist 中的文件列表">刷新列表</button>
+              </div>
               <div v-for="f in gistFiles" :key="f.name"
                    style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px">
                 <span class="chip chip-accent" style="font-family:var(--font-mono)">{{ f.name }}</span>
                 <span class="mono" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:11px">{{ f.rawUrl }}</span>
                 <button class="btn btn-sm" type="button" @click="copyText(f.rawUrl)">复制</button>
                 <a :href="f.rawUrl" target="_blank" class="btn btn-sm" style="text-decoration:none">打开</a>
+                <button class="btn btn-sm btn-danger-soft" type="button" @click="deleteGistFile(f.name)" :disabled="gistSyncing" title="从 Gist 中彻底删除此文件">删除</button>
               </div>
             </div>
           </div>
@@ -3888,6 +3894,126 @@ var app = Vue.createApp({
       gistSyncing.value = false;
     }
 
+    async function refreshGistFiles() {
+      if (!gistId.value) return;
+      gistSyncing.value = true;
+      gistStatus.value = '正在刷新 Gist 文件列表...';
+      gistStatusType.value = '';
+      try {
+        var headers = { 'Accept': 'application/vnd.github+json' };
+        if (githubToken.value) {
+          headers['Authorization'] = 'Bearer ' + githubToken.value.trim();
+        }
+        var res = await fetch('https://api.github.com/gists/' + gistId.value.trim(), { headers: headers });
+        if (!res.ok) throw new Error('GitHub API 返回 ' + res.status);
+        var data = await res.json();
+        var files = [];
+        var ownerLogin = (data && data.owner && data.owner.login) ? data.owner.login : '';
+        var gid = (data && data.id) || (gistId.value || '').trim();
+        if (data && data.files) {
+          Object.keys(data.files).forEach(function(name) {
+            var f = data.files[name];
+            var raw = f.raw_url || '';
+            var user = ownerLogin;
+            var id = gid;
+            if ((!user || !id) && raw) {
+              var m = raw.match(/^https?:\/\/gist\.githubusercontent\.com\/([^/]+)\/([^/]+)\/raw\//i);
+              if (m) {
+                if (!user) user = m[1];
+                if (!id) id = m[2];
+              }
+            }
+            var stableRawUrl = '';
+            if (user && id) {
+              stableRawUrl = 'https://gist.githubusercontent.com/' + user + '/' + id + '/raw/' + encodeURIComponent(name);
+            } else if (raw) {
+              stableRawUrl = raw.replace(/\/raw\/[0-9a-f]{40}\//i, '/raw/');
+            } else {
+              stableRawUrl = raw;
+            }
+            files.push({ name: name, rawUrl: stableRawUrl, size: f.size });
+          });
+        }
+        gistFiles.value = files;
+        lsSave('sbx:gistFiles', files);
+        gistStatus.value = '已刷新 Gist 文件列表，共 ' + files.length + ' 个文件。';
+        gistStatusType.value = 'ok';
+      } catch (e) {
+        gistStatus.value = '刷新失败：' + (e.message || e);
+        gistStatusType.value = 'err';
+      } finally {
+        gistSyncing.value = false;
+      }
+    }
+
+    async function deleteGistFile(fileName) {
+      if (!confirm('确定从 GitHub Gist 中删除文件「' + fileName + '」吗？此操作无法撤销。')) return;
+      if (!gistId.value || !githubToken.value) {
+        gistStatus.value = '请先配置 GitHub Token 和 Gist ID';
+        gistStatusType.value = 'err';
+        return;
+      }
+      gistSyncing.value = true;
+      gistStatus.value = '正在从 Gist 删除 ' + fileName + '...';
+      gistStatusType.value = '';
+      try {
+        var url = 'https://api.github.com/gists/' + gistId.value.trim();
+        var body = { files: {} };
+        body.files[fileName] = null; // null deletes the file in GitHub Gist API
+        var res = await fetch(url, {
+          method: 'PATCH',
+          headers: {
+            'Accept': 'application/vnd.github+json',
+            'Authorization': 'Bearer ' + githubToken.value.trim(),
+            'X-GitHub-Api-Version': '2022-11-28',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          var errText = await res.text();
+          throw new Error('GitHub API 返回 ' + res.status + ': ' + errText);
+        }
+        var data = await res.json();
+        var files = [];
+        var ownerLogin = (data && data.owner && data.owner.login) ? data.owner.login : '';
+        var gid = (data && data.id) || (gistId.value || '').trim();
+        if (data && data.files) {
+          Object.keys(data.files).forEach(function(name) {
+            var f = data.files[name];
+            var raw = f.raw_url || '';
+            var user = ownerLogin;
+            var id = gid;
+            if ((!user || !id) && raw) {
+              var m = raw.match(/^https?:\/\/gist\.githubusercontent\.com\/([^/]+)\/([^/]+)\/raw\//i);
+              if (m) {
+                if (!user) user = m[1];
+                if (!id) id = m[2];
+              }
+            }
+            var stableRawUrl = '';
+            if (user && id) {
+              stableRawUrl = 'https://gist.githubusercontent.com/' + user + '/' + id + '/raw/' + encodeURIComponent(name);
+            } else if (raw) {
+              stableRawUrl = raw.replace(/\/raw\/[0-9a-f]{40}\//i, '/raw/');
+            } else {
+              stableRawUrl = raw;
+            }
+            files.push({ name: name, rawUrl: stableRawUrl, size: f.size });
+          });
+        }
+        gistFiles.value = files;
+        lsSave('sbx:gistFiles', files);
+        gistStatus.value = '已成功从 Gist 删除 ' + fileName;
+        gistStatusType.value = 'ok';
+      } catch (e) {
+        gistStatus.value = '删除失败：' + (e.message || e);
+        gistStatusType.value = 'err';
+      } finally {
+        gistSyncing.value = false;
+      }
+    }
+
     // Persist Gist config to localStorage and server file
     function saveGistConfig() {
       lsSave('sbx:gistId', gistId.value);
@@ -4357,7 +4483,7 @@ var app = Vue.createApp({
       showPublicUrlConfig, previewSearch, getFilteredPreviewNodes,
       last, generating, genStatus, genStatusType, activeOutTab,
       gistId, githubToken, gistSyncing, gistStatus, gistStatusType, gistFiles,
-      saveGistConfig, syncToGist,
+      saveGistConfig, syncToGist, deleteGistFile, refreshGistFiles,
       regionFilter, regionList, displayNodes,
       pingResults, pingRunning, pingStatus, pingStatusType,
       pageLoading, previewMap, getPreview, openCards, isOpen, toggleCard, onSourceCommand,
