@@ -75,7 +75,7 @@ const SUB_ROOT = "/sub/";
 // the response shape (a full config versus a bare outbounds fragment), so a
 // stray "outbounds" saved here would silently strip every client's config down
 // to that fragment, with no way back from the URL.
-const SETTINGS_KEYS = ["aclPreset", "nodeFilter", "ipv6Enabled"];
+const SETTINGS_KEYS = ["aclPreset", "nodeFilter", "ipv6Enabled", "nodePipeline"];
 
 // The options a client-visible render is made from: the saved server-side
 // defaults first, then whatever the caller overrides. /sub/<token> and
@@ -119,6 +119,9 @@ function sanitizeSettingsPatch(body, customSchemes) {
     }
     if (raw.ipv6Enabled !== undefined) {
         patch.ipv6Enabled = raw.ipv6Enabled === true;
+    }
+    if (raw.nodePipeline !== undefined) {
+        patch.nodePipeline = raw.nodePipeline && typeof raw.nodePipeline === "object" ? raw.nodePipeline : null;
     }
     return patch;
 }
@@ -227,6 +230,7 @@ export function createSubscriptionRouter(options) {
     const settings = config.subscription || {};
     const fetchImpl = options.fetchImpl;
     const now = options.now || (() => new Date());
+    const scheduler = options.scheduler;
 
     function apiGuard(req) {
         const required = config.apiToken;
@@ -296,6 +300,17 @@ export function createSubscriptionRouter(options) {
                 (t) => allowed.length === 0 || allowed.indexOf(t.id) !== -1,
             ),
             dataPath: store.dataPath,
+            collections: (model.collections || []).map((c) => ({
+                id: c.id,
+                name: c.name,
+                token: c.token,
+                subUrl: SUB_ROOT + c.token,
+                sourceIds: c.sourceIds,
+                options: c.options || {},
+                createdAt: c.createdAt,
+                updatedAt: c.updatedAt,
+            })),
+            scheduler: scheduler ? scheduler.getStatus() : null,
         };
     }
 
@@ -358,6 +373,25 @@ export function createSubscriptionRouter(options) {
             out: url.searchParams.get("out") || undefined,
             aclPreset: url.searchParams.get("acl") || undefined,
         });
+
+        const cleanParam = url.searchParams.get("clean");
+        const flagsParam = url.searchParams.get("flags");
+        const udpParam = url.searchParams.get("udp");
+        const skipCertParam = url.searchParams.get("skipCert");
+        const dedupeParam = url.searchParams.get("dedupe");
+
+        const pipelineOverrides = {};
+        if (cleanParam !== null) pipelineOverrides.cleanNotice = cleanParam === "1" || cleanParam === "true";
+        if (flagsParam !== null) pipelineOverrides.injectFlags = flagsParam === "1" || flagsParam === "true";
+        if (dedupeParam !== null) pipelineOverrides.dedupeAddress = dedupeParam === "1" || dedupeParam === "true";
+        if (udpParam !== null || skipCertParam !== null) {
+            pipelineOverrides.quickSettings = Object.assign({}, (options.nodePipeline && options.nodePipeline.quickSettings) || {});
+            if (udpParam !== null) pipelineOverrides.quickSettings.udp = udpParam === "1" || udpParam === "true";
+            if (skipCertParam !== null) pipelineOverrides.quickSettings.skipCertVerify = skipCertParam === "1" || skipCertParam === "true";
+        }
+        if (Object.keys(pipelineOverrides).length > 0) {
+            options.nodePipeline = Object.assign({}, options.nodePipeline || {}, pipelineOverrides);
+        }
         if (options.out === undefined) options.out = config.defaultOut;
         if (options.remoteDns === undefined) options.remoteDns = config.remoteDns;
 
@@ -644,6 +678,105 @@ export function createSubscriptionRouter(options) {
 
         // ---------------------------------------------------------------- misc
 
+        // ---- /api/collections ----------------------------------------------
+        if (pathname === "/api/collections" && method === "GET") {
+            const cols = store.listCollections().map((c) => ({
+                id: c.id,
+                name: c.name,
+                token: c.token,
+                subUrl: SUB_ROOT + c.token,
+                sourceIds: c.sourceIds,
+                options: c.options || {},
+                createdAt: c.createdAt,
+                updatedAt: c.updatedAt,
+            }));
+            sendJson(res, 200, { ok: true, data: { collections: cols } });
+            return;
+        }
+
+        if (pathname === "/api/collections" && method === "POST") {
+            const body = (await readJsonBody()) || {};
+            const created = store.addCollection({
+                name: body.name,
+                sourceIds: body.sourceIds,
+                options: body.options,
+            });
+            sendJson(res, 201, {
+                ok: true,
+                data: {
+                    collection: Object.assign({}, created, { subUrl: SUB_ROOT + created.token }),
+                },
+            });
+            return;
+        }
+
+        const colItemMatch = /^\/api\/collections\/([^/]+)(?:\/(rotate-token))?$/.exec(pathname);
+        if (colItemMatch) {
+            const colId = decodeURIComponent(colItemMatch[1]);
+            const action = colItemMatch[2];
+
+            if (action === "rotate-token" && method === "POST") {
+                const rotated = store.rotateCollectionToken(colId);
+                if (!rotated) {
+                    sendJson(res, 404, { ok: false, error: "collection not found" });
+                    return;
+                }
+                sendJson(res, 200, { ok: true, data: { subUrl: SUB_ROOT + rotated.token } });
+                return;
+            }
+
+            if (!action && (method === "PUT" || method === "PATCH")) {
+                const body = (await readJsonBody()) || {};
+                const updated = store.updateCollection(colId, body);
+                if (!updated) {
+                    sendJson(res, 404, { ok: false, error: "collection not found" });
+                    return;
+                }
+                sendJson(res, 200, {
+                    ok: true,
+                    data: {
+                        collection: Object.assign({}, updated, { subUrl: SUB_ROOT + updated.token }),
+                    },
+                });
+                return;
+            }
+
+            if (!action && method === "DELETE") {
+                const removed = store.removeCollection(colId);
+                sendJson(res, removed ? 200 : 404, { ok: removed });
+                return;
+            }
+        }
+
+        if (pathname === "/api/scheduler" && method === "GET") {
+            const status = scheduler ? scheduler.getStatus() : { enabled: false };
+            sendJson(res, 200, { ok: true, data: status });
+            return;
+        }
+
+        if (pathname === "/api/scheduler/run" && method === "POST") {
+            if (!scheduler) {
+                sendJson(res, 503, { ok: false, error: "scheduler not available" });
+                return;
+            }
+            const runResult = await scheduler.runJob();
+            sendJson(res, 200, { ok: true, data: runResult });
+            return;
+        }
+
+        if (pathname === "/api/scheduler/config" && method === "POST") {
+            if (!scheduler) {
+                sendJson(res, 503, { ok: false, error: "scheduler not available" });
+                return;
+            }
+            const body = (await readJsonBody()) || {};
+            if (body.intervalMinutes !== undefined) {
+                scheduler.setIntervalMinutes(body.intervalMinutes);
+            }
+            sendJson(res, 200, { ok: true, data: scheduler.getStatus() });
+            return;
+        }
+
         if (pathname === "/api/settings/rotate-token" && method === "POST") {
             const rotated = store.rotateToken(null);
             sendJson(res, 200, { ok: true, data: { subUrl: SUB_ROOT + rotated.token } });
@@ -917,6 +1050,7 @@ export function createSubscriptionRouter(options) {
             const options = renderOptionsFor(store, {
                 out: body.out || undefined,
                 aclPreset: bodyOptions.aclPreset,
+                nodePipeline: bodyOptions.nodePipeline || body.nodePipeline || undefined,
             });
             if (options.out === undefined) options.out = config.defaultOut;
             if (options.remoteDns === undefined) options.remoteDns = config.remoteDns;
@@ -984,6 +1118,8 @@ export function createSubscriptionRouter(options) {
             pathname === "/api/settings" ||
             pathname.startsWith("/api/settings/") ||
             pathname.startsWith("/api/schemes/") ||
+            pathname.startsWith("/api/collections") ||
+            pathname.startsWith("/api/scheduler") ||
             pathname === "/api/export";
         if (isApiRoute) {
             if (!apiGuard(req)) {

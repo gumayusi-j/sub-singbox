@@ -16,6 +16,7 @@ import assembleClash from "../kit/assemble-clash";
 import { assembleAcl } from "../kit/acl4ssr/build";
 import { findScheme } from "../kit/schemes";
 import { filterNodeNames, normalizeNodeFilter } from "../kit/nodes/filter";
+import { executeNodePipeline } from "../kit/nodes/pipeline";
 import { CompatError } from "../kit/compat";
 import { formatUserInfoHeader } from "./usage";
 
@@ -38,6 +39,9 @@ export function aggregateUsage(sources) {
     let total = null;
     let expire = null;
     const notices = [];
+    let webPageUrl = null;
+    let updateIntervalHours = null;
+    let planName = null;
     for (const source of sources) {
         const usage = source && source.usage;
         if (!usage) continue;
@@ -48,11 +52,14 @@ export function aggregateUsage(sources) {
             expire = expire == null ? usage.expire : Math.min(expire, usage.expire);
         }
         if (Array.isArray(usage.notices)) notices.push(...usage.notices);
+        if (!webPageUrl && usage.webPageUrl) webPageUrl = usage.webPageUrl;
+        if (!updateIntervalHours && usage.updateIntervalHours) updateIntervalHours = usage.updateIntervalHours;
+        if (!planName && usage.planName) planName = usage.planName;
     }
     if (upload == null && download == null && total == null && expire == null) {
         return null;
     }
-    return { upload, download, total, expire, origin: "merged", notices };
+    return { upload, download, total, expire, origin: "merged", notices, webPageUrl, updateIntervalHours, planName };
 }
 
 // Which sources the token addresses. A source token always means exactly that
@@ -65,6 +72,14 @@ export function selectSources(store, resolved, options) {
     options = options || {};
     if (!resolved) return [];
     if (resolved.kind === "source") return [resolved.source];
+    if (resolved.kind === "collection") {
+        const col = resolved.collection;
+        const all = store.list();
+        const byId = new Map(all.map((source) => [source.id, source]));
+        const ids = Array.isArray(col.sourceIds) ? col.sourceIds : [];
+        const wanted = ids.map((id) => byId.get(id)).filter(Boolean);
+        return wanted.filter((s) => s.enabled);
+    }
 
     const all = store.list();
     const ids = Array.isArray(options.sourceIds) ? options.sourceIds : null;
@@ -105,6 +120,7 @@ function normalizeOptions(options, customSchemes) {
         // A list of nodes to keep, by name. Distinct from a source's
         // excludedNodes, which is a per-source deny list of exact names.
         nodeFilter: normalizeNodeFilter(options.nodeFilter),
+        nodePipeline: options.nodePipeline && typeof options.nodePipeline === "object" ? options.nodePipeline : undefined,
         ipv6Enabled: options.ipv6Enabled === true ? true : options.ipv6Enabled === false ? false : undefined,
         remoteDns: options.remoteDns || undefined,
         // Domestic DNS servers (direct-connect). Corresponds to Tower 1.0.22's
@@ -149,6 +165,9 @@ function errorResponse(status, message, extra) {
 // `body` is a string for the dialect targets and a plain object for errors.
 export function renderSubscription(store, resolved, options) {
     options = options || {};
+    if (resolved && resolved.kind === "collection" && resolved.collection && resolved.collection.options) {
+        options = Object.assign({}, resolved.collection.options, options);
+    }
     const target = options.target;
     if (!target) return errorResponse(400, "no client dialect resolved");
 
@@ -183,7 +202,7 @@ export function renderSubscription(store, resolved, options) {
 
     // Each body is parsed into nodes and metadata (dns / hosts).
     // Hosts rewriting applies to nodes directly so that IPs are used with original SNI preserved.
-    const parsedNodes = withSnapshots.map((entry) => {
+    let parsedNodes = withSnapshots.map((entry) => {
         const docInfo = parseSubscriptionDoc(entry.text);
         let nodes = docInfo.nodes;
 
@@ -241,8 +260,25 @@ export function renderSubscription(store, resolved, options) {
                 return ai - bi;
             });
         }
+        if (normalized.nodePipeline) {
+            nodes = executeNodePipeline(nodes, normalized.nodePipeline, warnings);
+        }
         return nodes;
     });
+
+    if (normalized.nodePipeline && (normalized.nodePipeline.dedupeAddress === true || normalized.nodePipeline.dedupe === true)) {
+        const globalSeen = new Set();
+        parsedNodes = parsedNodes.map((nodes) => {
+            return nodes.filter((node) => {
+                if (!node) return false;
+                const port = node.port || node.server_port || "";
+                const key = `${node.type || ""}:${node.server || ""}:${port}:${node.uuid || node.password || ""}`;
+                if (key !== ":::" && globalSeen.has(key)) return false;
+                globalSeen.add(key);
+                return true;
+            });
+        });
+    }
 
     normalized.extractedDns = {
         privateDNS: [...new Set(allPrivateDns)],

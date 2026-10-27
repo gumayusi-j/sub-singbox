@@ -184,6 +184,30 @@ export function parseNoticeUsage(nodes) {
 
 // Combine sources by field: the first source that supplies a field wins, so
 // pass them in decreasing order of trust.
+export function parseProfileHeaders(headers) {
+    if (!isPlainObject(headers)) return {};
+    const res = {};
+    const webPageUrl =
+        headers["profile-web-page-url"] ||
+        headers["web-page-url"] ||
+        headers["profile-url"];
+    if (typeof webPageUrl === "string" && /^https?:\/\//i.test(webPageUrl.trim())) {
+        res.webPageUrl = webPageUrl.trim();
+    }
+    const updateInterval = headers["profile-update-interval"];
+    if (updateInterval != null) {
+        const hours = Number(updateInterval);
+        if (Number.isFinite(hours) && hours > 0) {
+            res.updateIntervalHours = Math.floor(hours);
+        }
+    }
+    const planName = headers["plan-name"] || headers["profile-title"];
+    if (typeof planName === "string" && planName.trim() !== "") {
+        res.planName = planName.trim();
+    }
+    return res;
+}
+
 export function mergeUsage(parts) {
     const out = {
         upload: null,
@@ -200,6 +224,12 @@ export function mergeUsage(parts) {
             if (out[field] == null && part[field] != null) {
                 out[field] = part[field];
                 out.origin = out.origin || part.origin || null;
+                any = true;
+            }
+        }
+        for (const meta of ["webPageUrl", "updateIntervalHours", "planName"]) {
+            if (out[meta] == null && part[meta] != null) {
+                out[meta] = part[meta];
                 any = true;
             }
         }
@@ -248,13 +278,18 @@ export function usageSummary(usage, now) {
                 : null,
         expired: usage.expire != null && usage.expire <= nowSeconds,
         notices: Array.isArray(usage.notices) ? usage.notices : [],
+        webPageUrl: usage.webPageUrl || null,
+        updateIntervalHours: usage.updateIntervalHours || null,
+        planName: usage.planName || null,
     };
 }
 
 // One call for the refresh engine: prefer the header, fall back to the body.
 export function extractUsage(headers, text, nodes) {
     const header = isPlainObject(headers) ? headers["subscription-userinfo"] : null;
+    const meta = parseProfileHeaders(headers);
     return mergeUsage([
+        meta,
         parseUserInfoHeader(header),
         parseStatusLine(text),
         parseNoticeUsage(nodes),
@@ -265,6 +300,7 @@ export default {
     parseUserInfoHeader,
     parseStatusLine,
     parseNoticeUsage,
+    parseProfileHeaders,
     mergeUsage,
     extractUsage,
     normalizeExpire,

@@ -1,12 +1,19 @@
-// Stub: MMDB/geo lookups are Sub-Store restful features, not on the
-// parse/produce('sing-box') path exercised by this kit.
+import { extractCountryFlag, stripExistingFlags } from '../kit/nodes/pipeline';
+
 function unsupported(name) {
     return function geoUnsupported() {
         throw new Error(`singbox-kit: ${name} (geo) is not supported`);
     };
 }
-export const getFlag = unsupported('getFlag');
-export const removeFlag = unsupported('removeFlag');
+
+export function getFlag(name) {
+    return extractCountryFlag(name) || '';
+}
+
+export function removeFlag(str) {
+    return stripExistingFlags(str);
+}
+
 export const getISO = unsupported('getISO');
 export const MMDB = { lookup: unsupported('MMDB.lookup') };
 export default { getFlag, removeFlag, getISO, MMDB };

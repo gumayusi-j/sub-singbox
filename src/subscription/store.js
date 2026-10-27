@@ -47,6 +47,7 @@ function emptyModel() {
             defaultOptions: {},
         },
         sources: [],
+        collections: [],
     };
 }
 
@@ -98,7 +99,23 @@ function normalizeModel(raw) {
     if (Array.isArray(raw.sources)) {
         model.sources = raw.sources.filter(isPlainObject).map(normalizeSource);
     }
+    if (Array.isArray(raw.collections)) {
+        model.collections = raw.collections.filter(isPlainObject).map(normalizeCollection).filter(Boolean);
+    }
     return model;
+}
+
+function normalizeCollection(raw) {
+    if (!isPlainObject(raw)) return null;
+    return {
+        id: typeof raw.id === "string" ? raw.id : "",
+        name: typeof raw.name === "string" ? raw.name : "未命名组合",
+        token: typeof raw.token === "string" ? raw.token : "",
+        sourceIds: Array.isArray(raw.sourceIds) ? raw.sourceIds.filter((id) => typeof id === "string") : [],
+        options: isPlainObject(raw.options) ? deepClone(raw.options) : {},
+        createdAt: raw.createdAt || null,
+        updatedAt: raw.updatedAt || null,
+    };
 }
 
 function normalizeSource(raw) {
@@ -332,6 +349,72 @@ export function createStore(options) {
         list() {
             return load().sources;
         },
+        listCollections() {
+            return load().collections || [];
+        },
+        getCollection(id) {
+            if (typeof id !== "string") return null;
+            return (load().collections || []).find((c) => c.id === id) || null;
+        },
+        addCollection(input) {
+            input = input || {};
+            return mutate((live) => {
+                live.collections = live.collections || [];
+                const timestamp = now().toISOString();
+                const col = normalizeCollection({
+                    id: generateId(crypto),
+                    name: typeof input.name === "string" && input.name.trim() !== "" ? input.name.trim() : "组合 " + (live.collections.length + 1),
+                    token: generateToken(crypto),
+                    sourceIds: Array.isArray(input.sourceIds) ? input.sourceIds : [],
+                    options: input.options || {},
+                    createdAt: timestamp,
+                    updatedAt: timestamp,
+                });
+                live.collections.push(col);
+                return col;
+            });
+        },
+        updateCollection(id, patch) {
+            if (typeof id !== "string" || !isPlainObject(patch)) return null;
+            return mutate((live) => {
+                live.collections = live.collections || [];
+                const col = live.collections.find((c) => c.id === id);
+                if (!col) return null;
+                if (typeof patch.name === "string" && patch.name.trim() !== "") {
+                    col.name = patch.name.trim();
+                }
+                if (Array.isArray(patch.sourceIds)) {
+                    col.sourceIds = patch.sourceIds.filter((s) => typeof s === "string");
+                }
+                if (isPlainObject(patch.options)) {
+                    col.options = deepClone(patch.options);
+                }
+                col.updatedAt = now().toISOString();
+                return col;
+            });
+        },
+        removeCollection(id) {
+            if (typeof id !== "string") return false;
+            return mutate((live) => {
+                live.collections = live.collections || [];
+                const idx = live.collections.findIndex((c) => c.id === id);
+                if (idx === -1) return false;
+                live.collections.splice(idx, 1);
+                return true;
+            });
+        },
+        rotateCollectionToken(id) {
+            if (typeof id !== "string") return null;
+            return mutate((live) => {
+                live.collections = live.collections || [];
+                const col = live.collections.find((c) => c.id === id);
+                if (!col) return null;
+                const token = generateToken(crypto);
+                col.token = token;
+                col.updatedAt = now().toISOString();
+                return { id, token };
+            });
+        },
         get(id) {
             if (typeof id !== "string") return null;
             return load().sources.find((s) => s.id === id) || null;
@@ -479,6 +562,10 @@ export function createStore(options) {
             const live = load();
             if (live.settings.globalToken && live.settings.globalToken === token) {
                 return { kind: "global" };
+            }
+            if (Array.isArray(live.collections)) {
+                const col = live.collections.find((c) => c.token === token);
+                if (col) return { kind: "collection", collection: col };
             }
             const source = live.sources.find((s) => s.token === token);
             return source ? { kind: "source", source } : null;

@@ -1875,6 +1875,17 @@ pre.code-block {
                     <span class="num">
                       {{ usageOf(s).usedText }}<template v-if="usageOf(s).totalText"> / {{ usageOf(s).totalText }}</template>
                     </span>
+
+                    <template v-if="usageOf(s) && usageOf(s).planName">
+                      <i class="fact-sep"></i>
+                      <span class="chip chip-ghost" style="padding:1px 6px;font-size:11px">{{ usageOf(s).planName }}</span>
+                    </template>
+                    <template v-if="usageOf(s) && usageOf(s).webPageUrl">
+                      <i class="fact-sep"></i>
+                      <a :href="usageOf(s).webPageUrl" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;font-size:12px;display:inline-flex;align-items:center;gap:3px">
+                        <el-icon :size="12"><component :is="'Link'" /></el-icon> 官网后台
+                      </a>
+                    </template>
                     <template v-if="usageOf(s).daysText">
                       <i class="fact-sep"></i>
                       <span :class="usageOf(s).soon ? 'is-warn' : ''">{{ usageOf(s).daysText }}</span>
@@ -1977,6 +1988,69 @@ pre.code-block {
                 </template>
               </div>
             </article>
+          </div>
+
+
+          <!-- Scheduler Automation Status -->
+          <div class="card" style="margin-top:16px;background:var(--bg-panel-muted);border:1px solid var(--border-color-lighter);padding:12px 16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <el-icon style="font-size:18px;color:var(--accent)"><timer /></el-icon>
+                <span style="font-weight:600;font-size:13.5px">后台自动化运维</span>
+                <span class="chip chip-ok" v-if="schedulerInfo && schedulerInfo.enabled">已启用定时静默刷新 (每 {{ schedulerInfo.intervalMinutes }} 分钟)</span>
+                <span class="chip chip-ghost" v-else>定时静默刷新已就绪</span>
+                <span v-if="schedulerInfo && schedulerInfo.lastRunAt" style="font-size:11.5px;color:var(--text-3)">
+                  上次执行：{{ new Date(schedulerInfo.lastRunAt).toLocaleTimeString() }}
+                </span>
+              </div>
+              <button class="btn btn-sm" type="button" :disabled="schedulerRunning" @click="triggerSchedulerRun">
+                <el-icon :class="{ spin: schedulerRunning }"><refresh /></el-icon>
+                {{ schedulerRunning ? '正在后台执行…' : '立即触发后台自动化刷新' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Collections (场景化组合订阅) Section -->
+          <div class="card" style="margin-top:16px;">
+            <div class="section-head">
+              <div style="display:flex;align-items:center;gap:8px">
+                <h2>组合订阅 (Collections / 场景化分组)</h2>
+                <span class="chip chip-accent">专属场景 · 独立链接</span>
+              </div>
+              <button class="btn btn-sm btn-primary" type="button" @click="openAddCollectionModal">
+                <el-icon><plus /></el-icon> 新建组合订阅
+              </button>
+            </div>
+
+            <p class="footnote" style="margin:0 0 12px 0">
+              可以将不同机场的节点组合成专属分流方案（例如「流媒体专用」、「办公专线」、「游戏加速」），每个组合拥有完全独立的订阅链接与独立的客户端设置。
+            </p>
+
+            <div v-if="!collections.length" style="padding:20px;text-align:center;color:var(--text-3);border:1px dashed var(--border-color);border-radius:var(--radius-sm)">
+              暂无组合订阅。点击上方「新建组合订阅」将多个订阅源组合输出。
+            </div>
+
+            <div v-else class="stack" style="gap:10px">
+              <div v-for="c in collections" :key="c.id" class="card" style="background:var(--bg-panel-muted);border:1px solid var(--border-color);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+                <div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <b style="font-size:14px">{{ c.name }}</b>
+                    <span class="chip chip-ghost" style="font-size:11px">包含 {{ (c.sourceIds || []).length }} 个订阅源</span>
+                  </div>
+                  <div style="font-size:12px;color:var(--text-3);margin-top:4px">
+                    链接路径：<code>{{ c.subUrl }}</code>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <button class="btn btn-sm" type="button" @click="copyText(getSubUrl(c.subUrl))">
+                    <el-icon><document-copy /></el-icon> 复制组合订阅
+                  </button>
+                  <button class="btn btn-sm btn-danger-soft" type="button" @click="removeCollection(c.id)">
+                    <el-icon><delete /></el-icon> 删除
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <p class="footnote" v-if="sources.length">
@@ -2095,6 +2169,16 @@ pre.code-block {
                   <el-radio-button value="outbounds">仅节点列表 (Provider)</el-radio-button>
                 </el-radio-group>
               </div>
+            </div>
+
+
+            <div class="hub-controls" style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border-color-lighter);display:flex;align-items:center;flex-wrap:wrap;gap:14px;">
+              <span class="ctrl-label" style="font-size:12px;color:var(--text-2);font-weight:600">流水线算子:</span>
+              <el-checkbox v-model="pipelineCleanNotice" size="small">🧹 自动清洗公告/失效节点</el-checkbox>
+              <el-checkbox v-model="pipelineInjectFlags" size="small">🚩 自动添加国旗 Emoji</el-checkbox>
+              <el-checkbox v-model="pipelineDedupe" size="small">⚡ 物理地址去重 (按 IP+端口)</el-checkbox>
+              <el-checkbox v-model="pipelineUdp" size="small">强制开启 UDP</el-checkbox>
+              <el-checkbox v-model="pipelineSkipCert" size="small">跳过证书校验 (Insecure)</el-checkbox>
             </div>
 
             <div v-if="isTargetInherentlyNodeOnly(exportTarget)" class="hub-hint">
@@ -3098,6 +3182,8 @@ var app = Vue.createApp({
         totalText: u.unlimited ? null : formatBytes(u.total),
         daysText: null, soon: false, fraction: null, tone: 'ok'
       };
+      if (u.planName) out.planName = u.planName;
+      if (u.webPageUrl) out.webPageUrl = u.webPageUrl;
       if (u.daysLeft != null) {
         out.daysText = u.expired ? '已到期' : (u.daysLeft + ' 天后到期');
         out.soon = !!u.expired || u.daysLeft <= 7;
@@ -3573,7 +3659,16 @@ var app = Vue.createApp({
       try {
         var exportBody = {
           ids: enabledSubs.value.map(function(s){ return s.id; }),
-          out: exportOut.value || 'config'
+          out: exportOut.value || 'config',
+          nodePipeline: {
+            cleanNotice: pipelineCleanNotice.value,
+            injectFlags: pipelineInjectFlags.value,
+            dedupeAddress: pipelineDedupe.value,
+            quickSettings: {
+              udp: pipelineUdp.value,
+              skipCertVerify: pipelineSkipCert.value
+            }
+          }
         };
         if (exportTarget.value) exportBody.target = exportTarget.value;
         if (exportSourceId.value) exportBody.src = exportSourceId.value;
@@ -3883,6 +3978,11 @@ var app = Vue.createApp({
       if (exportTarget.value) params.push('target=' + encodeURIComponent(exportTarget.value));
       if (exportSourceId.value) params.push('src=' + encodeURIComponent(exportSourceId.value));
       if (exportOut.value === 'outbounds') params.push('out=outbounds');
+      if (pipelineInjectFlags.value) params.push('flags=1');
+      if (!pipelineCleanNotice.value) params.push('clean=0');
+      if (pipelineDedupe.value) params.push('dedupe=1');
+      if (pipelineUdp.value) params.push('udp=1');
+      if (pipelineSkipCert.value) params.push('skipCert=1');
       var query = params.length > 0 ? '?' + params.join('&') : '';
       return baseUrl + globalSubUrl.value + query;
     }

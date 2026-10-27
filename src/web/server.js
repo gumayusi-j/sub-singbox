@@ -10,6 +10,7 @@ import { assembleAcl, findPreset } from "../kit/acl4ssr/build";
 import { createStore } from "../subscription/store";
 import { createCoordinator } from "../subscription/coordinator";
 import { createSubscriptionRouter } from "../subscription/router";
+import { createScheduler } from "../subscription/scheduler";
 
 export { loadConfig };
 
@@ -370,10 +371,21 @@ export function createServer(config, deps) {
     deps = deps || {};
     const store = deps.store || createStore({ dataPath: resolveDataPath(config) });
     const coordinator = deps.coordinator || createCoordinator();
+    const scheduler = deps.scheduler || createScheduler({
+        store,
+        coordinator,
+        config,
+        fetchImpl: deps.fetchImpl,
+        now: deps.now,
+    });
+    if (config.disableScheduler !== true && !deps.noScheduler) {
+        scheduler.start();
+    }
     const subscriptions = createSubscriptionRouter({
         store,
         coordinator,
         config,
+        scheduler,
         fetchImpl: deps.fetchImpl,
         now: deps.now,
     });
@@ -477,6 +489,12 @@ export function createServer(config, deps) {
     // Exposed so callers (and tests) can close the store's write queue before
     // exiting instead of losing a queued write.
     server.subscriptionStore = store;
+    server.scheduler = scheduler;
+    const originalClose = server.close.bind(server);
+    server.close = (cb) => {
+        try { scheduler.stop(); } catch (_e) {}
+        return originalClose(cb);
+    };
     return server;
 }
 

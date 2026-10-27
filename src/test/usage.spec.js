@@ -222,3 +222,23 @@ describe("subscription usage — presentation", function () {
         expect(summary.ratio).to.equal(1);
     });
 });
+describe("subscription profile metadata", function () {
+    it("parses profile headers and surfaces them in usageSummary", function () {
+        const headers = {
+            "subscription-userinfo": "upload=100; download=200; total=1000; expire=1735660800",
+            "profile-web-page-url": "https://portal.airport.com",
+            "profile-update-interval": "12",
+            "plan-name": "Premium VIP",
+        };
+
+        const usage = extractUsage(headers, "", []);
+        expect(usage.webPageUrl).to.equal("https://portal.airport.com");
+        expect(usage.updateIntervalHours).to.equal(12);
+        expect(usage.planName).to.equal("Premium VIP");
+
+        const summary = usageSummary(usage, new Date(1700000000 * 1000));
+        expect(summary.webPageUrl).to.equal("https://portal.airport.com");
+        expect(summary.updateIntervalHours).to.equal(12);
+        expect(summary.planName).to.equal("Premium VIP");
+    });
+});
