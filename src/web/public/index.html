@@ -1970,13 +1970,57 @@ pre.code-block {
         <template #label><span class="seg-label"><i class="seg-step">3</i>导出</span></template>
 
         <div class="section">
+          <!-- Export Controls -->
+          <div class="card" style="padding:14px 18px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:13px;font-weight:600;color:var(--text-1)">客户端：</span>
+                  <el-select v-model="exportTarget" @change="onTargetChange" size="small" style="width:160px"
+                    placeholder="自动识别客户端">
+                    <el-option :value="''" label="自动识别 (User-Agent)"></el-option>
+                    <el-option v-for="t in targets" :key="t.id" :value="t.id" :label="t.label" />
+                  </el-select>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:13px;font-weight:600;color:var(--text-1)">订阅源：</span>
+                  <el-select v-model="exportSourceId" @change="onSourceChange" size="small" style="width:140px" placeholder="全部订阅源">
+                    <el-option :value="''" label="全部订阅源"></el-option>
+                    <el-option v-for="s in sources" :key="s.id" :value="s.id" :label="s.name" />
+                  </el-select>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:13px;font-weight:600;color:var(--text-1)">输出形态：</span>
+                  <el-radio-group v-model="exportOut" size="small" @change="onOutModeChange">
+                    <el-radio-button value="config">完整配置</el-radio-button>
+                    <el-radio-button value="outbounds">仅节点列表</el-radio-button>
+                  </el-radio-group>
+                </div>
+              </div>
+
+              <div v-if="isTargetInherentlyNodeOnly(exportTarget)" style="font-size:12px;color:var(--text-3)">
+                💡 {{ currentTargetLabel }} 原生仅接收节点列表，策略组与分流规则由客户端自行管理
+              </div>
+            </div>
+          </div>
+
           <!-- Generate -->
           <div class="card action-card">
             <div class="action-info">
-              <h2>生成配置</h2>
-              <p v-if="enabledSubs.length">
+              <h2>{{ exportOut === 'outbounds' ? '生成节点列表' : '生成配置' }}</h2>
+              <p v-if="enabledSubs.length && exportOut === 'outbounds'">
                 将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），
-                按「{{ aclName }}」生成{{ exportTarget ? targets.find(t => t.id === exportTarget)?.label || exportTarget : 'sing-box' }}配置。
+                生成 {{ currentTargetLabel }} 纯节点列表（不附加分流规则与策略组，适合外部 Provider / 纯节点集）。
+              </p>
+              <p v-else-if="enabledSubs.length && isTargetInherentlyNodeOnly(exportTarget)">
+                将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），
+                生成 {{ currentTargetLabel }} 节点列表（该客户端原生通过模块/UI自行管理分流规则）。
+              </p>
+              <p v-else-if="enabledSubs.length">
+                将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），
+                按「{{ aclName }}」生成 {{ currentTargetLabel }} 完整配置（含策略组、分流规则与 DNS 骨架）。
               </p>
               <p v-else>
                 还没有订阅参与导出。到「订阅」页把要合并的订阅源点成<b>「启用」</b>即可。
@@ -1994,7 +2038,7 @@ pre.code-block {
               <!-- Same DOM-compilation rule as the theme toggle above. -->
               <el-icon v-if="generating" class="spin"><loading /></el-icon>
               <el-icon v-else><magic-stick /></el-icon>
-              {{ generating ? '生成中…' : '生成配置' }}
+              {{ generating ? '生成中…' : (exportOut === 'outbounds' ? '生成节点列表' : '生成配置') }}
             </button>
           </div>
 
@@ -2194,10 +2238,10 @@ pre.code-block {
 
             <div class="result-actions">
               <button class="btn btn-sm" type="button" @click="copyConfig">
-                <el-icon><document-copy /></el-icon> 复制完整配置
+                <el-icon><document-copy /></el-icon> {{ exportOut === 'outbounds' ? '复制节点列表' : '复制完整配置' }}
               </button>
               <button class="btn btn-sm" type="button" @click="downloadConfig">
-                <el-icon><download /></el-icon> 下载配置
+                <el-icon><download /></el-icon> {{ exportOut === 'outbounds' ? '下载节点列表' : '下载配置' }}
               </button>
               <button class="btn btn-sm" type="button" :disabled="pingRunning" @click="pingNodes">
                 <el-icon :class="{ spin: pingRunning }"><connection /></el-icon>
@@ -2213,20 +2257,22 @@ pre.code-block {
           <div class="card sub-address" v-if="globalSubUrl">
             <div class="section-head">
               <h2>订阅地址</h2>
-              <span class="chip chip-accent">填一次，客户端自动跟进</span>
+              <span class="chip" :class="exportOut === 'outbounds' ? 'chip-ghost' : 'chip-accent'">
+                {{ exportOut === 'outbounds' ? '纯节点 Provider 模式' : '完整配置模式' }}
+              </span>
             </div>
             <p class="footnote" style="margin:0">
               把这个地址填进客户端一次即可：之后你在「订阅」页点「刷新」，客户端再来拉取时拿到的就是最新节点。
-              默认按客户端的 User-Agent 自动判断格式，也可以固定成某一个客户端。
+              默认按客户端的 User-Agent 自动判断格式，也可指定客户端与输出形态（完整配置 vs 仅节点 Provider）。
             </p>
             <el-row :gutter="14">
-              <el-col :xs="24" :sm="12">
+              <el-col :xs="24" :sm="8">
                 <el-form-item label="对外地址（留空用当前浏览器地址）" size="small">
                   <el-input v-model="publicUrlInput" placeholder="http://150.158.78.150"
                             @input="onPublicUrlInput" @blur="flushPublicUrl" />
                 </el-form-item>
               </el-col>
-              <el-col :xs="24" :sm="8">
+              <el-col :xs="24" :sm="6">
                 <el-form-item label="客户端类型" size="small">
                   <el-select v-model="exportTarget" @change="onTargetChange" style="width:100%"
                     placeholder="自动识别客户端（按 User-Agent）">
@@ -2235,11 +2281,19 @@ pre.code-block {
                   </el-select>
                 </el-form-item>
               </el-col>
-              <el-col :xs="24" :sm="4">
+              <el-col :xs="24" :sm="5">
                 <el-form-item label="订阅源" size="small">
-                  <el-select v-model="exportSourceId" style="width:100%" placeholder="全部订阅源">
+                  <el-select v-model="exportSourceId" @change="onSourceChange" style="width:100%" placeholder="全部订阅源">
                     <el-option :value="''" label="全部订阅源"></el-option>
                     <el-option v-for="s in sources" :key="s.id" :value="s.id" :label="s.name" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="5">
+                <el-form-item label="输出形态" size="small">
+                  <el-select v-model="exportOut" @change="onOutModeChange" style="width:100%">
+                    <el-option value="config" label="完整配置 (含规则)"></el-option>
+                    <el-option value="outbounds" label="仅节点列表 (Provider)"></el-option>
                   </el-select>
                 </el-form-item>
               </el-col>
@@ -2269,11 +2323,11 @@ pre.code-block {
             </div>
             <div class="lan-row" v-for="iface in lanIps" :key="iface.name">
               <span class="lan-name">{{ iface.name }}</span>
-              <code>{{ iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : '') }}</code>
+              <code>{{ buildLanSubUrl(iface.url) }}</code>
               <button class="btn btn-sm" type="button"
-                      @click="copyText(iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : ''))">复制</button>
+                      @click="copyText(buildLanSubUrl(iface.url))">复制</button>
               <button class="btn btn-sm" type="button"
-                      @click="showQr(iface.url + globalSubUrl + (exportTarget ? '?target=' + encodeURIComponent(exportTarget) : ''))">QR</button>
+                      @click="showQr(buildLanSubUrl(iface.url))">QR</button>
             </div>
           </div>
 
@@ -2524,7 +2578,7 @@ var PROTO_ABBR = {
   wireguard:"WG", anytls:"AT", snell:"SN", socks:"SK", http:"HT"
 };
 
-var STORE = { apiToken:"sbx:apiToken", exportTarget:"sbx:exportTarget", legacySubs:"sbx:subs", legacyEnabled:"sbx:enabledIds", shape:"sbx:shape", acl:"sbx:acl", theme:"sbx:theme" };
+var STORE = { apiToken:"sbx:apiToken", exportTarget:"sbx:exportTarget", exportOut:"sbx:exportOut", legacySubs:"sbx:subs", legacyEnabled:"sbx:enabledIds", shape:"sbx:shape", acl:"sbx:acl", theme:"sbx:theme" };
 var ACL_NAME = { "mihomo-smart":"Mihomo 现代智能分组", "acl4ssr-default":"ACL4SSR 默认", "acl4ssr-full":"ACL4SSR 全分组", "acl4ssr-mini":"ACL4SSR 精简", none:"默认分域模板" };
 
 function lsLoad(key, fb) { try { var v=localStorage.getItem(key); return v?JSON.parse(v):fb; } catch(e){return fb;} }
@@ -2576,6 +2630,7 @@ var app = Vue.createApp({
     // Export
     var exportTarget = Vue.ref(lsLoad(STORE.exportTarget, ''));
     var exportSourceId = Vue.ref(''); // '' = all sources, otherwise a source id
+    var exportOut = Vue.ref(lsLoad(STORE.exportOut, 'config')); // 'config' | 'outbounds'
     var last = Vue.ref(null);
     var generating = Vue.ref(false);
     var genStatus = Vue.ref('');
@@ -2690,11 +2745,7 @@ var app = Vue.createApp({
     });
     var fullSubUrl = Vue.computed(function() {
       var base = publicUrl.value || location.origin;
-      var params = [];
-      if (exportTarget.value) params.push('target=' + encodeURIComponent(exportTarget.value));
-      if (exportSourceId.value) params.push('src=' + encodeURIComponent(exportSourceId.value));
-      var query = params.length > 0 ? '?' + params.join('&') : '';
-      return base + globalSubUrl.value + query;
+      return buildLanSubUrl(base);
     });
     var allWarnings = Vue.computed(function() {
       var warns = [];
@@ -3447,7 +3498,7 @@ var app = Vue.createApp({
       try {
         var exportBody = {
           ids: enabledSubs.value.map(function(s){ return s.id; }),
-          out: 'config'
+          out: exportOut.value || 'config'
         };
         if (exportTarget.value) exportBody.target = exportTarget.value;
         if (exportSourceId.value) exportBody.src = exportSourceId.value;
@@ -3492,6 +3543,22 @@ var app = Vue.createApp({
       'uri': 'uri-list.txt'
     };
 
+    var GIST_NODES_FILE_MAP = {
+      'sing-box': 'singbox-outbounds.json',
+      'clash': 'clash-provider.yaml',
+      'surge': 'surge-nodes.conf',
+      'loon': 'loon-nodes.conf',
+      'quantumultx': 'qx-nodes.conf',
+      'shadowrocket': 'shadowrocket-nodes.yaml',
+      'stash': 'stash-provider.yaml',
+      'surfboard': 'surfboard-nodes.conf',
+      'v2ray': 'v2ray-nodes.json',
+      'egern': 'egern-config.yaml',
+      'hiddify': 'hiddify-nodes.json',
+      'karing': 'karing-provider.yaml',
+      'uri': 'uri-list.txt'
+    };
+
     async function syncToGist() {
       if (!gistId.value || !githubToken.value) {
         gistStatus.value = '请先填写 Gist ID 和 GitHub Token。';
@@ -3508,7 +3575,9 @@ var app = Vue.createApp({
       gistStatusType.value = '';
 
       var targetKey = exportTarget.value || 'sing-box';
-      var baseName = GIST_FILE_MAP[targetKey] || (targetKey + '-config.json');
+      var isOutbounds = exportOut.value === 'outbounds';
+      var map = isOutbounds ? GIST_NODES_FILE_MAP : GIST_FILE_MAP;
+      var baseName = map[targetKey] || (isOutbounds ? targetKey + '-nodes.yaml' : targetKey + '-config.json');
       // Prefix with source name so different subscriptions don't overwrite each other.
       // exportSourceId == '' means all enabled sources are merged.
       var sourceName = '';
@@ -3590,7 +3659,7 @@ var app = Vue.createApp({
         gistFiles.value = files;
         // Save persisted gist files list to localStorage for later reload
         lsSave('sbx:gistFiles', files);
-        gistStatus.value = '已同步 ' + fileName + ' 到 Gist。';
+        gistStatus.value = '已同步 ' + fileName + ' (' + (isOutbounds ? '纯节点' : '完整配置') + ') 到 Gist。';
         gistStatusType.value = 'ok';
       } catch (e) {
         gistStatus.value = '同步失败：' + (e.message || e);
@@ -3622,7 +3691,9 @@ var app = Vue.createApp({
     function downloadConfig() {
       if (!last.value) return;
       var targetKey = exportTarget.value || 'sing-box';
-      var baseName = GIST_FILE_MAP[targetKey] || 'singbox-config.json';
+      var isOutbounds = exportOut.value === 'outbounds';
+      var map = isOutbounds ? GIST_NODES_FILE_MAP : GIST_FILE_MAP;
+      var baseName = map[targetKey] || (isOutbounds ? targetKey + '-nodes.yaml' : targetKey + '-config.json');
       var sourceName = '';
       if (exportSourceId.value) {
         var src = sources.value.find(function(s){ return s.id === exportSourceId.value; });
@@ -3694,6 +3765,40 @@ var app = Vue.createApp({
       if (last.value && enabledSubs.value.length > 0) {
         generate();
       }
+    }
+    function onOutModeChange(val) {
+      exportOut.value = val;
+      lsSave(STORE.exportOut, val);
+      if (last.value && enabledSubs.value.length > 0) {
+        generate();
+      }
+    }
+    function onSourceChange() {
+      if (last.value && enabledSubs.value.length > 0) {
+        generate();
+      }
+    }
+    function isTargetInherentlyNodeOnly(targetId) {
+      var id = targetId || 'sing-box';
+      return ['egern', 'surge', 'loon', 'quantumultx', 'surfboard', 'v2ray', 'uri'].indexOf(id) >= 0;
+    }
+    var currentTargetLabel = Vue.computed(function() {
+      if (!exportTarget.value) return '自动识别';
+      var t = targets.value.find(function(item){ return item.id === exportTarget.value; });
+      return t ? t.label : exportTarget.value;
+    });
+    var currentSourceName = Vue.computed(function() {
+      if (!exportSourceId.value) return '全部订阅源';
+      var s = sources.value.find(function(src){ return src.id === exportSourceId.value; });
+      return s ? s.name : exportSourceId.value;
+    });
+    function buildLanSubUrl(baseUrl) {
+      var params = [];
+      if (exportTarget.value) params.push('target=' + encodeURIComponent(exportTarget.value));
+      if (exportSourceId.value) params.push('src=' + encodeURIComponent(exportSourceId.value));
+      if (exportOut.value === 'outbounds') params.push('out=outbounds');
+      var query = params.length > 0 ? '?' + params.join('&') : '';
+      return baseUrl + globalSubUrl.value + query;
     }
     async function rotateToken() {
       try { await ElementPlus.ElMessageBox.confirm('轮换密钥会让旧地址立刻失效，需要重新复制。继续？', '轮换密钥', { type:'warning' }); }
@@ -3944,7 +4049,9 @@ var app = Vue.createApp({
       activeTab, sources, targets, globalSubUrl, publicUrl, dataPath, settings, acl,
       theme, isDark, toggleTheme,
       showAddForm, editingId, savingSource, srcFormHint, srcForm,
-      exportTarget, exportSourceId, last, generating, genStatus, genStatusType, activeOutTab,
+      exportTarget, exportSourceId, exportOut, onOutModeChange, onSourceChange,
+      currentTargetLabel, currentSourceName, isTargetInherentlyNodeOnly, buildLanSubUrl,
+      last, generating, genStatus, genStatusType, activeOutTab,
       gistId, githubToken, gistSyncing, gistStatus, gistStatusType, gistFiles,
       saveGistConfig, syncToGist,
       regionFilter, regionList, displayNodes,

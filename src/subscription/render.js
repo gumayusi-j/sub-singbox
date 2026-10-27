@@ -97,7 +97,7 @@ function normalizeOptions(options, customSchemes) {
     const scheme = options.aclPreset ? findScheme(options.aclPreset, customSchemes) : null;
     return {
         out:
-            options.out === "outbounds" || options.content === "nodes"
+            options.out === "outbounds" || options.out === "nodes" || options.content === "nodes"
                 ? "outbounds"
                 : "config",
         aclPreset: scheme !== null ? options.aclPreset : undefined,

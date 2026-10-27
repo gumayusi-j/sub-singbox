@@ -10,7 +10,7 @@
     "web": "node -r @babel/register -r ./preload src/web/index.js",
     "validate": "node scripts/validate-config.mjs",
     "compile:acl": "node scripts/compile-acl4ssr.mjs",
-    "build": "pnpm build:web",
+    "build": "npm run build:web",
     "build:web": "node scripts/build-web.mjs",
     "start": "node dist/singbox-kit-web.js"
   },

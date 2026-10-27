@@ -55,6 +55,8 @@ describe("singbox-kit web API", function () {
         // here would drift.
         expect(html).to.include('v-model="publicUrlInput"');
         expect(html).to.include('v-model="exportTarget"');
+        expect(html).to.include('v-model="exportOut"');
+        expect(html).to.include('GIST_NODES_FILE_MAP');
         expect(html).to.include('v-for="t in targets"');
         // The feature was specified without one; this keeps it that way.
         expect(html).to.not.include("二维码");
