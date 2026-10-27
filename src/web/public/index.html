@@ -1031,6 +1031,82 @@ html[data-theme="dark"] .page-head h1 {
 /* ==========================================================================
    11. Export
    ========================================================================== */
+.export-hub-card {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.hub-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.hub-title h2 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.hub-title p { margin: 4px 0 0; font-size: 12.5px; color: var(--text-2); }
+.hub-status-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hub-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ctrl-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.hub-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.hub-hint .el-icon { color: var(--accent); font-size: 14px; flex: none; }
+.lan-chips-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lan-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  font-size: 12px;
+}
+.lan-chip-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+.btn-xs {
+  height: 22px;
+  line-height: 22px;
+  padding: 0 7px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
 .action-card {
   padding: 20px 22px;
   display: flex;
@@ -1813,6 +1889,9 @@ pre.code-block {
                     <el-icon :class="{ spin: refreshingIds.get(s.id) }"><refresh /></el-icon>
                     {{ refreshingIds.get(s.id) ? '刷新中…' : '刷新' }}
                   </button>
+                  <button class="btn btn-sm" type="button" :disabled="!s.subUrl" @click="copyText(getSubUrl(s.subUrl))" title="复制单一源订阅地址">
+                    <el-icon><document-copy /></el-icon> 复制链接
+                  </button>
                   <button class="btn btn-sm" type="button" @click="toggleCard(s.id)">
                     <el-icon><grid /></el-icon> {{ isOpen(s.id) ? '收起节点' : '节点' }}
                   </button>
@@ -1848,15 +1927,18 @@ pre.code-block {
                   <el-icon class="spin"><loading /></el-icon> 正在读取节点…
                 </div>
                 <template v-else>
-                  <div class="node-head">
-                    <span class="micro">节点</span>
-                    <span class="node-count num">{{ getPreview(s.id).nodeCount }}</span>
-                    <span class="chip chip-proto" v-for="(n, t) in getPreview(s.id).protocolMap"
-                          :key="t" :class="'p-' + familyOf(t)">{{ abbrOf(t) }} <b>{{ n }}</b></span>
+                  <div class="node-head" style="justify-content:space-between">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                      <span class="micro">节点</span>
+                      <span class="node-count num">{{ getPreview(s.id).nodeCount }}</span>
+                      <span class="chip chip-proto" v-for="(n, t) in getPreview(s.id).protocolMap"
+                            :key="t" :class="'p-' + familyOf(t)">{{ abbrOf(t) }} <b>{{ n }}</b></span>
+                    </div>
+                    <el-input v-model="previewSearch[s.id]" size="small" placeholder="搜索节点名或服务器…" clearable style="max-width:200px" />
                   </div>
 
                   <el-table v-if="getPreview(s.id).nodes && getPreview(s.id).nodes.length"
-                    :data="getPreview(s.id).nodes" size="small" max-height="300"
+                    :data="getFilteredPreviewNodes(s.id)" size="small" max-height="320"
                     @dragover="onNodeDragOver" @drop="(e) => onNodeDrop(e, s)" @dragend="onNodeDragEnd">
                     <el-table-column width="42">
                       <template #header>
@@ -1935,10 +2017,12 @@ pre.code-block {
               </span>
               <div class="pick-body">
                 <!-- Badge: shows rule type/recommendation -->
-                <span v-if="!r.custom && (r.value === 'mihomo-smart' || r.value === 'acl4ssr')" class="pick-badge badge-recommend">⭐ 推荐</span>
-                <span v-else-if="!r.custom && r.value === 'minimal'" class="pick-badge badge-lite">轻量</span>
-                <span v-else-if="!r.custom && r.value !== 'none'" class="pick-badge badge-full">完整</span>
-                <span v-else-if="r.custom" class="pick-badge badge-custom">自定义</span>
+                <span v-if="!r.custom && r.value === 'mihomo-smart'" class="pick-badge badge-recommend">⭐ 推荐 · 现代智能</span>
+                <span v-else-if="!r.custom && r.value === 'acl4ssr-default'" class="pick-badge badge-recommend">⭐ 推荐 · 经典ACL</span>
+                <span v-else-if="!r.custom && r.value === 'acl4ssr-full'" class="pick-badge badge-full">全规则集</span>
+                <span v-else-if="!r.custom && r.value === 'acl4ssr-mini'" class="pick-badge badge-lite">极简轻量</span>
+                <span v-else-if="!r.custom && r.value === 'none'" class="pick-badge badge-lite">默认直连</span>
+                <span v-else-if="r.custom" class="pick-badge badge-custom">自定义方案</span>
                 <div class="pick-title">
                   <span>{{ r.label }}</span>
                   <span class="chip chip-accent" v-if="acl === r.value">当前</span>
@@ -1970,148 +2054,152 @@ pre.code-block {
         <template #label><span class="seg-label"><i class="seg-step">3</i>导出</span></template>
 
         <div class="section">
-          <!-- Export Controls -->
-          <div class="card" style="padding:14px 18px;margin-bottom:12px">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-                <div style="display:flex;align-items:center;gap:6px">
-                  <span style="font-size:13px;font-weight:600;color:var(--text-1)">客户端：</span>
-                  <el-select v-model="exportTarget" @change="onTargetChange" size="small" style="width:160px"
-                    placeholder="自动识别客户端">
-                    <el-option :value="''" label="自动识别 (User-Agent)"></el-option>
-                    <el-option v-for="t in targets" :key="t.id" :value="t.id" :label="t.label" />
-                  </el-select>
-                </div>
+          <!-- 1. Master Export Controls -->
+          <div class="card export-hub-card">
+            <div class="hub-header">
+              <div class="hub-title">
+                <h2>导出设置</h2>
+                <p>配置目标客户端与输出形态，下方订阅地址与导出内容将即时自动响应。</p>
+              </div>
+              <div class="hub-status-tags">
+                <span class="chip chip-accent" v-if="exportTarget">{{ currentTargetLabel }}</span>
+                <span class="chip" :class="exportOut === 'outbounds' ? 'chip-ghost' : 'chip-ok'">
+                  {{ exportOut === 'outbounds' ? '纯节点 Provider 模式' : '完整配置模式' }}
+                </span>
+                <span class="chip chip-ghost" v-if="exportSourceId">{{ currentSourceName }}</span>
+              </div>
+            </div>
 
-                <div style="display:flex;align-items:center;gap:6px">
-                  <span style="font-size:13px;font-weight:600;color:var(--text-1)">订阅源：</span>
-                  <el-select v-model="exportSourceId" @change="onSourceChange" size="small" style="width:140px" placeholder="全部订阅源">
-                    <el-option :value="''" label="全部订阅源"></el-option>
-                    <el-option v-for="s in sources" :key="s.id" :value="s.id" :label="s.name" />
-                  </el-select>
-                </div>
-
-                <div style="display:flex;align-items:center;gap:6px">
-                  <span style="font-size:13px;font-weight:600;color:var(--text-1)">输出形态：</span>
-                  <el-radio-group v-model="exportOut" size="small" @change="onOutModeChange">
-                    <el-radio-button value="config">完整配置</el-radio-button>
-                    <el-radio-button value="outbounds">仅节点列表</el-radio-button>
-                  </el-radio-group>
-                </div>
+            <div class="hub-controls">
+              <div class="ctrl-group">
+                <span class="ctrl-label">目标客户端</span>
+                <el-select v-model="exportTarget" @change="onTargetChange" style="width:180px"
+                  placeholder="自动识别 (User-Agent)">
+                  <el-option :value="''" label="自动识别 (User-Agent)"></el-option>
+                  <el-option v-for="t in targets" :key="t.id" :value="t.id" :label="t.label" />
+                </el-select>
               </div>
 
-              <div v-if="isTargetInherentlyNodeOnly(exportTarget)" style="font-size:12px;color:var(--text-3)">
-                💡 {{ currentTargetLabel }} 原生仅接收节点列表，策略组与分流规则由客户端自行管理
+              <div class="ctrl-group">
+                <span class="ctrl-label">包含订阅源</span>
+                <el-select v-model="exportSourceId" @change="onSourceChange" style="width:160px" placeholder="全部订阅源">
+                  <el-option :value="''" label="全部已启用订阅源"></el-option>
+                  <el-option v-for="s in sources" :key="s.id" :value="s.id" :label="s.name" />
+                </el-select>
+              </div>
+
+              <div class="ctrl-group">
+                <span class="ctrl-label">输出形态</span>
+                <el-radio-group v-model="exportOut" @change="onOutModeChange">
+                  <el-radio-button value="config">完整配置 (含规则与分组)</el-radio-button>
+                  <el-radio-button value="outbounds">仅节点列表 (Provider)</el-radio-button>
+                </el-radio-group>
+              </div>
+            </div>
+
+            <div v-if="isTargetInherentlyNodeOnly(exportTarget)" class="hub-hint">
+              <el-icon><info-filled /></el-icon>
+              <span>提示：<b>{{ currentTargetLabel }}</b> 客户端原生采用模块/规则集机制，本系统仅输出纯节点集合，分流规则由客户端自行接管。</span>
+            </div>
+          </div>
+
+          <!-- 2. Subscription Address (Top Priority Deliverable) -->
+          <div class="card sub-address" v-if="globalSubUrl">
+            <div class="section-head">
+              <div style="display:flex;align-items:center;gap:8px">
+                <h2>在线订阅地址</h2>
+                <span class="chip chip-accent">一劳永逸 · 自动跟进</span>
+                <span class="chip" :class="exportOut === 'outbounds' ? 'chip-ghost' : 'chip-ok'">
+                  {{ exportOut === 'outbounds' ? '纯节点' : '完整配置' }}
+                </span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <button class="btn btn-sm" type="button" @click="showPublicUrlConfig = !showPublicUrlConfig">
+                  <el-icon><setting /></el-icon> {{ showPublicUrlConfig ? '收起网络设置' : '对外网络设置' }}
+                </button>
+                <button class="btn btn-sm" type="button" @click="rotateToken">
+                  <el-icon><key /></el-icon> 轮换密钥
+                </button>
+              </div>
+            </div>
+
+            <p class="footnote" style="margin:0">
+              把此地址填进客户端一次即可。服务端每次实时生成最新配置；修改规则或刷新订阅后，客户端下次拉取自动生效。
+            </p>
+
+            <div class="url-row">
+              <span class="url-value">{{ fullSubUrl }}</span>
+              <button class="btn btn-primary btn-sm" type="button" @click="copyText(fullSubUrl)">
+                <el-icon><document-copy /></el-icon> 复制订阅地址
+              </button>
+              <button class="btn btn-sm" type="button" @click="showQr(fullSubUrl)">
+                <el-icon><iphone /></el-icon> 扫码导入
+              </button>
+            </div>
+            <p class="footnote" style="margin:0" v-if="exportSubHint">{{ exportSubHint }}</p>
+
+            <!-- Collapsible Public URL Setting -->
+            <div v-if="showPublicUrlConfig" style="padding-top:12px;border-top:1px solid var(--stroke-soft)">
+              <el-form-item label="对外访问地址（留空使用当前浏览器地址访问）" size="small" style="margin-bottom:6px">
+                <el-input v-model="publicUrlInput" placeholder="http://192.168.1.100:8788 或 https://sub.my-domain.com"
+                          @input="onPublicUrlInput" @blur="flushPublicUrl" clearable style="max-width:520px" />
+              </el-form-item>
+              <p class="footnote" style="margin:0" v-if="publicUrlHint"
+                 :class="publicUrlHintType === 'ok' ? 'is-ok' : publicUrlHintType === 'err' ? 'is-danger' : ''">{{ publicUrlHint }}</p>
+            </div>
+
+            <!-- LAN Direct Sharing (inline quick chips) -->
+            <div v-if="lanIps.length" style="padding-top:12px;border-top:1px solid var(--stroke-soft)">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+                <span style="font-size:12px;font-weight:600;color:var(--text-2)"><el-icon><connection /></el-icon> 局域网快捷直链（同一 Wi-Fi 下可直接导入）：</span>
+              </div>
+              <div class="lan-chips-grid">
+                <div v-for="iface in lanIps" :key="iface.name" class="lan-chip-row">
+                  <span class="chip chip-ghost" style="font-weight:600;font-size:11px">{{ iface.name }}</span>
+                  <code class="lan-chip-url">{{ buildLanSubUrl(iface.url) }}</code>
+                  <button class="btn btn-xs" type="button" @click="copyText(buildLanSubUrl(iface.url))">复制</button>
+                  <button class="btn btn-xs" type="button" @click="showQr(buildLanSubUrl(iface.url))">QR</button>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Generate -->
+          <!-- 3. Local Config Generation & Live Debugging -->
           <div class="card action-card">
             <div class="action-info">
-              <h2>{{ exportOut === 'outbounds' ? '生成节点列表' : '生成配置' }}</h2>
+              <h2>{{ exportOut === 'outbounds' ? '生成节点列表文件' : '生成完整配置文件' }}</h2>
               <p v-if="enabledSubs.length && exportOut === 'outbounds'">
                 将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），
-                生成 {{ currentTargetLabel }} 纯节点列表（不附加分流规则与策略组，适合外部 Provider / 纯节点集）。
+                生成 <b>{{ currentTargetLabel }}</b> 纯节点列表（不附加分流规则与策略组，适合外部 Provider / 纯节点集）。
               </p>
               <p v-else-if="enabledSubs.length && isTargetInherentlyNodeOnly(exportTarget)">
                 将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），
-                生成 {{ currentTargetLabel }} 节点列表（该客户端原生通过模块/UI自行管理分流规则）。
+                生成 <b>{{ currentTargetLabel }}</b> 节点列表（该客户端原生通过模块/UI自行管理分流规则）。
               </p>
               <p v-else-if="enabledSubs.length">
                 将合并 {{ enabledSubs.length }} 个订阅源（{{ enabledSubs.map(s => s.name).join('、') }}），
-                按「{{ aclName }}」生成 {{ currentTargetLabel }} 完整配置（含策略组、分流规则与 DNS 骨架）。
+                按「<b>{{ aclName }}</b>」生成 <b>{{ currentTargetLabel }}</b> 完整配置（含策略组、分流规则与 DNS 骨架）。
               </p>
               <p v-else>
                 还没有订阅参与导出。到「订阅」页把要合并的订阅源点成<b>「启用」</b>即可。
               </p>
             </div>
-            <!-- With nothing enabled the primary action is the thing that
-                 actually unblocks you, rather than a disabled 生成配置 that
-                 only says what is missing. -->
             <button v-if="!enabledSubs.length" class="btn btn-primary btn-lg" type="button"
                     @click="goTab('subs')">
               <el-icon><arrow-left /></el-icon> 去选择订阅源
             </button>
             <button v-else class="btn btn-primary btn-lg" type="button"
                     :disabled="generating" @click="generate">
-              <!-- Same DOM-compilation rule as the theme toggle above. -->
               <el-icon v-if="generating" class="spin"><loading /></el-icon>
               <el-icon v-else><magic-stick /></el-icon>
-              {{ generating ? '生成中…' : (exportOut === 'outbounds' ? '生成节点列表' : '生成配置') }}
+              {{ generating ? '生成中…' : (exportOut === 'outbounds' ? '✨ 一键生成节点列表' : '✨ 一键生成配置') }}
             </button>
-          </div>
-
-          <!-- GitHub Gist Sync -->
-          <div class="card" style="padding:18px 20px">
-            <div class="section-head" style="margin-bottom:10px">
-              <h2>GitHub Gist 同步</h2>
-              <span class="chip chip-ghost">生成配置时自动推送</span>
-            </div>
-            <p class="footnote" style="margin:0 0 12px">
-              填写 Gist ID 和 Token 后将自动持久化保存到本地（也可在 singbox-web.config.json 或 .env 中配置）。每次点击「生成配置」会自动将配置推送到 GitHub Gist。
-              不同客户端类型会生成不同文件名，所有文件共享同一个 Gist。
-            </p>
-            <el-row :gutter="14">
-              <el-col :xs="24" :sm="10">
-                <el-form-item label="Gist ID" size="small">
-                  <el-input v-model="gistId" placeholder="7f3a8b29c0d1e2f3a4b5c6d7e8f90123"
-                            @blur="saveGistConfig" @change="saveGistConfig" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :sm="10">
-                <el-form-item label="GitHub Token" size="small">
-                  <el-input v-model="githubToken" type="password" show-password
-                            placeholder="ghp_xxxxxx"
-                            @blur="saveGistConfig" @change="saveGistConfig" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :sm="4">
-                <el-form-item label=" " size="small">
-                  <button class="btn btn-primary" type="button" style="width:100%"
-                          :disabled="gistSyncing || !last" @click="syncToGist">
-                    <el-icon v-if="gistSyncing" class="spin"><loading /></el-icon>
-                    <el-icon v-else><upload /></el-icon>
-                    {{ gistSyncing ? '同步中…' : '手动同步' }}
-                  </button>
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <p class="footnote" style="margin:0" v-if="gistStatus"
-               :class="gistStatusType === 'ok' ? 'is-ok' : gistStatusType === 'err' ? 'is-danger' : ''">{{ gistStatus }}</p>
-
-            <!-- Gist file download links -->
-            <div v-if="gistFiles.length" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke-soft)">
-              <p style="font-size:12.5px;font-weight:600;color:var(--text-2);margin:0 0 8px">Gist 文件下载直链（永久最新）</p>
-              <div v-for="f in gistFiles" :key="f.name"
-                   style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px">
-                <span class="chip chip-accent" style="font-family:var(--font-mono)">{{ f.name }}</span>
-                <span class="mono" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:11px">{{ f.rawUrl }}</span>
-                <button class="btn btn-sm" type="button" @click="copyText(f.rawUrl)">复制</button>
-                <a :href="f.rawUrl" target="_blank" class="btn btn-sm" style="text-decoration:none">打开</a>
-              </div>
-            </div>
-          </div>
-
-          <!-- Render options that change the config rather than which nodes go
-               into it. -->
-          <div class="card" style="margin-top:12px">
-            <div class="filters" style="justify-content:space-between;flex-wrap:nowrap">
-              <div>
-                <b style="font-size:13px">IPv6</b>
-                <p class="muted" style="font-size:12px;margin:3px 0 0;line-height:1.5">
-                  开启后隧道与 DNS 走双栈（prefer_ipv4）。部分网络通告了 IPv6 却没有出口，
-                  开启反而更慢，所以默认关闭。
-                </p>
-              </div>
-              <el-switch v-model="ipv6Enabled" @change="persistAll" />
-            </div>
           </div>
 
           <p class="footnote" v-if="genStatus"
              :class="genStatusType === 'ok' ? 'is-ok' : genStatusType === 'err' ? 'is-danger' : ''">{{ genStatus }}</p>
 
-          <!-- Result -->
+          <!-- Result Card: Directly beneath generation action! -->
           <div class="card result-card" v-if="last">
             <!-- Result summary -->
             <div class="result-summary" v-if="resultSummary">
@@ -2160,8 +2248,6 @@ pre.code-block {
             <el-tabs v-model="activeOutTab" class="seg seg-sm" @tab-change="onOutTabChange">
               <el-tab-pane label="节点" name="node">
                 <div class="section">
-                  <!-- Name filter. An expression, not a keyword box: the
-                       keyword form is just a shorthand for one. -->
                   <div class="filters" style="margin-bottom:10px">
                     <el-input v-model="nodeFilterPattern" size="small" clearable
                               style="max-width:340px"
@@ -2231,13 +2317,13 @@ pre.code-block {
                 </div>
               </el-tab-pane>
 
-              <el-tab-pane label="配置" name="cfg">
+              <el-tab-pane label="配置预览" name="cfg">
                 <pre class="code-block">{{ cfgJson }}</pre>
               </el-tab-pane>
             </el-tabs>
 
             <div class="result-actions">
-              <button class="btn btn-sm" type="button" @click="copyConfig">
+              <button class="btn btn-sm btn-primary" type="button" @click="copyConfig">
                 <el-icon><document-copy /></el-icon> {{ exportOut === 'outbounds' ? '复制节点列表' : '复制完整配置' }}
               </button>
               <button class="btn btn-sm" type="button" @click="downloadConfig">
@@ -2253,97 +2339,84 @@ pre.code-block {
             </div>
           </div>
 
-          <!-- Subscription address -->
-          <div class="card sub-address" v-if="globalSubUrl">
-            <div class="section-head">
-              <h2>订阅地址</h2>
-              <span class="chip" :class="exportOut === 'outbounds' ? 'chip-ghost' : 'chip-accent'">
-                {{ exportOut === 'outbounds' ? '纯节点 Provider 模式' : '完整配置模式' }}
-              </span>
+          <!-- 4. GitHub Gist Cloud Sync -->
+          <div class="card" style="padding:18px 20px">
+            <div class="section-head" style="margin-bottom:10px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <h2>GitHub Gist 云端同步</h2>
+                <span class="chip chip-ghost">生成时自动推送</span>
+              </div>
             </div>
-            <p class="footnote" style="margin:0">
-              把这个地址填进客户端一次即可：之后你在「订阅」页点「刷新」，客户端再来拉取时拿到的就是最新节点。
-              默认按客户端的 User-Agent 自动判断格式，也可指定客户端与输出形态（完整配置 vs 仅节点 Provider）。
+            <p class="footnote" style="margin:0 0 12px">
+              填写 Gist ID 和 Token 后将自动持久化保存到本地（也可在 singbox-web.config.json 或 .env 中配置）。每次点击「生成配置」会自动将配置推送到 GitHub Gist。
+              不同客户端与模式会生成不同文件名，所有文件共享同一个 Gist。
             </p>
             <el-row :gutter="14">
-              <el-col :xs="24" :sm="8">
-                <el-form-item label="对外地址（留空用当前浏览器地址）" size="small">
-                  <el-input v-model="publicUrlInput" placeholder="http://150.158.78.150"
-                            @input="onPublicUrlInput" @blur="flushPublicUrl" />
+              <el-col :xs="24" :sm="10">
+                <el-form-item label="Gist ID" size="small">
+                  <el-input v-model="gistId" placeholder="7f3a8b29c0d1e2f3a4b5c6d7e8f90123"
+                            @blur="saveGistConfig" @change="saveGistConfig" />
                 </el-form-item>
               </el-col>
-              <el-col :xs="24" :sm="6">
-                <el-form-item label="客户端类型" size="small">
-                  <el-select v-model="exportTarget" @change="onTargetChange" style="width:100%"
-                    placeholder="自动识别客户端（按 User-Agent）">
-                    <el-option :value="''" label="自动识别客户端（按 User-Agent）"></el-option>
-                    <el-option v-for="t in targets" :key="t.id" :value="t.id" :label="t.label" />
-                  </el-select>
+              <el-col :xs="24" :sm="10">
+                <el-form-item label="GitHub Token" size="small">
+                  <el-input v-model="githubToken" type="password" show-password
+                            placeholder="ghp_xxxxxx"
+                            @blur="saveGistConfig" @change="saveGistConfig" />
                 </el-form-item>
               </el-col>
-              <el-col :xs="24" :sm="5">
-                <el-form-item label="订阅源" size="small">
-                  <el-select v-model="exportSourceId" @change="onSourceChange" style="width:100%" placeholder="全部订阅源">
-                    <el-option :value="''" label="全部订阅源"></el-option>
-                    <el-option v-for="s in sources" :key="s.id" :value="s.id" :label="s.name" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :sm="5">
-                <el-form-item label="输出形态" size="small">
-                  <el-select v-model="exportOut" @change="onOutModeChange" style="width:100%">
-                    <el-option value="config" label="完整配置 (含规则)"></el-option>
-                    <el-option value="outbounds" label="仅节点列表 (Provider)"></el-option>
-                  </el-select>
+              <el-col :xs="24" :sm="4">
+                <el-form-item label=" " size="small">
+                  <button class="btn btn-primary" type="button" style="width:100%"
+                          :disabled="gistSyncing || !last" @click="syncToGist">
+                    <el-icon v-if="gistSyncing" class="spin"><loading /></el-icon>
+                    <el-icon v-else><upload /></el-icon>
+                    {{ gistSyncing ? '同步中…' : '手动同步' }}
+                  </button>
                 </el-form-item>
               </el-col>
             </el-row>
-            <p class="footnote" style="margin:0" v-if="publicUrlHint"
-               :class="publicUrlHintType === 'ok' ? 'is-ok' : publicUrlHintType === 'err' ? 'is-danger' : ''">{{ publicUrlHint }}</p>
-            <div class="url-row">
-              <span class="url-value">{{ fullSubUrl }}</span>
-              <button class="btn btn-sm" type="button" @click="copyText(fullSubUrl)">
-                <el-icon><document-copy /></el-icon> 复制
-              </button>
-              <button class="btn btn-sm" type="button" @click="showQr(fullSubUrl)">
-                <el-icon><iphone /></el-icon> QR
-              </button>
-              <button class="btn btn-sm" type="button" @click="rotateToken">
-                <el-icon><key /></el-icon> 轮换密钥
-              </button>
-            </div>
-            <p class="footnote" style="margin:0" v-if="exportSubHint">{{ exportSubHint }}</p>
-          </div>
+            <p class="footnote" style="margin:0" v-if="gistStatus"
+               :class="gistStatusType === 'ok' ? 'is-ok' : gistStatusType === 'err' ? 'is-danger' : ''">{{ gistStatus }}</p>
 
-          <!-- LAN -->
-          <div class="card" v-if="lanIps.length" style="padding:18px 20px">
-            <div class="section-head" style="margin-bottom:6px">
-              <h2>局域网分享</h2>
-              <span class="chip chip-ghost">同一 Wi-Fi 下的设备可导入</span>
-            </div>
-            <div class="lan-row" v-for="iface in lanIps" :key="iface.name">
-              <span class="lan-name">{{ iface.name }}</span>
-              <code>{{ buildLanSubUrl(iface.url) }}</code>
-              <button class="btn btn-sm" type="button"
-                      @click="copyText(buildLanSubUrl(iface.url))">复制</button>
-              <button class="btn btn-sm" type="button"
-                      @click="showQr(buildLanSubUrl(iface.url))">QR</button>
+            <!-- Gist file download links -->
+            <div v-if="gistFiles.length" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--stroke-soft)">
+              <p style="font-size:12.5px;font-weight:600;color:var(--text-2);margin:0 0 8px">Gist 文件下载直链（永久最新）</p>
+              <div v-for="f in gistFiles" :key="f.name"
+                   style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px">
+                <span class="chip chip-accent" style="font-family:var(--font-mono)">{{ f.name }}</span>
+                <span class="mono" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:11px">{{ f.rawUrl }}</span>
+                <button class="btn btn-sm" type="button" @click="copyText(f.rawUrl)">复制</button>
+                <a :href="f.rawUrl" target="_blank" class="btn btn-sm" style="text-decoration:none">打开</a>
+              </div>
             </div>
           </div>
 
-          <!-- Help -->
+          <!-- 5. Advanced / Network Options -->
+          <div class="card" style="padding:14px 18px">
+            <div class="filters" style="justify-content:space-between;flex-wrap:nowrap">
+              <div>
+                <b style="font-size:13px">IPv6 双栈解析</b>
+                <p class="muted" style="font-size:12px;margin:3px 0 0;line-height:1.5">
+                  开启后隧道与 DNS 走双栈（prefer_ipv4）。部分网络通告了 IPv6 却没有出口，
+                  开启反而更慢，默认保持关闭。
+                </p>
+              </div>
+              <el-switch v-model="ipv6Enabled" @change="persistAll" />
+            </div>
+          </div>
+
+          <!-- 6. Help Guide -->
           <div class="card">
             <el-collapse>
-              <el-collapse-item title="如何使用这份配置" name="help">
+              <el-collapse-item title="使用说明与客户端配置提示" name="help">
                 <ul>
-                  <li><b>GUI 客户端</b>：把下载的 <code>singbox-config.json</code> 作为配置文件导入。</li>
-                  <li><b>命令行</b>：保存为 <code>config.json</code> 后运行 <code>sing-box run -c config.json</code>。</li>
-                  <li>配置按客户端形态生成：开 TUN 接管并带 DNS 骨架，需给 sing-box 相应的系统权限。</li>
-                  <li>ACL4SSR 会生成 🚀 节点选择 / ♻️ 自动选择 / 各地区组等策略组。</li>
-                  <li>国内 IP 直连依赖 sing-box 启动时拉取 <code>geoip-cn</code> 规则集。</li>
+                  <li><b>在线订阅</b>：将本页「在线订阅地址」填入客户端的远程配置/订阅管理中，最省心推荐。</li>
+                  <li><b>GUI 客户端导入</b>：下载配置文件后直接作为本地配置文件导入运行。</li>
+                  <li><b>命令行运行</b>：保存为 <code>config.json</code> 后运行 <code>sing-box run -c config.json</code>。</li>
+                  <li><b>分流规则说明</b>：智能分组会自动生成 🚀 节点选择、♻️ 自动选择与各地区分组；国内直连规则依赖 sing-box 启动时自动获取规则集。</li>
+                  <li><b>安全须知</b>：订阅凭据保存在服务端数据文件（<code>{{ dataPath || 'singbox-web.data.json' }}</code>）里，任何拿到订阅地址的人都能取到你的全部节点，对外暴露请务必套 HTTPS 反向代理。</li>
                 </ul>
-                订阅与凭据保存在服务端数据文件（<code>{{ dataPath || 'singbox-web.data.json' }}</code>）里。
-                <b>任何拿到订阅地址的人都能取到你的全部节点</b>，需要对外请套 HTTPS 反向代理。
               </el-collapse-item>
             </el-collapse>
           </div>
@@ -2609,6 +2682,8 @@ var app = Vue.createApp({
 
     // Loading state
     var pageLoading = Vue.ref(true);
+    var showPublicUrlConfig = Vue.ref(false);
+    var previewSearch = Vue.reactive({});
 
     // Theme: 'auto' follows the OS, 'light' / 'dark' pin it. The pre-paint
     // script in <head> has already set the attribute; this only tracks it.
@@ -3792,6 +3867,17 @@ var app = Vue.createApp({
       var s = sources.value.find(function(src){ return src.id === exportSourceId.value; });
       return s ? s.name : exportSourceId.value;
     });
+    function getFilteredPreviewNodes(sourceId) {
+      var p = getPreview(sourceId);
+      if (!p || !p.nodes) return [];
+      var q = (previewSearch[sourceId] || '').trim().toLowerCase();
+      if (!q) return p.nodes;
+      return p.nodes.filter(function(n) {
+        return (n.tag || '').toLowerCase().indexOf(q) >= 0 ||
+               (n.server || '').toLowerCase().indexOf(q) >= 0 ||
+               (n.type || '').toLowerCase().indexOf(q) >= 0;
+      });
+    }
     function buildLanSubUrl(baseUrl) {
       var params = [];
       if (exportTarget.value) params.push('target=' + encodeURIComponent(exportTarget.value));
@@ -4051,6 +4137,7 @@ var app = Vue.createApp({
       showAddForm, editingId, savingSource, srcFormHint, srcForm,
       exportTarget, exportSourceId, exportOut, onOutModeChange, onSourceChange,
       currentTargetLabel, currentSourceName, isTargetInherentlyNodeOnly, buildLanSubUrl,
+      showPublicUrlConfig, previewSearch, getFilteredPreviewNodes,
       last, generating, genStatus, genStatusType, activeOutTab,
       gistId, githubToken, gistSyncing, gistStatus, gistStatusType, gistFiles,
       saveGistConfig, syncToGist,
