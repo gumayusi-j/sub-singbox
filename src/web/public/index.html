@@ -2649,6 +2649,29 @@ pre.code-block {
     </template>
   </el-dialog>
 
+
+  <!-- Modal: 新建组合订阅 -->
+  <el-dialog v-model="showCollectionModal" title="新建组合订阅 (Collection)" width="520px" destroy-on-close>
+    <el-form label-position="top">
+      <el-form-item label="组合名称" required>
+        <el-input v-model="colForm.name" placeholder="例如：流媒体专用、办公专线、游戏加速" />
+      </el-form-item>
+      <el-form-item label="勾选要包含的订阅源" required>
+        <div style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:8px 12px;width:100%">
+          <el-checkbox-group v-model="colForm.sourceIds">
+            <div v-for="s in sources" :key="s.id" style="margin-bottom:6px">
+              <el-checkbox :value="s.id">{{ s.name }} ({{ s.nodeCount || 0 }} 节点)</el-checkbox>
+            </div>
+          </el-checkbox-group>
+        </div>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <button class="btn" type="button" @click="showCollectionModal = false">取消</button>
+      <button class="btn btn-primary" type="button" @click="saveCollection">确认创建</button>
+    </template>
+  </el-dialog>
+
   <!-- ============ QR dialog ============ -->
   <el-dialog v-if="qrVisible" :model-value="true"
              @close="qrVisible = false" @update:model-value="qrVisible = false"
@@ -2785,6 +2808,31 @@ var app = Vue.createApp({
     var savingSource = Vue.ref(false);
     var srcFormHint = Vue.ref('保存后会自动解析一次，显示节点概况。');
     var srcForm = Vue.reactive({ name:'', kind:'url', url:'', text:'', ua:'', timeout:null, headers:'' });
+
+    // Pipeline operators
+    var pipelineCleanNotice = Vue.ref(lsLoad('sbx:pipeCleanNotice', true));
+    var pipelineInjectFlags = Vue.ref(lsLoad('sbx:pipeInjectFlags', true));
+    var pipelineDedupe = Vue.ref(lsLoad('sbx:pipeDedupe', true));
+    var pipelineUdp = Vue.ref(lsLoad('sbx:pipeUdp', false));
+    var pipelineSkipCert = Vue.ref(lsLoad('sbx:pipeSkipCert', false));
+
+    // Collections
+    var collections = Vue.ref([]);
+    var showCollectionModal = Vue.ref(false);
+    var colForm = Vue.reactive({ name: '', sourceIds: [] });
+
+    // Scheduler
+    var schedulerInfo = Vue.ref(null);
+    var schedulerRunning = Vue.ref(false);
+
+    Vue.watch([pipelineCleanNotice, pipelineInjectFlags, pipelineDedupe, pipelineUdp, pipelineSkipCert], function() {
+      lsSave('sbx:pipeCleanNotice', pipelineCleanNotice.value);
+      lsSave('sbx:pipeInjectFlags', pipelineInjectFlags.value);
+      lsSave('sbx:pipeDedupe', pipelineDedupe.value);
+      lsSave('sbx:pipeUdp', pipelineUdp.value);
+      lsSave('sbx:pipeSkipCert', pipelineSkipCert.value);
+    });
+
 
     // Export
     var exportTarget = Vue.ref(lsLoad(STORE.exportTarget, ''));
@@ -3256,6 +3304,8 @@ var app = Vue.createApp({
         dataPath.value = data.dataPath || '';
         settings.value = data.settings || {};
         customSchemes.value = data.customSchemes || [];
+        if (Array.isArray(data.collections)) collections.value = data.collections;
+        if (data.scheduler) schedulerInfo.value = data.scheduler;
         if (data.gist && (data.gist.id || data.gist.token)) {
           gistId.value = data.gist.id || '';
           githubToken.value = data.gist.token || '';
@@ -4162,6 +4212,70 @@ var app = Vue.createApp({
       ctx.restore();
     }
 
+    
+    function openAddCollectionModal() {
+      colForm.name = '';
+      colForm.sourceIds = sources.value.filter(function(s){ return s.enabled; }).map(function(s){ return s.id; });
+      showCollectionModal.value = true;
+    }
+
+    async function loadCollections() {
+      try {
+        var data = await api('GET', '/api/collections');
+        if (data && data.collections) collections.value = data.collections;
+      } catch (e) {
+        console.warn('failed to load collections:', e);
+      }
+    }
+
+    async function saveCollection() {
+      if (!colForm.name.trim()) {
+        ElementPlus.ElMessage.warning('请填写组合名称');
+        return;
+      }
+      if (!colForm.sourceIds.length) {
+        ElementPlus.ElMessage.warning('请至少勾选一个订阅源');
+        return;
+      }
+      try {
+        await api('POST', '/api/collections', { name: colForm.name.trim(), sourceIds: colForm.sourceIds });
+        showCollectionModal.value = false;
+        await loadCollections();
+        ElementPlus.ElMessage.success('组合创建成功');
+      } catch (e) {
+        ElementPlus.ElMessage.error('创建组合失败: ' + (e.message || e));
+      }
+    }
+
+    async function removeCollection(id) {
+      try {
+        await ElementPlus.ElMessageBox.confirm('确定删除该组合订阅吗？', '删除组合', { type: 'warning' });
+      } catch(e) { return; }
+      try {
+        await api('DELETE', '/api/collections/' + encodeURIComponent(id));
+        await loadCollections();
+        ElementPlus.ElMessage.success('已删除组合');
+      } catch (e) {
+        ElementPlus.ElMessage.error('删除失败: ' + (e.message || e));
+      }
+    }
+
+    async function triggerSchedulerRun() {
+      schedulerRunning.value = true;
+      try {
+        var res = await api('POST', '/api/scheduler/run');
+        if (res) {
+          schedulerInfo.value = res;
+          await loadSubs();
+          ElementPlus.ElMessage.success('自动化刷新完成！' + (res.gistSync && res.gistSync.ok ? '（Gist 已云同步）' : ''));
+        }
+      } catch (e) {
+        ElementPlus.ElMessage.error('执行失败: ' + (e.message || e));
+      } finally {
+        schedulerRunning.value = false;
+      }
+    }
+
     Vue.onMounted(function() {
       // Everything below is the start-up path: no early return here, or a
       // missing map canvas would skip loadSubs() and leave the page inert.
@@ -4232,6 +4346,9 @@ var app = Vue.createApp({
     });
 
     return {
+      pipelineCleanNotice, pipelineInjectFlags, pipelineDedupe, pipelineUdp, pipelineSkipCert,
+      collections, showCollectionModal, colForm, openAddCollectionModal, saveCollection, removeCollection,
+      schedulerInfo, schedulerRunning, triggerSchedulerRun,
       activeTab, sources, targets, globalSubUrl, publicUrl, dataPath, settings, acl,
       theme, isDark, toggleTheme,
       showAddForm, editingId, savingSource, srcFormHint, srcForm,
