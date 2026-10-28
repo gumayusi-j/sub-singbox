@@ -87,32 +87,42 @@ export function createScheduler(options = {}) {
             if (changedAny) {
                 const settings = store.getSettings() || {};
                 const gist = settings.gist;
-                if (gist && gist.id && gist.token) {
+                // Only auto-sync to Gist if explicitly enabled (autoSync: true)
+                // This prevents background jobs from silently pushing unwanted default files
+                // (singbox-config.json, clash-config.yaml) when user exports other targets.
+                if (gist && gist.id && gist.token && gist.autoSync === true) {
                     const filesToSync = {};
-                    // Auto-render default configs: Clash and Sing-box
+                    const targetsToSync = Array.isArray(gist.autoSyncTargets) && gist.autoSyncTargets.length > 0
+                        ? gist.autoSyncTargets
+                        : ["clash", "sing-box"];
+
                     try {
-                        const clashTarget = resolveTarget({ queryTarget: "clash" });
-                        if (clashTarget) {
-                            const clashRender = renderSubscription(store, { kind: "global" }, {
-                                target: clashTarget.target,
-                                out: "config",
-                            });
-                            if (clashRender && clashRender.status === 200) {
-                                filesToSync["clash-config.yaml"] = clashRender.body;
+                        if (targetsToSync.includes("clash")) {
+                            const clashTarget = resolveTarget({ queryTarget: "clash" });
+                            if (clashTarget) {
+                                const clashRender = renderSubscription(store, { kind: "global" }, {
+                                    target: clashTarget.target,
+                                    out: "config",
+                                });
+                                if (clashRender && clashRender.status === 200) {
+                                    filesToSync["clash-config.yaml"] = clashRender.body;
+                                }
                             }
                         }
 
-                        const singboxTarget = resolveTarget({ queryTarget: "sing-box" });
-                        if (singboxTarget) {
-                            const sbRender = renderSubscription(store, { kind: "global" }, {
-                                target: singboxTarget.target,
-                                out: "config",
-                            });
-                            if (sbRender && sbRender.status === 200) {
-                                filesToSync["singbox-config.json"] =
-                                    typeof sbRender.body === "string"
-                                        ? sbRender.body
-                                        : JSON.stringify(sbRender.body, null, 2);
+                        if (targetsToSync.includes("sing-box")) {
+                            const singboxTarget = resolveTarget({ queryTarget: "sing-box" });
+                            if (singboxTarget) {
+                                const sbRender = renderSubscription(store, { kind: "global" }, {
+                                    target: singboxTarget.target,
+                                    out: "config",
+                                });
+                                if (sbRender && sbRender.status === 200) {
+                                    filesToSync["singbox-config.json"] =
+                                        typeof sbRender.body === "string"
+                                            ? sbRender.body
+                                            : JSON.stringify(sbRender.body, null, 2);
+                                }
                             }
                         }
 

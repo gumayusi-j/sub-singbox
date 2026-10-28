@@ -131,9 +131,9 @@ describe("Subscription Scheduler & Automation", function () {
             },
         });
 
-        // Configure Gist in store settings
+        // Configure Gist in store settings with autoSync: true
         store.setSettings({
-            gist: { id: "test-gist-id", token: "ghp_secretToken123" },
+            gist: { id: "test-gist-id", token: "ghp_secretToken123", autoSync: true },
         });
 
         store.addSource({
@@ -153,5 +153,37 @@ describe("Subscription Scheduler & Automation", function () {
         expect(gistPatched).to.be.true;
         expect(result.gistSync).to.not.be.null;
         expect(result.gistSync.ok).to.be.true;
+    });
+
+    it("skips Gist sync when autoSync is not explicitly enabled", async function () {
+        let gistPatched = false;
+
+        const mockFetch = createMockFetch({
+            "https://example.com/sub": {
+                status: 200,
+                headers: {},
+                body: nodesJson(["香港 02"]),
+            },
+            "https://api.github.com/gists/test-gist-id": () => {
+                gistPatched = true;
+                return { status: 200, body: JSON.stringify({ ok: true }) };
+            },
+        });
+
+        // Configure Gist credentials without autoSync
+        store.setSettings({
+            gist: { id: "test-gist-id", token: "ghp_secretToken123" },
+        });
+
+        const scheduler = createScheduler({
+            store,
+            coordinator,
+            fetchImpl: mockFetch,
+        });
+
+        const result = await scheduler.runJob();
+        expect(result.ok).to.be.true;
+        expect(gistPatched).to.be.false;
+        expect(result.gistSync).to.be.null;
     });
 });
