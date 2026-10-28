@@ -2178,7 +2178,7 @@ pre.code-block {
               <span class="ctrl-label" style="font-size:12px;color:var(--text-2);font-weight:600">流水线算子:</span>
               <el-checkbox v-model="pipelineCleanNotice" size="small">🧹 自动清洗公告/失效节点</el-checkbox>
               <el-checkbox v-model="pipelineInjectFlags" size="small">🚩 自动添加国旗 Emoji</el-checkbox>
-              <el-checkbox v-model="pipelineDedupe" size="small">⚡ 物理地址去重 (按 IP+端口)</el-checkbox>
+              <el-checkbox v-model="pipelineDedupe" size="small" title="仅去除协议、服务器、端口、认证、SNI与落地地区完全相同的重复节点">⚡ 物理链路去重 (精准匹配)</el-checkbox>
               <el-checkbox v-model="pipelineUdp" size="small">强制开启 UDP</el-checkbox>
               <el-checkbox v-model="pipelineSkipCert" size="small">跳过证书校验 (Insecure)</el-checkbox>
             </div>
@@ -2822,7 +2822,7 @@ var app = Vue.createApp({
     // Pipeline operators
     var pipelineCleanNotice = Vue.ref(lsLoad('sbx:pipeCleanNotice', true));
     var pipelineInjectFlags = Vue.ref(lsLoad('sbx:pipeInjectFlags', true));
-    var pipelineDedupe = Vue.ref(lsLoad('sbx:pipeDedupe', true));
+    var pipelineDedupe = Vue.ref(lsLoad('sbx:pipeDedupe', false));
     var pipelineUdp = Vue.ref(lsLoad('sbx:pipeUdp', false));
     var pipelineSkipCert = Vue.ref(lsLoad('sbx:pipeSkipCert', false));
 

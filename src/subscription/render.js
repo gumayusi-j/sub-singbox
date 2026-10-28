@@ -16,7 +16,7 @@ import assembleClash from "../kit/assemble-clash";
 import { assembleAcl } from "../kit/acl4ssr/build";
 import { findScheme } from "../kit/schemes";
 import { filterNodeNames, normalizeNodeFilter } from "../kit/nodes/filter";
-import { executeNodePipeline } from "../kit/nodes/pipeline";
+import { executeNodePipeline, dedupeByAddress } from "../kit/nodes/pipeline";
 import { CompatError } from "../kit/compat";
 import { formatUserInfoHeader } from "./usage";
 
@@ -269,14 +269,7 @@ export function renderSubscription(store, resolved, options) {
     if (normalized.nodePipeline && (normalized.nodePipeline.dedupeAddress === true || normalized.nodePipeline.dedupe === true)) {
         const globalSeen = new Set();
         parsedNodes = parsedNodes.map((nodes) => {
-            return nodes.filter((node) => {
-                if (!node) return false;
-                const port = node.port || node.server_port || "";
-                const key = `${node.type || ""}:${node.server || ""}:${port}:${node.uuid || node.password || ""}`;
-                if (key !== ":::" && globalSeen.has(key)) return false;
-                globalSeen.add(key);
-                return true;
-            });
+            return dedupeByAddress(nodes, warnings, globalSeen);
         });
     }
 

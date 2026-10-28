@@ -175,29 +175,72 @@ export function applyRegexRename(nodes, rules = []) {
 }
 
 /**
- * Deduplicate nodes by physical address (type + server + port + credential).
+ * Generate a strict routing & destination identity key for a node.
+ * Includes protocol, server, port, credential, region/country, SNI, Reality keys, and transport path.
  */
-export function dedupeByAddress(nodes, warnings = []) {
+export function getNodeAddressKey(node) {
+    if (!node) return "";
+    const port = node.port || node.server_port || "";
+    const type = node.type || "";
+    const server = node.server || "";
+    const auth = node.uuid || node.password || "";
+
+    // 1. Region / Flag: Nodes for different regions MUST NOT collide (e.g. HK vs JP vs TW on shared relay)
+    const name = node.name || node.tag || "";
+    const region = extractCountryFlag(name) || "";
+
+    // 2. TLS / SNI / Host
+    const sni = node.sni || node.server_name || (node.tls && node.tls.server_name) || "";
+    const host = node.host ||
+        (node["ws-opts"] && node["ws-opts"].headers && (node["ws-opts"].headers.Host || node["ws-opts"].headers.host)) ||
+        (node.ws_opts && node.ws_opts.headers && (node.ws_opts.headers.Host || node.ws_opts.headers.host)) || "";
+
+    // 3. Reality Public Key & Short ID
+    const pbk = node.public_key || node.pbk ||
+        (node.reality_opts && node.reality_opts.public_key) ||
+        (node["reality-opts"] && node["reality-opts"].public_key) ||
+        (node.tls && node.tls.reality && node.tls.reality.public_key) || "";
+    const sid = node.short_id || node.sid ||
+        (node.reality_opts && node.reality_opts.short_id) ||
+        (node["reality-opts"] && node["reality-opts"].short_id) ||
+        (node.tls && node.tls.reality && node.tls.reality.short_id) || "";
+
+    // 4. Transport & Path
+    const transport = node.network || node.transport || "";
+    const path = node.path ||
+        (node["ws-opts"] && node["ws-opts"].path) ||
+        (node.ws_opts && node.ws_opts.path) ||
+        (node["grpc-opts"] && node["grpc-opts"]["grpc-service-name"]) ||
+        (node.grpc_opts && node.grpc_opts.service_name) ||
+        (node["http-opts"] && node["http-opts"].path) || "";
+
+    return `${type}:${server}:${port}:${auth}:${region}:${sni}:${pbk}:${sid}:${transport}:${path}:${host}`;
+}
+
+/**
+ * Deduplicate nodes by physical destination and routing identity.
+ */
+export function dedupeByAddress(nodes, warnings = [], seen = new Set()) {
     if (!Array.isArray(nodes)) return [];
-    const seen = new Set();
     const kept = [];
     let dupCount = 0;
 
     for (const node of nodes) {
         if (!node) continue;
-        const port = node.port || node.server_port || "";
-        const key = `${node.type || ""}:${node.server || ""}:${port}:${node.uuid || node.password || ""}`;
-        if (key !== ":::" && seen.has(key)) {
+        const key = getNodeAddressKey(node);
+        if (key && key !== "::::::::::" && seen.has(key)) {
             dupCount += 1;
             continue;
         }
-        seen.add(key);
+        if (key && key !== "::::::::::") {
+            seen.add(key);
+        }
         kept.push(node);
     }
 
     if (dupCount > 0 && Array.isArray(warnings)) {
         warnings.push({
-            message: `按服务器地址与端口去除了 ${dupCount} 个物理重复节点`,
+            message: `按服务器配置去除了 ${dupCount} 个物理重复节点`,
             path: "pipeline:dedupeByAddress",
         });
     }
@@ -248,6 +291,7 @@ export default {
     applyQuickSettings,
     applyRegexRename,
     dedupeByAddress,
+    getNodeAddressKey,
     executeNodePipeline,
     extractCountryFlag,
     stripExistingFlags,

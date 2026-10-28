@@ -112,6 +112,69 @@ describe("Node Processing Pipeline (Operators)", function () {
             expect(deduped[1].name).to.equal("JP 01");
             expect(warnings).to.have.length(1);
         });
+
+        it("does NOT deduplicate nodes sharing relay host but with different region, SNI, or reality keys", function () {
+            const nodes = [
+                {
+                    name: "🇭🇰 [vless]HK香港 Reality 01 x1",
+                    type: "vless",
+                    server: "1.6rguyesfdhvbz.uk",
+                    port: 443,
+                    uuid: "7ceb06cc-83dd-4c5c-8582-045d00c21fa8",
+                    sni: "a-star.edu.sg",
+                    public_key: "g_zLZWBK-fEIIZlqvlajj7IayHCvnkdyzpidCOUaGko",
+                    short_id: "3456f305",
+                },
+                {
+                    name: "🇭🇰 [vless]HK香港 Reality 02 x1",
+                    type: "vless",
+                    server: "2.6rguyesfdhvbz.uk",
+                    port: 443,
+                    uuid: "7ceb06cc-83dd-4c5c-8582-045d00c21fa8",
+                    sni: "shingaku.mynavi.jp",
+                    public_key: "Kje-ArJ9fAuFhe6oNpPsrsQ95ByWfN06Qvi0nU-WU3E",
+                    short_id: "2765beb6",
+                },
+                {
+                    name: "🇨🇳TW台湾 Reality 01 x1",
+                    type: "vless",
+                    server: "1.6rguyesfdhvbz.uk",
+                    port: 443,
+                    uuid: "7ceb06cc-83dd-4c5c-8582-045d00c21fa8",
+                    sni: "tw-target.com",
+                },
+                {
+                    name: "🇯🇵JP日本 Reality 01 x1",
+                    type: "vless",
+                    server: "1.6rguyesfdhvbz.uk",
+                    port: 443,
+                    uuid: "7ceb06cc-83dd-4c5c-8582-045d00c21fa8",
+                    sni: "jp-target.com",
+                },
+                {
+                    name: "🇸🇬SG新加坡 Reality 01 x1",
+                    type: "vless",
+                    server: "1.6rguyesfdhvbz.uk",
+                    port: 443,
+                    uuid: "7ceb06cc-83dd-4c5c-8582-045d00c21fa8",
+                    sni: "sg-target.com",
+                },
+                {
+                    name: "🇩🇪DE德国 Reality 01 x1",
+                    type: "vless",
+                    server: "1.6rguyesfdhvbz.uk",
+                    port: 443,
+                    uuid: "7ceb06cc-83dd-4c5c-8582-045d00c21fa8",
+                    sni: "de-target.com",
+                },
+            ];
+
+            const warnings = [];
+            const result = dedupeByAddress(nodes, warnings);
+            // All 6 different regions/SNIs must be fully preserved!
+            expect(result).to.have.length(6);
+            expect(warnings).to.have.length(0);
+        });
     });
 
     describe("executeNodePipeline", function () {
