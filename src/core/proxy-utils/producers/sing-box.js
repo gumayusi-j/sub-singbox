@@ -831,6 +831,23 @@ const vmessProtocolOptionsParser = (proxy, parsedProxy) => {
     }
 };
 
+
+const xhttpParser = (proxy, parsedProxy) => {
+    const opts = proxy['xhttp-opts'] || proxy.xhttp_opts || {};
+    const transport = {
+        type: 'xhttp',
+    };
+    const path = opts.path || proxy['xhttp-path'] || proxy.path || '';
+    if (path) transport.path = path;
+    const host = opts.host || proxy['xhttp-host'] || proxy.host || (opts.headers && (opts.headers.Host || opts.headers.host)) || '';
+    if (host) transport.host = host;
+    if (opts.mode) transport.mode = opts.mode;
+    if (opts.headers && typeof opts.headers === 'object') {
+        transport.headers = opts.headers;
+    }
+    parsedProxy.transport = transport;
+};
+
 const vmessParser = (proxy = {}) => {
     const parsedProxy = {
         tag: proxy.name,
@@ -850,6 +867,7 @@ const vmessParser = (proxy = {}) => {
     if (proxy.network === 'h2') h2Parser(proxy, parsedProxy);
     if (proxy.network === 'http') h1Parser(proxy, parsedProxy);
     if (proxy.network === 'grpc') grpcParser(proxy, parsedProxy);
+    if (proxy.network === 'xhttp') xhttpParser(proxy, parsedProxy);
     networkParser(proxy, parsedProxy);
     tfoParser(proxy, parsedProxy);
     detourParser(proxy, parsedProxy);
@@ -879,6 +897,7 @@ const vlessParser = (proxy = {}) => {
     if (proxy.network === 'h2') h2Parser(proxy, parsedProxy);
     if (proxy.network === 'http') h1Parser(proxy, parsedProxy);
     if (proxy.network === 'grpc') grpcParser(proxy, parsedProxy);
+    if (proxy.network === 'xhttp') xhttpParser(proxy, parsedProxy);
     networkParser(proxy, parsedProxy);
     tfoParser(proxy, parsedProxy);
     detourParser(proxy, parsedProxy);
@@ -901,6 +920,7 @@ const trojanParser = (proxy = {}) => {
         throw 'invalid port';
     if (proxy['fast-open']) parsedProxy.udp_fragment = true;
     if (proxy.network === 'grpc') grpcParser(proxy, parsedProxy);
+    if (proxy.network === 'xhttp') xhttpParser(proxy, parsedProxy);
     if (proxy.network === 'ws') wsParser(proxy, parsedProxy);
     networkParser(proxy, parsedProxy);
     tfoParser(proxy, parsedProxy);
@@ -1418,10 +1438,7 @@ export default function singbox_Producer() {
                             'Platform sing-box cannot replace AnyTLS TLS with ShadowTLS',
                         );
                     }
-                    if (['xhttp'].includes(proxy.network))
-                        throw new Error(
-                            `Platform sing-box does not support network: ${proxy.network}`,
-                        );
+
                     switch (proxy.type) {
                         case 'ssh':
                             list.push(sshParser(proxy));
@@ -1513,7 +1530,7 @@ export default function singbox_Producer() {
                         case 'vmess':
                             if (
                                 !proxy.network ||
-                                ['tcp', 'ws', 'grpc', 'h2', 'http'].includes(
+                                ['tcp', 'ws', 'grpc', 'h2', 'http', 'xhttp'].includes(
                                     proxy.network,
                                 )
                             ) {

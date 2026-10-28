@@ -52,6 +52,29 @@ export function stripExistingFlags(str) {
 /**
  * Clean announcement / dummy notice nodes.
  */
+
+export function isDomesticMianliuHttpNode(node) {
+    if (!node || node.type !== "http") return false;
+    const headers = node.headers || {};
+    // Check for mianliu specific headers (T5, with-At, X-Online-Host, tinyproxy)
+    if (headers["X-T5-Auth"] || headers["with-At"] || headers["X-Online-Host"] || headers["x-online-host"]) {
+        return true;
+    }
+    const hostHeader = (headers.Host || headers.host || "").toLowerCase();
+    if (hostHeader.includes("dingtalk.com") || hostHeader.includes("10010.com") || hostHeader.includes("189.cn") || hostHeader.includes("10086.cn")) {
+        return true;
+    }
+    const ua = (headers["User-Agent"] || headers["user-agent"] || "").toLowerCase();
+    if (ua.includes("sp-engine") || ua.includes("baiduboxapp")) {
+        return true;
+    }
+    const name = (node.name || node.tag || "").toLowerCase();
+    if (name.includes("免流") || name.includes("定向") || (/(?:移动|联通|电信)/.test(name) && Object.keys(headers).length > 0)) {
+        return true;
+    }
+    return false;
+}
+
 export function cleanNoticeNodes(nodes, warnings = []) {
     if (!Array.isArray(nodes)) return [];
     const kept = [];
@@ -68,8 +91,9 @@ export function cleanNoticeNodes(nodes, warnings = []) {
             (server === "127.0.0.1" || server === "0.0.0.0" || server === "localhost") &&
             (port === 0 || port === 1080);
         const isPortZero = port === 0;
+        const isMianliuHttp = isDomesticMianliuHttpNode(node);
 
-        if (isNoticeName || isDummyAddress || isPortZero) {
+        if (isNoticeName || isDummyAddress || isPortZero || isMianliuHttp) {
             removedCount += 1;
             continue;
         }
@@ -78,7 +102,7 @@ export function cleanNoticeNodes(nodes, warnings = []) {
 
     if (removedCount > 0 && Array.isArray(warnings)) {
         warnings.push({
-            message: `已自动清洗 ${removedCount} 个公告或无用节点`,
+            message: `已自动清洗 ${removedCount} 个公告、免流或无用节点`,
             path: "pipeline:cleanNoticeNodes",
         });
     }
@@ -287,6 +311,7 @@ export function executeNodePipeline(nodes, options = {}, warnings = []) {
 
 export default {
     cleanNoticeNodes,
+    isDomesticMianliuHttpNode,
     injectCountryFlags,
     applyQuickSettings,
     applyRegexRename,

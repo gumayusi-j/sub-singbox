@@ -34,7 +34,48 @@ describe("Node Processing Pipeline (Operators)", function () {
             expect(result[0].name).to.equal("香港 02 [1.0x]");
             expect(result[1].name).to.equal("日本 01");
             expect(warnings).to.have.length(1);
-            expect(warnings[0].message).to.include("4 个公告或无用节点");
+            expect(warnings[0].message).to.include("4 个公告");
+        });
+
+        it("filters out domestic carrier mianliu / dummy fake HTTP proxies", function () {
+            const raw = [
+                {
+                    name: "🇨🇳 南京移动",
+                    type: "http",
+                    server: "36.155.169.188",
+                    port: 443,
+                    headers: {
+                        Host: "down.dingtalk.com:80",
+                        "with-At": "down.dingtalk.com",
+                        "X-T5-Auth": "2025848265",
+                        "User-Agent": "okhttp/3.11.0 SP-engine/2.71.0",
+                    },
+                },
+                {
+                    name: "🇨🇳 广州电信",
+                    type: "http",
+                    server: "14.215.182.75",
+                    port: 443,
+                    headers: {
+                        Host: "down.dingtalk.com:80",
+                        "X-T5-Auth": "2025848265",
+                    },
+                },
+                {
+                    name: "普通可用代理",
+                    type: "http",
+                    server: "1.2.3.4",
+                    port: 8080,
+                    headers: {},
+                },
+            ];
+
+            const warnings = [];
+            const result = cleanNoticeNodes(raw, warnings);
+            expect(result).to.have.length(1);
+            expect(result[0].name).to.equal("普通可用代理");
+            expect(warnings).to.have.length(1);
+            expect(warnings[0].message).to.include("2 个公告");
         });
     });
 

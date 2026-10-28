@@ -2176,7 +2176,7 @@ pre.code-block {
 
             <div class="hub-controls" style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border-color-lighter);display:flex;align-items:center;flex-wrap:wrap;gap:14px;">
               <span class="ctrl-label" style="font-size:12px;color:var(--text-2);font-weight:600">流水线算子:</span>
-              <el-checkbox v-model="pipelineCleanNotice" size="small">🧹 自动清洗公告/失效节点</el-checkbox>
+              <el-checkbox v-model="pipelineCleanNotice" size="small" title="移除失效、说明、流量到期提醒及国内运营商免流HTTP节点">🧹 清洗公告与免流节点</el-checkbox>
               <el-checkbox v-model="pipelineInjectFlags" size="small">🚩 自动添加国旗 Emoji</el-checkbox>
               <el-checkbox v-model="pipelineDedupe" size="small" title="仅去除协议、服务器、端口、认证、SNI与落地地区完全相同的重复节点">⚡ 物理链路去重 (精准匹配)</el-checkbox>
               <el-checkbox v-model="pipelineUdp" size="small">强制开启 UDP</el-checkbox>
