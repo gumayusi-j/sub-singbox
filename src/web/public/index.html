@@ -2275,7 +2275,7 @@ pre.code-block {
               <el-icon><arrow-left /></el-icon> 去选择订阅源
             </button>
             <button v-else class="btn btn-primary btn-lg" type="button"
-                    :disabled="generating" @click="generate">
+                    :disabled="generating" @click="generate(true)">
               <el-icon v-if="generating" class="spin"><loading /></el-icon>
               <el-icon v-else><magic-stick /></el-icon>
               {{ generating ? '生成中…' : (exportOut === 'outbounds' ? '✨ 一键生成节点列表' : '✨ 一键生成配置') }}
@@ -3706,12 +3706,13 @@ var app = Vue.createApp({
     }
 
     // === Export ===
-    async function generate() {
+    async function generate(trigger) {
       if (!enabledSubs.value.length) return;
       generating.value = true;
       genStatus.value = '生成中…'; genStatusType.value = '';
       skippedExpanded.value = false;
       skippedGroupExpanded.value = new Set();
+      var isManual = trigger === true || (trigger && typeof trigger === 'object' && trigger.isTrusted);
       try {
         var exportBody = {
           ids: enabledSubs.value.map(function(s){ return s.id; }),
@@ -3741,11 +3742,25 @@ var app = Vue.createApp({
         genStatus.value = parts.join('，') + '。';
         genStatusType.value = 'ok';
         if (activeOutTab.value === 'map') Vue.nextTick(drawWorldMap);
+
+        // 手动点击生成配置且已配置 Gist 时，自动触发同步
+        if (isManual && gistId.value && githubToken.value) {
+          genStatus.value += ' 正在自动同步至 GitHub Gist…';
+          try {
+            await syncToGist();
+            if (gistStatusType.value === 'ok') {
+              genStatus.value = parts.join('，') + '。已自动同步至 GitHub Gist。';
+            } else if (gistStatusType.value === 'err') {
+              genStatus.value = parts.join('，') + '。但 Gist 同步失败：' + gistStatus.value;
+            }
+          } catch(syncErr) {
+            genStatus.value = parts.join('，') + '。但 Gist 同步失败：' + (syncErr.message || syncErr);
+          }
+        }
       } catch(e) {
         genStatus.value = '生成失败：'+(e.message||e); genStatusType.value = 'err';
       }
       generating.value = false;
-      // Gist sync is manually triggered by user via syncToGist() button to prevent unwanted duplicate file pushes during option toggling
     }
 
     // === GitHub Gist Sync ===
@@ -3815,7 +3830,7 @@ var app = Vue.createApp({
       // Sanitize: keep Chinese, letters, digits, dash, underscore; replace others with dash.
       var prefix = sourceName ? sourceName.replace(/[^\w\u4e00-\u9fff-]+/g, '-').replace(/^-|-$/g, '') + '-' : '';
       var fileName = prefix + baseName;
-      var content = cfgJson.value;
+      var content = cfgJson.value || (last.value && (typeof last.value.output === 'string' ? last.value.output : JSON.stringify(last.value.output, null, 2))) || '';
 
       try {
         var url = 'https://api.github.com/gists/' + gistId.value;
