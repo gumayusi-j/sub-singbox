@@ -867,7 +867,6 @@ const vmessParser = (proxy = {}) => {
     if (proxy.network === 'h2') h2Parser(proxy, parsedProxy);
     if (proxy.network === 'http') h1Parser(proxy, parsedProxy);
     if (proxy.network === 'grpc') grpcParser(proxy, parsedProxy);
-    if (proxy.network === 'xhttp') xhttpParser(proxy, parsedProxy);
     networkParser(proxy, parsedProxy);
     tfoParser(proxy, parsedProxy);
     detourParser(proxy, parsedProxy);
@@ -897,7 +896,6 @@ const vlessParser = (proxy = {}) => {
     if (proxy.network === 'h2') h2Parser(proxy, parsedProxy);
     if (proxy.network === 'http') h1Parser(proxy, parsedProxy);
     if (proxy.network === 'grpc') grpcParser(proxy, parsedProxy);
-    if (proxy.network === 'xhttp') xhttpParser(proxy, parsedProxy);
     networkParser(proxy, parsedProxy);
     tfoParser(proxy, parsedProxy);
     detourParser(proxy, parsedProxy);
@@ -920,7 +918,6 @@ const trojanParser = (proxy = {}) => {
         throw 'invalid port';
     if (proxy['fast-open']) parsedProxy.udp_fragment = true;
     if (proxy.network === 'grpc') grpcParser(proxy, parsedProxy);
-    if (proxy.network === 'xhttp') xhttpParser(proxy, parsedProxy);
     if (proxy.network === 'ws') wsParser(proxy, parsedProxy);
     networkParser(proxy, parsedProxy);
     tfoParser(proxy, parsedProxy);
@@ -1439,6 +1436,12 @@ export default function singbox_Producer() {
                         );
                     }
 
+                    if (['xhttp', 'splithttp'].includes(proxy.network)) {
+                        throw new Error(
+                            `Platform sing-box does not support network: ${proxy.network}`,
+                        );
+                    }
+
                     switch (proxy.type) {
                         case 'ssh':
                             list.push(sshParser(proxy));
@@ -1530,7 +1533,7 @@ export default function singbox_Producer() {
                         case 'vmess':
                             if (
                                 !proxy.network ||
-                                ['tcp', 'ws', 'grpc', 'h2', 'http', 'xhttp'].includes(
+                                ['tcp', 'ws', 'grpc', 'h2', 'http'].includes(
                                     proxy.network,
                                 )
                             ) {

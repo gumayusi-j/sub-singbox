@@ -186,4 +186,58 @@ describe("Subscription Scheduler & Automation", function () {
         expect(gistPatched).to.be.false;
         expect(result.gistSync).to.be.null;
     });
+    it("auto-updates configurations specified in gist.syncProfiles based on refreshed subscription nodes", async function () {
+        let syncedFiles = null;
+
+        const mockFetch = createMockFetch({
+            "https://example.com/sub": {
+                status: 200,
+                headers: {},
+                body: nodesJson(["香港 01", "台湾 01"]),
+            },
+            "https://api.github.com/gists/test-gist-id": (req) => {
+                if (req && req.body) {
+                    try {
+                        const parsed = JSON.parse(req.body);
+                        syncedFiles = parsed.files;
+                    } catch (e) {}
+                }
+                return { status: 200, body: JSON.stringify({ ok: true }) };
+            },
+        });
+
+        store.setSettings({
+            gist: {
+                id: "test-gist-id",
+                token: "ghp_secretToken123",
+                syncProfiles: [
+                    {
+                        fileName: "我的Anywhere-节点.txt",
+                        target: "anywhere",
+                        out: "outbounds",
+                    },
+                ],
+            },
+        });
+
+        store.addSource({
+            name: "My Source",
+            kind: "url",
+            url: "https://example.com/sub",
+        });
+
+        const scheduler = createScheduler({
+            store,
+            coordinator,
+            fetchImpl: mockFetch,
+        });
+
+        const result = await scheduler.runJob();
+        expect(result.ok).to.be.true;
+        expect(result.gistSync).to.not.be.null;
+        expect(result.gistSync.files).to.include("我的Anywhere-节点.txt");
+        expect(result.gistSync.files).to.not.include("singbox-config.json");
+        expect(result.gistSync.files).to.not.include("clash-config.yaml");
+    });
+
 });

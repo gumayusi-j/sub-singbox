@@ -273,10 +273,17 @@ export function createSubscriptionRouter(options) {
     function resolveEffectiveGist(storedGist) {
         const stored = storedGist || {};
         const fromConfig = (config && config.gist) || {};
-        return {
+        const out = {
             id: stored.id !== undefined && stored.id !== "" ? stored.id : (fromConfig.id || ""),
             token: stored.token !== undefined && stored.token !== "" ? stored.token : (fromConfig.token || ""),
         };
+        if (stored.syncProfiles !== undefined || fromConfig.syncProfiles !== undefined) {
+            out.syncProfiles = stored.syncProfiles || fromConfig.syncProfiles;
+        }
+        if (stored.autoSync !== undefined || fromConfig.autoSync !== undefined) {
+            out.autoSync = stored.autoSync !== undefined ? stored.autoSync : fromConfig.autoSync;
+        }
+        return out;
     }
 
     function collectionPayload() {

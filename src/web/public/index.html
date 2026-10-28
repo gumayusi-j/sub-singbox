@@ -2738,8 +2738,11 @@ var CLIENT_PROTOCOLS = {
   "anywhere":["vless","hysteria2","trojan","shadowsocks","socks","anytls"]
 };
 
-function isClientSupportingProto(client, type) {
+function isClientSupportingProto(client, type, node) {
   if (!client) return true;
+  if ((client === 'sing-box' || client === 'anywhere') && node && (node.network === 'xhttp' || node.network === 'splithttp')) {
+    return false;
+  }
   var supported = CLIENT_PROTOCOLS[client];
   if (!supported) return true;
   if (!type) return false;
@@ -2950,7 +2953,7 @@ var app = Vue.createApp({
     var filteredNodes = Vue.computed(function() {
       var nodes = (last.value && last.value.nodes) || [];
       if (!exportTarget.value) return nodes;
-      return nodes.filter(function(n){ return isClientSupportingProto(exportTarget.value, n.type); });
+      return nodes.filter(function(n){ return isClientSupportingProto(exportTarget.value, n.type, n); });
     });
     var hasPing = Vue.computed(function() { return Object.keys(pingResults).length > 0; });
     var cfgJson = Vue.computed(function() {
@@ -2970,7 +2973,7 @@ var app = Vue.createApp({
         last.value.warnings.forEach(function(w) { warns.push(w && w.message ? w.message : w); });
       }
       if (exportTarget.value && last.value && last.value.nodes) {
-        var removed = last.value.nodes.filter(function(n){ return !isClientSupportingProto(exportTarget.value, n.type); }).length;
+        var removed = last.value.nodes.filter(function(n){ return !isClientSupportingProto(exportTarget.value, n.type, n); }).length;
         if (removed > 0) warns.push('客户端「' + exportTarget.value + '」不支持 ' + removed + ' 个节点的协议，已自动过滤。');
       }
       return warns;
@@ -2997,7 +3000,7 @@ var app = Vue.createApp({
       var serverSkipped = ((last.value && last.value.skippedNodes) || []).length;
       var clientFiltered = 0;
       if (exportTarget.value && last.value && last.value.nodes) {
-        clientFiltered = last.value.nodes.filter(function(n){ return !isClientSupportingProto(exportTarget.value, n.type); }).length;
+        clientFiltered = last.value.nodes.filter(function(n){ return !isClientSupportingProto(exportTarget.value, n.type, n); }).length;
       }
       return serverSkipped + clientFiltered;
     });
@@ -3321,6 +3324,9 @@ var app = Vue.createApp({
           githubToken.value = data.gist.token || '';
           lsSave('sbx:gistId', gistId.value);
           lsSave('sbx:githubToken', githubToken.value);
+          if (Array.isArray(data.gist.syncProfiles)) {
+            lsSave('sbx:gistSyncProfiles', data.gist.syncProfiles);
+          }
         } else if (gistId.value || githubToken.value) {
           saveGistConfig();
         }
@@ -3737,7 +3743,7 @@ var app = Vue.createApp({
         regionFilter.value = '';
         var removed = 0;
         if (exportTarget.value && last.value.nodes) {
-          removed = last.value.nodes.filter(function(n){ return !isClientSupportingProto(exportTarget.value, n.type); }).length;
+          removed = last.value.nodes.filter(function(n){ return !isClientSupportingProto(exportTarget.value, n.type, n); }).length;
         }
         var serverSkipped = (last.value.skippedNodes || []).length;
         var parts = ['完成：' + filteredNodes.value.length + ' 个节点'];
@@ -3903,6 +3909,35 @@ var app = Vue.createApp({
         gistFiles.value = files;
         // Save persisted gist files list to localStorage for later reload
         lsSave('sbx:gistFiles', files);
+
+        // Record this sync profile so background subscription refresh auto-updates this configuration
+        try {
+          var currentProfiles = lsLoad('sbx:gistSyncProfiles', []);
+          currentProfiles = currentProfiles.filter(function(p){ return p.fileName !== fileName; });
+          currentProfiles.push({
+            fileName: fileName,
+            target: targetKey,
+            out: exportOut.value || 'config',
+            sourceId: exportSourceId.value || '',
+            nodePipeline: {
+              cleanNotice: pipelineCleanNotice.value,
+              injectFlags: pipelineInjectFlags.value,
+              dedupeAddress: pipelineDedupe.value,
+              quickSettings: {
+                udp: pipelineUdp.value,
+                skipCertVerify: pipelineSkipCert.value
+              }
+            }
+          });
+          lsSave('sbx:gistSyncProfiles', currentProfiles);
+          api('PUT', '/api/settings', {
+            gist: {
+              id: (gistId.value || '').trim(),
+              token: (githubToken.value || '').trim(),
+              syncProfiles: currentProfiles
+            }
+          }).catch(function(e){ console.warn('Failed to save syncProfiles:', e); });
+        } catch(_e) {}
         gistStatus.value = '已同步 ' + fileName + ' (' + (isOutbounds ? '纯节点' : '完整配置') + ') 到 Gist。';
         gistStatusType.value = 'ok';
       } catch (e) {
@@ -4022,6 +4057,18 @@ var app = Vue.createApp({
         }
         gistFiles.value = files;
         lsSave('sbx:gistFiles', files);
+        try {
+          var currentProfiles = lsLoad('sbx:gistSyncProfiles', []);
+          currentProfiles = currentProfiles.filter(function(p){ return p.fileName !== fileName; });
+          lsSave('sbx:gistSyncProfiles', currentProfiles);
+          api('PUT', '/api/settings', {
+            gist: {
+              id: (gistId.value || '').trim(),
+              token: (githubToken.value || '').trim(),
+              syncProfiles: currentProfiles
+            }
+          }).catch(function(e){ console.warn('Failed to update syncProfiles on delete:', e); });
+        } catch(_e) {}
         gistStatus.value = '已成功从 Gist 删除 ' + fileName;
         gistStatusType.value = 'ok';
       } catch (e) {
@@ -4036,10 +4083,12 @@ var app = Vue.createApp({
     function saveGistConfig() {
       lsSave('sbx:gistId', gistId.value);
       lsSave('sbx:githubToken', githubToken.value);
+      var currentProfiles = lsLoad('sbx:gistSyncProfiles', []);
       api('PUT', '/api/settings', {
         gist: {
           id: (gistId.value || '').trim(),
-          token: (githubToken.value || '').trim()
+          token: (githubToken.value || '').trim(),
+          syncProfiles: currentProfiles
         }
       }).catch(function(e) {
         console.warn('[saveGistConfig] failed to save to server:', e);

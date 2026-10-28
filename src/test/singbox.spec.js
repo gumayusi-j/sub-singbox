@@ -50,7 +50,7 @@ function expectSubset(actual, expected, path) {
 }
 
 describe("sing-box producer (vendored kernel)", function () {
-    it("supports VLESS and VMess with xhttp transport (Cloudflare nodes)", function () {
+    it("filters out VLESS with unsupported xhttp transport for sing-box", function () {
         const cfNode = {
             name: "[vless] 🇭🇰 HK香港 Cloudflare A x1",
             type: "vless",
@@ -68,15 +68,9 @@ describe("sing-box producer (vendored kernel)", function () {
         };
 
         const result = fromNodes([cfNode]);
-        expect(result.skippedNodes).to.have.length(0);
-        expect(result.outbounds).to.have.length(1);
-        const out = result.outbounds[0];
-        expect(out.type).to.equal("vless");
-        expect(out.transport).to.be.an("object");
-        expect(out.transport.type).to.equal("xhttp");
-        expect(out.transport.path).to.equal("/_next/lsqlrd");
-        expect(out.transport.host).to.equal("k7tq2mvx.velvetharbor428.win");
-        expect(out.transport.mode).to.equal("packet-up");
+        expect(result.skippedNodes).to.have.length(1);
+        expect(result.skippedNodes[0].reason).to.include("不支持 xhttp");
+        expect(result.outbounds).to.have.length(0);
     });
 
     it("exports ss / trojan / vmess nodes to sing-box outbounds", function () {

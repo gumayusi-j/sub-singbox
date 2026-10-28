@@ -140,6 +140,10 @@ function skipReason(node) {
     if (type === "trojan" && node.flow) {
         return "sing-box 不支持 Trojan flow: " + node.flow;
     }
+    // xhttp / splithttp network is unsupported by sing-box
+    if (node.network === "xhttp" || node.network === "splithttp") {
+        return "sing-box 不支持 xhttp 传输方式";
+    }
     // Shadowsocks over TLS without plugin (native SS TLS)
     if (type === "ss" && node.tls && !node.plugin) {
         return "sing-box 不支持原生 SS-over-TLS";
