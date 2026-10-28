@@ -116,6 +116,14 @@ export const TARGETS = [
         ua: /egern/i,
     },
     {
+        id: "anywhere",
+        label: "Anywhere",
+        exportable: true,
+        produce: "anywhere",
+        contentType: "text/plain; charset=utf-8",
+        ua: /anywhere/i,
+    },
+    {
         // Never matched from a UA (the pattern only accepts an empty agent, and
         // an empty agent short-circuits before the scan); reachable only via an
         // explicit ?target=uri.
@@ -151,6 +159,7 @@ const ALIASES = {
     sfa: "sing-box",
     sft: "sing-box",
     "shadow-rocket": "shadowrocket",
+    anywhere: "anywhere",
     v2rayng: "v2ray",
 };
 

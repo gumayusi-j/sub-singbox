@@ -2221,6 +2221,9 @@ pre.code-block {
               <button class="btn btn-sm" type="button" @click="showQr(fullSubUrl)">
                 <el-icon><iphone /></el-icon> 扫码导入
               </button>
+              <a v-if="exportTarget === 'anywhere'" :href="'anywhere://add-proxy?link=' + encodeURIComponent(fullSubUrl)" class="btn btn-sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px">
+                <el-icon><component :is="'link'" /></el-icon> 一键导入 Anywhere
+              </a>
             </div>
             <p class="footnote" style="margin:0" v-if="exportSubHint">{{ exportSubHint }}</p>
 
@@ -2731,7 +2734,8 @@ var CLIENT_PROTOCOLS = {
   "egern":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard","anytls","snell","ssh","socks","http"],
   "hiddify":["shadowsocks","vmess","vless","trojan","hysteria2","tuic","wireguard","anytls"],
   "karing":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"],
-  "uri":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls"]
+  "uri":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls"],
+  "anywhere":["vless","hysteria2","trojan","shadowsocks","socks","anytls"]
 };
 
 function isClientSupportingProto(client, type) {
@@ -3778,7 +3782,8 @@ var app = Vue.createApp({
       'egern': 'egern-config.yaml',
       'hiddify': 'hiddify-config.json',
       'karing': 'karing-config.json',
-      'uri': 'uri-list.txt'
+      'uri': 'uri-list.txt',
+      'anywhere': 'anywhere-nodes.txt'
     };
 
     var GIST_NODES_FILE_MAP = {
@@ -3794,7 +3799,8 @@ var app = Vue.createApp({
       'egern': 'egern-config.yaml',
       'hiddify': 'hiddify-nodes.json',
       'karing': 'karing-provider.yaml',
-      'uri': 'uri-list.txt'
+      'uri': 'uri-list.txt',
+      'anywhere': 'anywhere-nodes.txt'
     };
 
     async function syncToGist() {
@@ -4142,7 +4148,7 @@ var app = Vue.createApp({
     }
     function isTargetInherentlyNodeOnly(targetId) {
       var id = targetId || 'sing-box';
-      return ['egern', 'surge', 'loon', 'quantumultx', 'surfboard', 'v2ray', 'uri'].indexOf(id) >= 0;
+      return ['egern', 'surge', 'loon', 'quantumultx', 'surfboard', 'v2ray', 'uri', 'anywhere'].indexOf(id) >= 0;
     }
     var currentTargetLabel = Vue.computed(function() {
       if (!exportTarget.value) return '自动识别';

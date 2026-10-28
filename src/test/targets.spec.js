@@ -28,6 +28,7 @@ describe("subscription targets — resolution", function () {
         expect(ua("Quantumult%20X/1.0.30").target.id).to.equal("quantumultx");
         expect(ua("Surfboard/2.0").target.id).to.equal("surfboard");
         expect(ua("Egern/1.0").target.id).to.equal("egern");
+        expect(ua("Anywhere/1.0").target.id).to.equal("anywhere");
     });
 
     it("checks an app before the core it embeds", function () {
@@ -132,7 +133,7 @@ describe("subscription targets — table integrity", function () {
 
     it("lists the clients the export page can pin an address to", function () {
         const listed = listExportTargets();
-        expect(listed).to.have.length(10);
+        expect(listed).to.have.length(11);
         expect(listed[0]).to.have.keys(["id", "label"]);
         // Membership, not order: the table's order is a UA-matching concern.
         expect(listed.map((t) => t.id)).to.have.members([
@@ -146,6 +147,7 @@ describe("subscription targets — table integrity", function () {
             "hiddify",
             "egern",
             "stash",
+            "anywhere",
         ]);
         // URI list is an output format rather than a client a user picks.
         expect(listed.map((t) => t.id)).to.not.include("uri");
