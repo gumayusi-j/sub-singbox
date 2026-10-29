@@ -29,7 +29,7 @@ describe('Anywhere Export & Dialect', function () {
         expect(unsupportedReason(invalidUuid)).to.include('认证信息无效');
     });
 
-    it('rejects nodes with skip-cert-verify, pinned cert, or disabled udp', function () {
+    it('accepts nodes with skip-cert-verify and disabled udp, rejects pinned cert', function () {
         const base = {
             type: 'trojan',
             name: 'Trojan-Node',
@@ -40,17 +40,16 @@ describe('Anywhere Export & Dialect', function () {
         };
         expect(supports(base)).to.equal(true);
 
+        // Nodes with skip-cert-verify or disabled udp are supported (Anywhere connects normally)
         const insecure = { ...base, 'skip-cert-verify': true };
-        expect(supports(insecure)).to.equal(false);
-        expect(unsupportedReason(insecure)).to.include('跳过证书校验');
+        expect(supports(insecure)).to.equal(true);
+
+        const noUdp = { ...base, udp: false };
+        expect(supports(noUdp)).to.equal(true);
 
         const pinned = { ...base, 'certificate-fingerprint': 'aabbccdd' };
         expect(supports(pinned)).to.equal(false);
         expect(unsupportedReason(pinned)).to.include('证书指纹固定');
-
-        const noUdp = { ...base, udp: false };
-        expect(supports(noUdp)).to.equal(false);
-        expect(unsupportedReason(noUdp)).to.include('UDP');
     });
 
     it('maps TLS fingerprints according to Anywhere specifications', function () {
@@ -76,10 +75,10 @@ describe('Anywhere Export & Dialect', function () {
         const randomLink = produceLink(node('random'));
         expect(randomLink).to.not.include('fp=');
 
-        // Unsupported fingerprint rejected
+        // Unsupported fingerprint mapped to chrome_133
         const unsupportedFp = node('qq');
-        expect(supports(unsupportedFp)).to.equal(false);
-        expect(unsupportedReason(unsupportedFp)).to.include('不支持 TLS 指纹');
+        const link = produceLink(unsupportedFp);
+        expect(link).to.include('fp=chrome_133');
     });
 
     it('converts parameter aliases (ici, it, mis) for Anywhere', function () {

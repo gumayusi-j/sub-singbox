@@ -369,7 +369,7 @@ export function renderSubscription(store, resolved, options) {
                     contentType = "text/plain; charset=utf-8";
                 }
             } else {
-                const produced = ProxyUtils.produce(nodes, target.produce, "external");
+                const produced = ProxyUtils.produce(nodes, target.produce, "external", { skippedNodes });
                 const raw = typeof produced === "string" ? produced : JSON.stringify(produced, null, 2);
 
                 // Clash-family targets (clash, stash, shadowrocket, karing) receive

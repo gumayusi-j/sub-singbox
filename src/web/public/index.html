@@ -3746,7 +3746,13 @@ var app = Vue.createApp({
           removed = last.value.nodes.filter(function(n){ return !isClientSupportingProto(exportTarget.value, n.type, n); }).length;
         }
         var serverSkipped = (last.value.skippedNodes || []).length;
-        var parts = ['完成：' + filteredNodes.value.length + ' 个节点'];
+        var isNodeOnly = exportOut.value === 'outbounds' || isTargetInherentlyNodeOnly(exportTarget.value);
+        var actualCount = filteredNodes.value.length;
+        if (typeof last.value.output === 'string' && last.value.output.trim()) {
+          var outLines = last.value.output.trim().split('\n').filter(Boolean);
+          if (isNodeOnly) actualCount = outLines.length;
+        }
+        var parts = ['完成：' + actualCount + ' 个节点'];
         if (removed > 0) parts.push('过滤 ' + removed + ' 个不兼容');
         if (serverSkipped > 0) parts.push('跳过 ' + serverSkipped + ' 个');
         genStatus.value = parts.join('，') + '。';
@@ -3815,8 +3821,14 @@ var app = Vue.createApp({
         gistStatusType.value = 'err';
         return;
       }
-      if (!last.value || !cfgJson.value) {
-        gistStatus.value = '请先生成配置。';
+      if (!last.value) {
+        gistStatus.value = '请先点击「一键生成」生成配置。';
+        gistStatusType.value = 'err';
+        return;
+      }
+      var content = cfgJson.value || (last.value && (typeof last.value.output === 'string' ? last.value.output : JSON.stringify(last.value.output, null, 2))) || '';
+      if (!content || !content.trim()) {
+        gistStatus.value = '生成的配置内容为空，没有可导出的有效节点。';
         gistStatusType.value = 'err';
         return;
       }

@@ -47,36 +47,17 @@ export function unsupportedReason(node) {
         }
     }
 
-    // 2. Skip certificate verify: Anywhere always verifies certs
-    if (node['skip-cert-verify'] || node.skipCertVerify) {
-        return 'Anywhere 总是校验服务器证书，无法保留此节点的“跳过证书校验”，导出后会连接失败。';
-    }
-
-    // 3. Certificate fingerprint pin
+    // 2. Certificate fingerprint pin
     if (node['certificate-fingerprint'] || node.certificateFingerprint) {
         return 'Anywhere 不支持证书指纹固定。';
     }
 
-    // 4. UDP relay disable
-    if (node.udp === false || node['udp-relay'] === false) {
-        return 'Anywhere 无法关闭此节点的 UDP 转发。';
-    }
-
-    // 5. TLS Fingerprint check
-    const fp = node['client-fingerprint'] || node.fingerprint;
-    if (fp) {
-        const fpLower = fp.toLowerCase();
-        if (!(fpLower in FINGERPRINTS) && !NATIVE_FINGERPRINTS.has(fp)) {
-            return `Anywhere 不支持 TLS 指纹 ${fp}。`;
-        }
-    }
-
-    // 6. Port hopping and plugin
+    // 3. Port hopping and plugin
     if (node.ports || node['port-hopping'] || node.plugin) {
         return 'Anywhere 不支持此节点的端口跳跃或插件。';
     }
 
-    // 7. Transport and Reality
+    // 4. Transport and Reality
     const transport = (node.network || node.transport || 'tcp').toLowerCase();
     const usesReality = !!(node.reality || node['reality-opts']);
     if (usesReality && type !== 'vless') {
@@ -86,7 +67,7 @@ export function unsupportedReason(node) {
         return 'Anywhere 只有 VLESS 支持 Reality 和 TCP 以外的传输方式。';
     }
 
-    // 8. Protocol whitelist and specific checks
+    // 5. Protocol whitelist and specific checks
     switch (type) {
         case 'ss':
         case 'shadowsocks':
@@ -221,6 +202,8 @@ export function produceLink(node) {
             } else {
                 params.set('fp', mapped);
             }
+        } else if (!NATIVE_FINGERPRINTS.has(currentFp)) {
+            params.set('fp', 'chrome_133');
         }
     }
 
@@ -231,7 +214,15 @@ export function produceLink(node) {
 export default function Anywhere_Producer() {
     const type = 'ALL';
     const produce = (proxies, produceType, opts = {}) => {
-        const supported = (proxies || []).filter(supports);
+        const supported = [];
+        for (const proxy of proxies || []) {
+            const reason = unsupportedReason(proxy);
+            if (!reason) {
+                supported.push(proxy);
+            } else if (opts && Array.isArray(opts.skippedNodes)) {
+                opts.skippedNodes.push({ name: proxy.name || '未知节点', reason });
+            }
+        }
         const links = supported.map(produceLink).filter(Boolean);
         if (produceType === 'internal') {
             return links;
