@@ -198,6 +198,15 @@ function sanitizeTopLevelSettings(body) {
                 id: typeof raw.gist.id === "string" ? raw.gist.id.trim() : "",
                 token: typeof raw.gist.token === "string" ? raw.gist.token.trim() : "",
             };
+            if (Array.isArray(raw.gist.syncProfiles)) {
+                patch.gist.syncProfiles = raw.gist.syncProfiles;
+            }
+            if (raw.gist.autoSync !== undefined) {
+                patch.gist.autoSync = Boolean(raw.gist.autoSync);
+            }
+            if (Array.isArray(raw.gist.autoSyncTargets)) {
+                patch.gist.autoSyncTargets = raw.gist.autoSyncTargets;
+            }
         }
     }
 

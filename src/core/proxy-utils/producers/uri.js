@@ -791,7 +791,9 @@ function vless(proxy) {
 
 export default function URI_Producer() {
     const type = 'SINGLE';
-    const produce = (proxy) => {
+    const produce = (rawProxy) => {
+        if (!rawProxy) return '';
+        const proxy = Object.assign({}, rawProxy);
         let result = '';
         delete proxy.subName;
         delete proxy.collectionName;

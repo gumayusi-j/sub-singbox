@@ -162,4 +162,28 @@ describe('Anywhere Export & Dialect', function () {
         const result = producer.produce([vmess, wg, tuic]);
         expect(result.trim()).to.equal('');
     });
+
+    it('supports Hysteria 2 with network udp and preserves original node object immutability', function () {
+        const hy2Node = {
+            type: 'hysteria2',
+            name: 'HY2-Node',
+            server: 'hy2.example.com',
+            port: 443,
+            password: 'secret-password',
+            tls: true,
+            network: 'udp',
+            subName: 'my-sub',
+        };
+        expect(supports(hy2Node)).to.equal(true);
+
+        const beforeTls = hy2Node.tls;
+        const beforeSubName = hy2Node.subName;
+        const link = produceLink(hy2Node);
+        expect(link).to.include('hysteria2://');
+        expect(link).to.include('#HY2-Node');
+
+        // Original object properties must not be deleted or mutated
+        expect(hy2Node.tls).to.equal(beforeTls);
+        expect(hy2Node.subName).to.equal(beforeSubName);
+    });
 });

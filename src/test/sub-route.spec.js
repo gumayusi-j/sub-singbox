@@ -788,6 +788,34 @@ describe("settings — one saved config, two readers", function () {
         });
     });
 
+    it("persists gist settings including syncProfiles via PUT /api/settings", async function () {
+        ctx = await serve();
+        const profiles = [
+            {
+                fileName: "custom-nodes.yaml",
+                target: "clash",
+                out: "outbounds",
+            },
+        ];
+        const res = await ctx.request("/api/settings", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                gist: {
+                    id: "gist-12345",
+                    token: "ghp_testToken",
+                    syncProfiles: profiles,
+                },
+            }),
+        });
+        expect(res.status).to.equal(200);
+
+        const overview = (await ctx.request("/api/subscriptions")).json;
+        expect(overview.data.gist.id).to.equal("gist-12345");
+        expect(overview.data.gist.token).to.equal("ghp_testToken");
+        expect(overview.data.gist.syncProfiles).to.deep.equal(profiles);
+    });
+
     it("offers the exportable clients, narrowed by allowedTargets", async function () {
         ctx = await serve();
         let ids = (await ctx.request("/api/subscriptions")).json.data.targets.map((t) => t.id);

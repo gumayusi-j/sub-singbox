@@ -1,4 +1,4 @@
-import URI_Producer from './uri';
+import URI_Producer from './uri.js';
 
 const FINGERPRINTS = {
     chrome: 'chrome_133',
@@ -63,7 +63,7 @@ export function unsupportedReason(node) {
     if (usesReality && type !== 'vless') {
         return 'Anywhere 只有 VLESS 支持 Reality 和 TCP 以外的传输方式。';
     }
-    if (type !== 'vless' && !['', 'tcp'].includes(transport)) {
+    if (!['vless', 'hysteria2', 'hy2', 'anytls'].includes(type) && !['', 'tcp'].includes(transport)) {
         return 'Anywhere 只有 VLESS 支持 Reality 和 TCP 以外的传输方式。';
     }
 
@@ -104,8 +104,10 @@ export function supports(node) {
 }
 
 export function produceLink(node) {
+    if (!node) return '';
+    const nodeClone = Object.assign({}, node);
     const uriProducer = URI_Producer();
-    const rawUri = uriProducer.produce(node);
+    const rawUri = uriProducer.produce(nodeClone);
     if (!rawUri) return '';
 
     const type = (node.type || '').toLowerCase();

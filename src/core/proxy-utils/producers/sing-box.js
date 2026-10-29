@@ -1636,6 +1636,12 @@ export default function singbox_Producer() {
                     // console.log(e);
                     list.length = listStart;
                     $.error(e.message ?? e);
+                    if (opts && Array.isArray(opts.skippedNodes)) {
+                        opts.skippedNodes.push({
+                            name: proxy.name || '未知节点',
+                            reason: e && e.message ? e.message : String(e),
+                        });
+                    }
                 }
             });
 
