@@ -9,7 +9,7 @@ export const COUNTRY_FLAG_RULES = [
     { flag: "🇯🇵", regex: /(?:🇯🇵|日本|东京|大阪|京都|(?<![a-zA-Z])JPN?(?![a-zA-Z])|japan)/i },
     { flag: "🇺🇸", regex: /(?:🇺🇸|美国|美|纽约|洛杉矶|硅谷|西雅图|芝加哥|(?<![a-zA-Z])USA?(?![a-zA-Z])|america|united\s*states)/i },
     { flag: "🇸🇬", regex: /(?:🇸🇬|新加坡|狮城|(?<![a-zA-Z])SGP?(?![a-zA-Z])|singapore)/i },
-    { flag: "🇹🇼", regex: /(?:🇹🇼|🧋|台湾|台北|台中|高雄|(?<![a-zA-Z])TWN?(?![a-zA-Z])|taiwan)/i },
+    { flag: "🧋", regex: /(?:🇹🇼|🧋|台湾|台灣|台北|台中|高雄|(?<![a-zA-Z])TWN?(?![a-zA-Z])|taiwan)/i },
     { flag: "🇰🇷", regex: /(?:🇰🇷|韩国|首尔|(?<![a-zA-Z])(KOR?|KR)(?![a-zA-Z])|korea)/i },
     { flag: "🇬🇧", regex: /(?:🇬🇧|英国|伦敦|(?<![a-zA-Z])(UK|GBR?)(?![a-zA-Z])|britain|england|united\s*kingdom)/i },
     { flag: "🇩🇪", regex: /(?:🇩🇪|德国|法兰克福|柏林|(?<![a-zA-Z])(DE|DEU)(?![a-zA-Z])|germany)/i },

@@ -26,6 +26,20 @@ function nodeName(node) {
     return node && typeof node.name === "string" ? node.name : "";
 }
 
+// 规范化台湾节点的小图标（国行 iOS 屏蔽 🇹🇼，替换为全平台通用的珍珠奶茶 🧋）
+export function sanitizeTaiwanFlag(nodes) {
+    if (!Array.isArray(nodes)) return;
+    for (const node of nodes) {
+        if (!node) continue;
+        if (typeof node.name === "string" && node.name.includes("🇹🇼")) {
+            node.name = node.name.replaceAll("🇹🇼", "🧋");
+        }
+        if (typeof node.tag === "string" && node.tag.includes("🇹🇼")) {
+            node.tag = node.tag.replaceAll("🇹🇼", "🧋");
+        }
+    }
+}
+
 function isNonNegative(value) {
     return Number.isFinite(value) && value >= 0;
 }
@@ -205,6 +219,7 @@ export function renderSubscription(store, resolved, options) {
     let parsedNodes = withSnapshots.map((entry) => {
         const docInfo = parseSubscriptionDoc(entry.text);
         let nodes = docInfo.nodes;
+sanitizeTaiwanFlag(nodes);
 
         // Apply hosts mapping to nodes if present in subscription doc (safe IP rewriting preserving SNI)
         if (docInfo.hosts) {
@@ -263,6 +278,7 @@ export function renderSubscription(store, resolved, options) {
         if (normalized.nodePipeline) {
             nodes = executeNodePipeline(nodes, normalized.nodePipeline, warnings);
         }
+        sanitizeTaiwanFlag(nodes);
         return nodes;
     });
 

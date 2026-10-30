@@ -95,7 +95,7 @@ describe("Node Processing Pipeline (Operators)", function () {
             expect(result[1].name).to.equal("🇯🇵 日本-东京-02");
             expect(result[2].name).to.equal("🇺🇸 US Los Angeles BGP");
             expect(result[3].name).to.equal("🇸🇬 新加坡 01");
-            expect(result[4].name).to.equal("🇹🇼 台湾 01");
+            expect(result[4].name).to.equal("🧋 台湾 01");
             expect(result[5].name).to.equal("未知节点");
         });
     });
