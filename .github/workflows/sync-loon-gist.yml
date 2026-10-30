@@ -1,0 +1,76 @@
+name: Sync MyLoon.conf to Gist
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - "MyLoon.conf"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Sync to GitHub Gist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Push MyLoon.conf to Gist
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN || secrets.GH_TOKEN || secrets.PAT }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+        run: |
+          node -e '
+          const fs = require("fs");
+          async function sync() {
+            const token = process.env.GIST_TOKEN;
+            const gistId = process.env.GIST_ID;
+            if (!token || !gistId) {
+              console.error("::error::Missing GIST_TOKEN or GIST_ID in repository secrets.");
+              process.exit(1);
+            }
+            if (!fs.existsSync("MyLoon.conf")) {
+              console.error("::error::MyLoon.conf not found.");
+              process.exit(1);
+            }
+            const content = fs.readFileSync("MyLoon.conf", "utf8");
+            const url = `https://api.github.com/gists/${gistId.trim()}`;
+            const body = {
+              description: `MyLoon.conf auto-sync at ${new Date().toISOString()}`,
+              files: {
+                "MyLoon.conf": { content }
+              }
+            };
+            console.log(`Submitting MyLoon.conf (${content.length} bytes) to Gist ${gistId}...`);
+            const res = await fetch(url, {
+              method: "PATCH",
+              headers: {
+                "Accept": "application/vnd.github+json",
+                "Authorization": `Bearer ${token.trim()}`,
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(body)
+            });
+            if (!res.ok) {
+              const err = await res.text();
+              console.error(`::error::GitHub Gist API error (${res.status}): ${err}`);
+              process.exit(1);
+            }
+            const data = await res.json();
+            const rawUrl = data.files?.["MyLoon.conf"]?.raw_url;
+            console.log("Successfully synced MyLoon.conf to GitHub Gist!");
+            if (rawUrl) {
+              console.log("Permanent raw link:", rawUrl.replace(/\/raw\/[0-9a-f]{40}\//i, "/raw/"));
+            }
+          }
+          sync().catch(err => {
+            console.error(err);
+            process.exit(1);
+          });
+          '
