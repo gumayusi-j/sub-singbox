@@ -46,8 +46,9 @@ export function createScheduler(options = {}) {
         if (!filesMap || Object.keys(filesMap).length === 0) return null;
 
         const url = `https://api.github.com/gists/${gistConfig.id}`;
+        const beijingTime = new Date(now().getTime() + 8 * 3600 * 1000).toISOString().replace("T", " ").replace(/\..+/, "") + " (北京时间)";
         const body = {
-            description: `singbox-kit auto-sync at ${now().toISOString()}`,
+            description: `singbox-kit 自动同步于 ${beijingTime}`,
             files: {},
         };
         for (const [name, content] of Object.entries(filesMap)) {

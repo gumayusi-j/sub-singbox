@@ -40,8 +40,9 @@ jobs:
             }
             const content = fs.readFileSync("MyLoon.conf", "utf8");
             const url = `https://api.github.com/gists/${gistId.trim()}`;
+            const beijingTime = new Date(Date.now() + 8 * 3600 * 1000).toISOString().replace("T", " ").replace(/\..+/, "") + " (北京时间)";
             const body = {
-              description: `MyLoon.conf auto-sync at ${new Date().toISOString()}`,
+              description: `MyLoon.conf 自动同步于 ${beijingTime}`,
               files: {
                 "MyLoon.conf": { content }
               }
