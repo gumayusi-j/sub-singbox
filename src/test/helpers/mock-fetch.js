@@ -24,6 +24,7 @@ export function createMockFetch(routes, options) {
             url: String(url),
             method: (init && init.method) || "GET",
             headers: flattenHeaders(init && init.headers),
+            body: init && init.body,
             at: Date.now(),
             // Exposed so a route can simulate a slow panel by awaiting it.
             signal: init && init.signal,

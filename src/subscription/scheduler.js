@@ -1,12 +1,16 @@
 // Background scheduler for automated subscription refreshes and cloud sync.
 //
-// Automatically refreshes enabled subscriptions periodically. If any subscription
-// snapshot has changed and GitHub Gist is configured, it auto-syncs the rendered
-// configuration to GitHub Gist so clients using Gist URLs always have the latest nodes.
+// 自动化运维执行闭环流程：
+// 1. 定时触发或手动触发时，全量更新所有订阅节点（包括未启用的节点，确保本地所有节点数据最新）；
+// 2. 启用状态作为生成配置的过滤开关：在生成客户端配置时，自动基于各源启用的最新节点；
+// 3. 扫描已上传到 GitHub Gist 的配置方案 (syncProfiles)，按照原有参数重新生成最新配置；
+// 4. 静默提交最新生成的配置到 GitHub Gist，保证订阅客户端随时获得最新节点配置。
 
 import { refreshMany } from "./refresh";
 import { renderSubscription } from "./render";
 import { resolveTarget } from "./targets";
+
+export const DEFAULT_SCHEDULER_INTERVAL_MINUTES = 360; // 6 小时默认维护周期
 
 export function createScheduler(options = {}) {
     const store = options.store;
@@ -16,14 +20,18 @@ export function createScheduler(options = {}) {
     const now = options.now || (() => new Date());
     const logger = options.logger || console.log;
 
-    // Configurable interval in minutes (default 60 min; 0 or negative disables periodic polling)
+    const storedSettings = store && typeof store.getSettings === "function" ? store.getSettings() : null;
+    const storedScheduler = storedSettings && storedSettings.scheduler;
+
+    // Configurable interval in minutes (default 360 min / 6 hours; 0 or negative disables periodic polling)
     let intervalMinutes = Number(
+        (storedScheduler && storedScheduler.intervalMinutes) ||
         process.env.REFRESH_INTERVAL ||
         (config.scheduler && config.scheduler.intervalMinutes) ||
-        60
+        DEFAULT_SCHEDULER_INTERVAL_MINUTES
     );
     if (!Number.isFinite(intervalMinutes) || intervalMinutes < 0) {
-        intervalMinutes = 60;
+        intervalMinutes = DEFAULT_SCHEDULER_INTERVAL_MINUTES;
     }
 
     let timer = null;
@@ -69,27 +77,32 @@ export function createScheduler(options = {}) {
         }
     }
 
-    async function runJob() {
+    async function runJob(jobOptions = {}) {
         if (isRunning) return { ok: false, error: "job already in progress" };
         isRunning = true;
         const startedAt = now().toISOString();
+        const forceSyncGist = jobOptions && jobOptions.forceSyncGist === true;
+
         try {
+            // 步骤 1：后台全量静默更新所有节点（包括未启用的节点，保证最新可用性与快照）
             const refreshRes = await refreshMany(store, null, {
                 fetchImpl,
                 coordinator,
                 now,
+                allSources: true,
             });
 
             lastRunAt = startedAt;
             const changedAny = (refreshRes.results || []).some((r) => r.changed);
 
             let gistResult = null;
-            if (changedAny) {
-                const settings = store.getSettings() || {};
-                const gist = settings.gist;
-                // When subscriptions are refreshed, auto-update the actual exported configurations (syncProfiles)
-                // that were generated based on these subscriptions. Never blindly push unrequested default files.
-                if (gist && gist.id && gist.token) {
+            const settings = (store && typeof store.getSettings === "function" ? store.getSettings() : null) || {};
+            const gist = settings.gist || (config && config.gist);
+
+            // 步骤 2：基于已上传到 Gist 的配置 (syncProfiles)，按启用节点重新渲染各配置，并静默提交至 Gist
+            if (gist && gist.id && gist.token) {
+                const shouldSyncGist = forceSyncGist || changedAny || !lastGistSync || (lastGistSync && !lastGistSync.ok);
+                if (shouldSyncGist) {
                     const filesToSync = {};
                     const syncProfiles = Array.isArray(gist.syncProfiles) ? gist.syncProfiles : [];
 
@@ -98,14 +111,30 @@ export function createScheduler(options = {}) {
                             try {
                                 const resolvedTarget = resolveTarget({ queryTarget: profile.target || "sing-box" });
                                 if (!resolvedTarget) continue;
+
+                                const sourceObj = profile.sourceId ? store.get(profile.sourceId) : null;
                                 const renderSpec = profile.sourceId
-                                    ? { kind: "source", id: profile.sourceId }
+                                    ? { kind: "source", source: sourceObj, id: profile.sourceId }
                                     : { kind: "global" };
-                                const rendered = renderSubscription(store, renderSpec, {
-                                    target: resolvedTarget.target,
-                                    out: profile.out || "config",
-                                    nodePipeline: profile.nodePipeline,
-                                });
+
+                                const renderOptions = Object.assign(
+                                    {},
+                                    settings.defaultOptions || {},
+                                    profile.options || {},
+                                    {
+                                        target: resolvedTarget.target,
+                                        out: profile.out || "config",
+                                        nodePipeline: profile.nodePipeline,
+                                        aclPreset: profile.aclPreset,
+                                        nodeFilter: profile.nodeFilter,
+                                        remoteDns: profile.remoteDns,
+                                        localDns: profile.localDns,
+                                        ipv6Enabled: profile.ipv6Enabled,
+                                        sourceIds: profile.sourceIds,
+                                    }
+                                );
+
+                                const rendered = renderSubscription(store, renderSpec, renderOptions);
                                 if (rendered && rendered.status === 200) {
                                     filesToSync[profile.fileName] =
                                         typeof rendered.body === "string"
@@ -117,7 +146,7 @@ export function createScheduler(options = {}) {
                             }
                         }
                     } else if (gist.autoSync === true) {
-                        // Fallback only if user explicitly enabled legacy autoSync
+                        // 回退兼容：仅在用户未保存 syncProfiles 且显式开启旧版 autoSync 时
                         const targetsToSync = Array.isArray(gist.autoSyncTargets) && gist.autoSyncTargets.length > 0
                             ? gist.autoSyncTargets
                             : ["clash", "sing-box"];
@@ -162,6 +191,8 @@ export function createScheduler(options = {}) {
                             lastGistSync = gistResult;
                         } catch (gistErr) {
                             logger("[singbox-kit scheduler] gist sync error:", gistErr);
+                            gistResult = { ok: false, error: gistErr && gistErr.message ? gistErr.message : String(gistErr) };
+                            lastGistSync = gistResult;
                         }
                     }
                 }
@@ -223,6 +254,11 @@ export function createScheduler(options = {}) {
         const val = Number(mins);
         if (Number.isFinite(val) && val >= 0) {
             intervalMinutes = val;
+            if (store && typeof store.setSettings === "function") {
+                try {
+                    store.setSettings({ scheduler: { intervalMinutes: val } });
+                } catch (_e) {}
+            }
             stop();
             if (intervalMinutes > 0) {
                 scheduleNext();
@@ -251,4 +287,4 @@ export function createScheduler(options = {}) {
     };
 }
 
-export default { createScheduler };
+export default { createScheduler, DEFAULT_SCHEDULER_INTERVAL_MINUTES };

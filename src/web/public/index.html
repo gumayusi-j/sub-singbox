@@ -1994,21 +1994,68 @@ pre.code-block {
 
 
           <!-- Scheduler Automation Status -->
-          <div class="card" style="margin-top:16px;background:var(--bg-panel-muted);border:1px solid var(--border-color-lighter);padding:12px 16px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-              <div style="display:flex;align-items:center;gap:8px;">
+          <div class="card" style="margin-top:16px;background:var(--bg-panel-muted);border:1px solid var(--border-color-lighter);padding:14px 18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                 <el-icon style="font-size:18px;color:var(--accent)"><timer /></el-icon>
-                <span style="font-weight:600;font-size:13.5px">后台自动化运维</span>
-                <span class="chip chip-ok" v-if="schedulerInfo && schedulerInfo.enabled">已启用定时静默刷新 (每 {{ schedulerInfo.intervalMinutes }} 分钟)</span>
-                <span class="chip chip-ghost" v-else>定时静默刷新已就绪</span>
-                <span v-if="schedulerInfo && schedulerInfo.lastRunAt" style="font-size:11.5px;color:var(--text-3)">
-                  上次执行：{{ new Date(schedulerInfo.lastRunAt).toLocaleTimeString() }}
+                <span style="font-weight:600;font-size:14px">后台自动化运维</span>
+                <span class="chip chip-ok" v-if="schedulerInfo && schedulerInfo.enabled">
+                  定时静默运维中 (每 {{ schedulerInfo.intervalMinutes }} 分钟 / {{ (schedulerInfo.intervalMinutes / 60).toFixed(1) }} 小时)
+                </span>
+                <span class="chip chip-ghost" v-else>定时静默运维已就绪</span>
+                <span v-if="schedulerInfo && schedulerInfo.lastRunAt" style="font-size:12px;color:var(--text-3)">
+                  上次执行：{{ new Date(schedulerInfo.lastRunAt).toLocaleString() }}
+                </span>
+                <span v-if="schedulerInfo && schedulerInfo.nextRunAt" style="font-size:12px;color:var(--text-3)">
+                  下次计划：{{ new Date(schedulerInfo.nextRunAt).toLocaleTimeString() }}
                 </span>
               </div>
-              <button class="btn btn-sm" type="button" :disabled="schedulerRunning" @click="triggerSchedulerRun">
-                <el-icon :class="{ spin: schedulerRunning }"><refresh /></el-icon>
-                {{ schedulerRunning ? '正在后台执行…' : '立即触发后台自动化刷新' }}
-              </button>
+
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <span style="font-size:12px;color:var(--text-2);white-space:nowrap;">运维周期:</span>
+                  <el-select v-model="schedulerIntervalInput" size="small" style="width:140px" @change="saveSchedulerInterval">
+                    <el-option :value="180" label="3 小时 (180分)"></el-option>
+                    <el-option :value="360" label="6 小时 (推荐)"></el-option>
+                    <el-option :value="720" label="12 小时"></el-option>
+                    <el-option :value="1440" label="24 小时 (1天)"></el-option>
+                    <el-option :value="60" label="1 小时 (60分)"></el-option>
+                  </el-select>
+                </div>
+                <button class="btn btn-sm btn-primary" type="button" :disabled="schedulerRunning" @click="triggerSchedulerRun">
+                  <el-icon :class="{ spin: schedulerRunning }"><refresh /></el-icon>
+                  {{ schedulerRunning ? '正在全量运维中…' : '立即触发后台全量运维' }}
+                </button>
+              </div>
+            </div>
+
+            <!-- 运维流程与状态说明 -->
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--stroke-soft);font-size:12px;color:var(--text-3);line-height:1.6;">
+              <div style="display:flex;align-items:flex-start;gap:6px;">
+                <span style="color:var(--accent);font-weight:600">● 闭环运维流程：</span>
+                <span>
+                  后台定时全量更新<b>所有订阅节点</b>（确保所有源的节点可用性与流量最新）；随后以<b>启用状态</b>为准选用有效节点，自动根据<b>已上传到 Gist 的配置方案</b>重新生成各客户端最新配置，并静默提交更新至 GitHub Gist。
+                </span>
+              </div>
+
+              <div v-if="syncProfiles && syncProfiles.length" style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-weight:600;color:var(--text-2);">Gist 自动更新配置项 ({{ syncProfiles.length }} 个):</span>
+                <span v-for="p in syncProfiles" :key="p.fileName" class="chip chip-accent" style="font-size:11px;font-family:var(--font-mono)">
+                  {{ p.fileName }} ({{ p.target }})
+                </span>
+              </div>
+
+              <div v-if="schedulerInfo && schedulerInfo.lastResult" style="margin-top:6px;font-size:11.5px;color:var(--text-2);background:var(--bg-card);padding:6px 10px;border-radius:var(--radius-sm)">
+                <span>上次全量更新: {{ schedulerInfo.lastResult.totalSources }} 个源</span>
+                <span v-if="schedulerInfo.lastResult.changed" style="margin-left:8px;color:var(--ok)">● 节点有变动</span>
+                <span v-else style="margin-left:8px;color:var(--text-3)">● 节点内容无变动</span>
+                <span v-if="schedulerInfo.lastResult.gistSync && schedulerInfo.lastResult.gistSync.ok" style="margin-left:8px;color:var(--ok)">
+                  ● Gist 已更新文件: {{ (schedulerInfo.lastResult.gistSync.files || []).join(', ') }}
+                </span>
+                <span v-else-if="schedulerInfo.lastResult.gistSync && !schedulerInfo.lastResult.gistSync.ok" style="margin-left:8px;color:var(--danger)">
+                  ● Gist 同步失败: {{ schedulerInfo.lastResult.gistSync.error }}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -2834,9 +2881,12 @@ var app = Vue.createApp({
     var showCollectionModal = Vue.ref(false);
     var colForm = Vue.reactive({ name: '', sourceIds: [] });
 
-    // Scheduler
+    // Scheduler & SyncProfiles
     var schedulerInfo = Vue.ref(null);
     var schedulerRunning = Vue.ref(false);
+    var schedulerIntervalInput = Vue.ref(360);
+    var schedulerIntervalSaving = Vue.ref(false);
+    var syncProfiles = Vue.ref(lsLoad('sbx:gistSyncProfiles', []));
 
     Vue.watch([pipelineCleanNotice, pipelineInjectFlags, pipelineDedupe, pipelineUdp, pipelineSkipCert], function() {
       lsSave('sbx:pipeCleanNotice', pipelineCleanNotice.value);
@@ -3318,13 +3368,19 @@ var app = Vue.createApp({
         settings.value = data.settings || {};
         customSchemes.value = data.customSchemes || [];
         if (Array.isArray(data.collections)) collections.value = data.collections;
-        if (data.scheduler) schedulerInfo.value = data.scheduler;
+        if (data.scheduler) {
+          schedulerInfo.value = data.scheduler;
+          if (data.scheduler.intervalMinutes !== undefined) {
+            schedulerIntervalInput.value = data.scheduler.intervalMinutes;
+          }
+        }
         if (data.gist && (data.gist.id || data.gist.token)) {
           gistId.value = data.gist.id || '';
           githubToken.value = data.gist.token || '';
           lsSave('sbx:gistId', gistId.value);
           lsSave('sbx:githubToken', githubToken.value);
           if (Array.isArray(data.gist.syncProfiles)) {
+            syncProfiles.value = data.gist.syncProfiles;
             lsSave('sbx:gistSyncProfiles', data.gist.syncProfiles);
           }
         } else if (gistId.value || githubToken.value) {
@@ -3931,6 +3987,11 @@ var app = Vue.createApp({
             target: targetKey,
             out: exportOut.value || 'config',
             sourceId: exportSourceId.value || '',
+            aclPreset: aclPreset.value || '',
+            nodeFilter: nodeFilter.value || '',
+            remoteDns: remoteDns.value || '',
+            localDns: localDns.value || '',
+            ipv6Enabled: ipv6Enabled.value,
             nodePipeline: {
               cleanNotice: pipelineCleanNotice.value,
               injectFlags: pipelineInjectFlags.value,
@@ -3941,6 +4002,7 @@ var app = Vue.createApp({
               }
             }
           });
+          syncProfiles.value = currentProfiles;
           lsSave('sbx:gistSyncProfiles', currentProfiles);
           api('PUT', '/api/settings', {
             gist: {
@@ -4072,6 +4134,7 @@ var app = Vue.createApp({
         try {
           var currentProfiles = lsLoad('sbx:gistSyncProfiles', []);
           currentProfiles = currentProfiles.filter(function(p){ return p.fileName !== fileName; });
+          syncProfiles.value = currentProfiles;
           lsSave('sbx:gistSyncProfiles', currentProfiles);
           api('PUT', '/api/settings', {
             gist: {
@@ -4472,16 +4535,47 @@ var app = Vue.createApp({
     async function triggerSchedulerRun() {
       schedulerRunning.value = true;
       try {
-        var res = await api('POST', '/api/scheduler/run');
+        var res = await api('POST', '/api/scheduler/run', { forceSyncGist: true });
         if (res) {
-          schedulerInfo.value = res;
+          var data = res.data || res;
+          schedulerInfo.value = data;
           await loadSubs();
-          ElementPlus.ElMessage.success('自动化刷新完成！' + (res.gistSync && res.gistSync.ok ? '（Gist 已云同步）' : ''));
+          var gistMsg = '';
+          if (data.gistSync) {
+            if (data.gistSync.ok) {
+              gistMsg = '（已重新生成并提交 ' + (data.gistSync.files ? data.gistSync.files.length : 0) + ' 个 Gist 配置）';
+            } else {
+              gistMsg = '（Gist 提交失败: ' + (data.gistSync.error || '') + '）';
+            }
+          }
+          ElementPlus.ElMessage.success('全量自动化运维执行完成！共更新 ' + (data.totalSources || 0) + ' 个订阅源全部节点 ' + gistMsg);
         }
       } catch (e) {
         ElementPlus.ElMessage.error('执行失败: ' + (e.message || e));
       } finally {
         schedulerRunning.value = false;
+      }
+    }
+
+    async function saveSchedulerInterval(val) {
+      var mins = Number(val !== undefined ? val : schedulerIntervalInput.value);
+      if (!Number.isFinite(mins) || mins < 0) {
+        ElementPlus.ElMessage.warning('请输入有效的分钟数（0表示禁用，推荐 360 分钟 / 6 小时）');
+        return;
+      }
+      schedulerIntervalSaving.value = true;
+      try {
+        var res = await api('POST', '/api/scheduler/config', { intervalMinutes: mins });
+        if (res) {
+          var data = res.data || res;
+          schedulerInfo.value = data;
+          schedulerIntervalInput.value = data.intervalMinutes || mins;
+          ElementPlus.ElMessage.success('自动化运维周期已更新为每 ' + mins + ' 分钟（' + (mins / 60).toFixed(1) + ' 小时）');
+        }
+      } catch (e) {
+        ElementPlus.ElMessage.error('更新失败: ' + (e.message || e));
+      } finally {
+        schedulerIntervalSaving.value = false;
       }
     }
 
@@ -4557,7 +4651,7 @@ var app = Vue.createApp({
     return {
       pipelineCleanNotice, pipelineInjectFlags, pipelineDedupe, pipelineUdp, pipelineSkipCert,
       collections, showCollectionModal, colForm, openAddCollectionModal, saveCollection, removeCollection,
-      schedulerInfo, schedulerRunning, triggerSchedulerRun,
+      schedulerInfo, schedulerRunning, triggerSchedulerRun, schedulerIntervalInput, schedulerIntervalSaving, saveSchedulerInterval, syncProfiles,
       activeTab, sources, targets, globalSubUrl, publicUrl, dataPath, settings, acl,
       theme, isDark, toggleTheme,
       showAddForm, editingId, savingSource, srcFormHint, srcForm,

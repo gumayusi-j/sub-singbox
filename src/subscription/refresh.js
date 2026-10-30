@@ -266,7 +266,7 @@ export async function refreshMany(store, ids, deps) {
     const selected =
         requested.length > 0
             ? requested.map((id) => byId.get(id)).filter(Boolean)
-            : all.filter((s) => s.enabled);
+            : (deps.allSources ? all : all.filter((s) => s.enabled));
     const skipped = requested.filter((id) => !byId.has(id));
     const total = selected.length;
 

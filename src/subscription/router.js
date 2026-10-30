@@ -210,6 +210,17 @@ function sanitizeTopLevelSettings(body) {
         }
     }
 
+    if (raw.scheduler !== undefined) {
+        if (raw.scheduler === null) {
+            patch.scheduler = null;
+        } else if (typeof raw.scheduler === "object") {
+            const mins = Number(raw.scheduler.intervalMinutes);
+            patch.scheduler = {
+                intervalMinutes: Number.isFinite(mins) && mins >= 0 ? mins : 360,
+            };
+        }
+    }
+
     return Object.keys(patch).length > 0 ? patch : null;
 }
 
@@ -775,7 +786,8 @@ export function createSubscriptionRouter(options) {
                 sendJson(res, 503, { ok: false, error: "scheduler not available" });
                 return;
             }
-            const runResult = await scheduler.runJob();
+            const body = (await readJsonBody()) || {};
+            const runResult = await scheduler.runJob({ forceSyncGist: body.forceSyncGist !== false });
             sendJson(res, 200, { ok: true, data: runResult });
             return;
         }
@@ -787,7 +799,11 @@ export function createSubscriptionRouter(options) {
             }
             const body = (await readJsonBody()) || {};
             if (body.intervalMinutes !== undefined) {
-                scheduler.setIntervalMinutes(body.intervalMinutes);
+                const mins = Number(body.intervalMinutes);
+                scheduler.setIntervalMinutes(mins);
+                if (store && typeof store.setSettings === "function") {
+                    store.setSettings({ scheduler: { intervalMinutes: mins } });
+                }
             }
             sendJson(res, 200, { ok: true, data: scheduler.getStatus() });
             return;

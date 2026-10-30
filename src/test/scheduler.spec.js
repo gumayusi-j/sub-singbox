@@ -240,4 +240,85 @@ describe("Subscription Scheduler & Automation", function () {
         expect(result.gistSync.files).to.not.include("clash-config.yaml");
     });
 
+    it("refreshes ALL sources including disabled ones, while global config only includes enabled ones", async function () {
+        let syncedGistBody = null;
+        const mockFetch = createMockFetch({
+            "https://example.com/enabled": {
+                status: 200,
+                headers: {},
+                body: nodesJson(["启用节点-香港"]),
+            },
+            "https://example.com/disabled": {
+                status: 200,
+                headers: {},
+                body: nodesJson(["未启用节点-美国"]),
+            },
+            "https://api.github.com/gists/test-gist-id": (req) => {
+                if (req && req.body) {
+                    try {
+                        syncedGistBody = JSON.parse(req.body);
+                    } catch (e) {}
+                }
+                return { status: 200, body: JSON.stringify({ ok: true }) };
+            },
+        });
+
+        const enabledSource = store.addSource({
+            name: "Enabled Source",
+            kind: "url",
+            url: "https://example.com/enabled",
+            enabled: true,
+        });
+
+        const disabledSource = store.addSource({
+            name: "Disabled Source",
+            kind: "url",
+            url: "https://example.com/disabled",
+            enabled: false,
+        });
+
+        store.setSettings({
+            gist: {
+                id: "test-gist-id",
+                token: "ghp_secretToken123",
+                syncProfiles: [
+                    {
+                        fileName: "global-anywhere.txt",
+                        target: "anywhere",
+                        out: "outbounds",
+                    },
+                ],
+            },
+        });
+
+        const scheduler = createScheduler({
+            store,
+            coordinator,
+            fetchImpl: mockFetch,
+        });
+
+        const result = await scheduler.runJob();
+        expect(result.ok).to.be.true;
+
+        // Verify ALL sources (both enabled and disabled) were refreshed and updated
+        expect(store.readSnapshot(enabledSource.id)).to.include("启用节点-香港");
+        expect(store.readSnapshot(disabledSource.id)).to.include("未启用节点-美国");
+
+        // Verify Gist configuration generated according to enabled state:
+        // Global configuration should only include enabled nodes, not disabled ones
+        expect(syncedGistBody).to.not.be.null;
+        const gistFileContent = syncedGistBody.files["global-anywhere.txt"].content;
+        expect(decodeURIComponent(gistFileContent)).to.include("启用节点-香港");
+        expect(decodeURIComponent(gistFileContent)).to.not.include("未启用节点-美国");
+    });
+
+    it("persists scheduler interval in store settings and defaults to 360 minutes", function () {
+        const defaultScheduler = createScheduler({ store, coordinator });
+        expect(defaultScheduler.getStatus().intervalMinutes).to.equal(360);
+
+        defaultScheduler.setIntervalMinutes(720);
+        expect(defaultScheduler.getStatus().intervalMinutes).to.equal(720);
+        expect(store.getSettings().scheduler.intervalMinutes).to.equal(720);
+    });
+
 });

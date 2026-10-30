@@ -86,6 +86,23 @@ function normalizeModel(raw) {
                 id: typeof raw.settings.gist.id === "string" ? raw.settings.gist.id : "",
                 token: typeof raw.settings.gist.token === "string" ? raw.settings.gist.token : "",
             };
+            if (Array.isArray(raw.settings.gist.syncProfiles)) {
+                model.settings.gist.syncProfiles = deepClone(raw.settings.gist.syncProfiles);
+            }
+            if (raw.settings.gist.autoSync !== undefined) {
+                model.settings.gist.autoSync = raw.settings.gist.autoSync;
+            }
+            if (Array.isArray(raw.settings.gist.autoSyncTargets)) {
+                model.settings.gist.autoSyncTargets = deepClone(raw.settings.gist.autoSyncTargets);
+            }
+            for (const [gk, gv] of Object.entries(raw.settings.gist)) {
+                if (!Object.prototype.hasOwnProperty.call(model.settings.gist, gk)) {
+                    model.settings.gist[gk] = deepClone(gv);
+                }
+            }
+        }
+        if (isPlainObject(raw.settings.scheduler)) {
+            model.settings.scheduler = deepClone(raw.settings.scheduler);
         }
         if (Array.isArray(raw.settings.customSchemes)) {
             model.settings.customSchemes = deepClone(raw.settings.customSchemes);
