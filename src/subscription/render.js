@@ -394,7 +394,7 @@ sanitizeTaiwanFlag(nodes);
                 // work as bare lists that their clients know how to merge.
                 const CLASH_IDS = new Set(["clash", "stash", "shadowrocket", "karing"]);
                 body = CLASH_IDS.has(target.id) && !isNodesOnly
-                    ? assembleClash(raw, normalized.aclScheme, normalized)
+                    ? assembleClash(raw, normalized.aclScheme, Object.assign({}, normalized, { targetId: target.id }))
                     : raw;
             }
         }

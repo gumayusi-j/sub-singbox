@@ -438,6 +438,13 @@ function produce(proxies, targetPlatform, type, opts = {}) {
             proxy.supported &&
             proxy.supported[targetPlatform] === false
         ) {
+            if (opts && Array.isArray(opts.skippedNodes)) {
+                opts.skippedNodes.push({
+                    name: proxy.name || `${proxy.server}:${proxy.port}`,
+                    type: proxy.type || 'unknown',
+                    reason: `代理明确标记不支持平台: ${targetPlatform}`,
+                });
+            }
             return false;
         }
 
@@ -447,6 +454,7 @@ function produce(proxies, targetPlatform, type, opts = {}) {
             isRootHeaderSensitiveProxy(proxy) &&
             !supportsRootProxyHeaders(proxy, targetPlatform)
         ) {
+            const reason = `目标平台 ${targetPlatform} 不支持 ${getRootHeaderProxyLabel(proxy)} 代理的根 headers`;
             $.error(
                 `Target platform ${targetPlatform} does not support headers for ${getRootHeaderProxyLabel(
                     proxy,
@@ -454,6 +462,13 @@ function produce(proxies, targetPlatform, type, opts = {}) {
                     proxy.name || `${proxy.server}:${proxy.port}`
                 }. Proxy has been filtered.`,
             );
+            if (opts && Array.isArray(opts.skippedNodes)) {
+                opts.skippedNodes.push({
+                    name: proxy.name || `${proxy.server}:${proxy.port}`,
+                    type: proxy.type || 'unknown',
+                    reason,
+                });
+            }
             return false;
         }
 
@@ -462,6 +477,13 @@ function produce(proxies, targetPlatform, type, opts = {}) {
             isShadowsocksOverTls(proxy) &&
             !['qx', 'quantumultx', 'shadowrocket'].includes(normalizedTarget)
         ) {
+            if (opts && Array.isArray(opts.skippedNodes)) {
+                opts.skippedNodes.push({
+                    name: proxy.name || `${proxy.server}:${proxy.port}`,
+                    type: proxy.type || 'unknown',
+                    reason: `目标平台 ${targetPlatform} 不支持原生 Shadowsocks-over-TLS`,
+                });
+            }
             return false;
         }
 
@@ -591,6 +613,13 @@ function produce(proxies, targetPlatform, type, opts = {}) {
                     $.error(
                         `Cannot produce proxy: ${proxy.name}\nReason: ${err}`,
                     );
+                    if (opts && Array.isArray(opts.skippedNodes)) {
+                        opts.skippedNodes.push({
+                            name: proxy.name || `${proxy.server}:${proxy.port}`,
+                            type: proxy.type || 'unknown',
+                            reason: err && err.message ? err.message : String(err),
+                        });
+                    }
                     return '';
                 }
             })

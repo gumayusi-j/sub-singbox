@@ -79,7 +79,9 @@ export const TARGETS = [
         id: "surfboard",
         label: "Surfboard",
         exportable: true,
-        produce: "surfboard",
+        // Surfboard is a Surge-compatible dialect on Android. Aligned with Tower,
+        // reuse the mature Surge generator instead of a restrictive secondary producer.
+        produce: "surge",
         contentType: "text/plain; charset=utf-8",
         ua: /surfboard/i,
     },

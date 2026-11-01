@@ -14,6 +14,16 @@ import $ from '@/core/app';
 export default function Stash_Producer() {
     const type = 'ALL';
     const produce = (proxies, type, opts = {}) => {
+        const recordSkip = (proxy, reason) => {
+            if (opts && Array.isArray(opts.skippedNodes)) {
+                opts.skippedNodes.push({
+                    name: proxy.name || `${proxy.server}:${proxy.port}`,
+                    type: proxy.type || 'unknown',
+                    reason,
+                });
+            }
+        };
+
         // https://stash.wiki/proxy-protocols/proxy-types#shadowsocks
         const list = proxies
             .filter((proxy) => {
@@ -61,10 +71,12 @@ export default function Stash_Producer() {
                         ].includes(proxy.cipher)) ||
                     (proxy.type === 'snell' && proxy.version >= 6)
                 ) {
+                    recordSkip(proxy, `Stash 不支持此协议类型或加密方式: ${proxy.type}${proxy.cipher ? ' (' + proxy.cipher + ')' : ''}`);
                     return false;
                 } else if (
                     !supportsShadowsocksV2rayPluginMode(proxy, ['websocket'])
                 ) {
+                    recordSkip(proxy, 'Stash Shadowsocks 仅支持 websocket 模式的 v2ray-plugin');
                     return false;
                 } else if (
                     ['vless'].includes(proxy.type) &&
@@ -72,6 +84,7 @@ export default function Stash_Producer() {
                     proxy.network &&
                     !['tcp'].includes(proxy.network)
                 ) {
+                    recordSkip(proxy, `Stash VLESS REALITY 仅支持 TCP 传输 (当前: ${proxy.network})`);
                     return false;
                 } else if (
                     ['anytls'].includes(proxy.type) &&
@@ -80,16 +93,19 @@ export default function Stash_Producer() {
                         (['tcp'].includes(proxy.network) &&
                             proxy['reality-opts']))
                 ) {
+                    recordSkip(proxy, 'Stash AnyTLS 仅支持纯 TCP 且不支持 REALITY');
                     return false;
                 } else if (
                     !['vless'].includes(proxy.type) &&
                     ['xhttp'].includes(proxy.network)
                 ) {
+                    recordSkip(proxy, 'Stash 不支持非 VLESS 的 xhttp 传输');
                     return false;
                 } else if (
                     ['ws'].includes(proxy.network) &&
                     proxy['ws-opts']?.['v2ray-http-upgrade']
                 ) {
+                    recordSkip(proxy, 'Stash 不支持 WebSocket HTTP Upgrade');
                     return false;
                 } else if (
                     proxy.type === 'ss' &&
@@ -98,6 +114,7 @@ export default function Stash_Producer() {
                 ) {
                     const stVersion = proxy['plugin-opts'].version;
                     if (stVersion != null && stVersion < 2) {
+                        recordSkip(proxy, 'Stash Shadow-TLS 需要 v2 及以上版本');
                         return false;
                     }
                 }

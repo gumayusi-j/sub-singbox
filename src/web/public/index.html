@@ -2770,17 +2770,17 @@ var COUNTRY_MAP = {
 };
 var CLIENT_PROTOCOLS = {
   "sing-box":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls","snell","socks","http"],
-  "clash":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
+  "clash":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls","snell","socks","http"],
   "surge":["shadowsocks","vmess","vless","trojan","tuic","wireguard","snell","socks","http","anytls"],
   "loon":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard","socks","http","anytls"],
   "quantumultx":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","http","anytls"],
   "shadowrocket":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http","anytls"],
-  "stash":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","snell","socks","http"],
-  "surfboard":["shadowsocks","vmess","vless","trojan","tuic","wireguard","socks","http"],
+  "stash":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls","snell","socks","http"],
+  "surfboard":["shadowsocks","vmess","vless","trojan","hysteria2","tuic","wireguard","anytls","snell","socks","http"],
   "v2ray":["shadowsocks","vmess","vless","trojan"],
   "egern":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","tuic","wireguard","anytls","snell","ssh","socks","http"],
   "hiddify":["shadowsocks","vmess","vless","trojan","hysteria2","tuic","wireguard","anytls"],
-  "karing":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard"],
+  "karing":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls"],
   "uri":["shadowsocks","shadowsocksr","vmess","vless","trojan","hysteria2","hysteria","tuic","wireguard","anytls"],
   "anywhere":["vless","hysteria2","trojan","shadowsocks","socks","anytls"]
 };
@@ -3805,8 +3805,15 @@ var app = Vue.createApp({
         var isNodeOnly = exportOut.value === 'outbounds' || isTargetInherentlyNodeOnly(exportTarget.value);
         var actualCount = filteredNodes.value.length;
         if (typeof last.value.output === 'string' && last.value.output.trim()) {
-          var outLines = last.value.output.trim().split('\n').filter(Boolean);
-          if (isNodeOnly) actualCount = outLines.length;
+          if (isNodeOnly) {
+            if (/^\s*proxies\s*:/m.test(last.value.output)) {
+              var yamlMatches = last.value.output.match(/^\s*-\s*(?:name:|\{)/gm);
+              actualCount = yamlMatches ? yamlMatches.length : filteredNodes.value.length;
+            } else {
+              var outLines = last.value.output.trim().split('\n').filter(Boolean);
+              actualCount = outLines.length;
+            }
+          }
         }
         var parts = ['完成：' + actualCount + ' 个节点'];
         if (removed > 0) parts.push('过滤 ' + removed + ' 个不兼容');
