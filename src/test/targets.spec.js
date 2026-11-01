@@ -8,6 +8,16 @@ import {
     resolveTarget,
 } from "@/subscription/targets";
 import producers from "@/core/proxy-utils/producers";
+import { renderSubscription } from "@/subscription/render";
+
+function makeStore(nodes) {
+    return {
+        list: () => [{ id: "src-1", name: "Source 1", enabled: true }],
+        readSnapshot: () => JSON.stringify({ proxies: nodes }),
+        getSettings: () => ({}),
+        resolveToken: () => ({ kind: "global" }),
+    };
+}
 
 function ua(agent) {
     return resolveTarget({ userAgent: agent });
@@ -155,5 +165,26 @@ describe("subscription targets — table integrity", function () {
         for (const entry of listed) {
             expect(findTarget(entry.id), entry.id).to.not.equal(null);
         }
+    });
+
+    it("renders complete profile with [Proxy] and [Proxy Group] for Surfboard by default", function () {
+        const testNode = {
+            name: "HK-01",
+            type: "ss",
+            server: "1.1.1.1",
+            port: 8388,
+            cipher: "aes-128-gcm",
+            password: "test",
+        };
+        const store = makeStore([testNode]);
+        const target = findTarget("surfboard");
+        const rendered = renderSubscription(store, { kind: "global" }, { target });
+
+        expect(rendered.status).to.equal(200);
+        expect(rendered.body).to.include("[General]");
+        expect(rendered.body).to.include("[Proxy]");
+        expect(rendered.body).to.include("HK-01");
+        expect(rendered.body).to.include("[Proxy Group]");
+        expect(rendered.body).to.include("[Rule]");
     });
 });

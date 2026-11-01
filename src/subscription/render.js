@@ -13,6 +13,7 @@ import { applyHostsToProxies, extractPrivateDns } from "../kit/common-dns";
 import { mergeParsed, dedupeNodeNames } from "../kit/merge";
 import assemble from "../kit/assemble";
 import assembleClash from "../kit/assemble-clash";
+import assembleSurge from "../kit/assemble-surge";
 import { assembleAcl } from "../kit/acl4ssr/build";
 import { findScheme } from "../kit/schemes";
 import { filterNodeNames, normalizeNodeFilter } from "../kit/nodes/filter";
@@ -390,12 +391,21 @@ sanitizeTaiwanFlag(nodes);
 
                 // Clash-family targets (clash, stash, shadowrocket, karing) receive
                 // a complete config with dns, proxy-groups and rules — the same
-                // structure Tower exports. Other dialects (surge, loon, …) already
-                // work as bare lists that their clients know how to merge.
+                // structure Tower exports.
                 const CLASH_IDS = new Set(["clash", "stash", "shadowrocket", "karing"]);
-                body = CLASH_IDS.has(target.id) && !isNodesOnly
-                    ? assembleClash(raw, normalized.aclScheme, Object.assign({}, normalized, { targetId: target.id }))
-                    : raw;
+                // Surfboard and Surge (profile mode) receive a complete .conf with
+                // [General], [Proxy], [Proxy Group], and [Rule] sections.
+                // Surfboard requires [Proxy] to recognize nodes; without sections
+                // Surfboard will parse 0 nodes.
+                const SURGE_IDS = new Set(["surfboard", "surge"]);
+
+                if (CLASH_IDS.has(target.id) && !isNodesOnly) {
+                    body = assembleClash(raw, normalized.aclScheme, Object.assign({}, normalized, { targetId: target.id }));
+                } else if (SURGE_IDS.has(target.id) && !isNodesOnly) {
+                    body = assembleSurge(raw, normalized.aclScheme, Object.assign({}, normalized, { targetId: target.id }));
+                } else {
+                    body = raw;
+                }
             }
         }
     } catch (e) {

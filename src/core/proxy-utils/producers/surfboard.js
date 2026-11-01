@@ -18,6 +18,10 @@ function appendTlsProxyParams(result, proxy, enabled = true) {
         'tls-fingerprint',
     );
     result.appendIfPresent(`,sni="${proxy.sni}"`, 'sni');
+    if (hasNonBlankValue(proxy.alpn)) {
+        const alpn = Array.isArray(proxy.alpn) ? proxy.alpn.join(',') : proxy.alpn;
+        result.append(`,alpn="${alpn}"`);
+    }
     result.appendIfPresent(
         `,skip-cert-verify=${proxy['skip-cert-verify']}`,
         'skip-cert-verify',
