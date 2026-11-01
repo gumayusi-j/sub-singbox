@@ -155,6 +155,10 @@ function formatRuleProviders(providers) {
  */
 export function buildMihomoSmartClash(proxyYaml, options) {
     const opts = options || {};
+    // Stash does not support the Mihomo-only "sticky-sessions" load-balance
+    // strategy. When generating for Stash, fall back to "round-robin" which
+    // both Clash and Stash understand.
+    const lbStrategy = opts.targetId === "stash" ? "round-robin" : "sticky-sessions";
 
     let originalDoc = null;
     try {
@@ -282,7 +286,7 @@ export function buildMihomoSmartClash(proxyYaml, options) {
             ...GROUP_BASE_OPTION,
             name: "⚖️ 负载均衡",
             type: "load-balance",
-            strategy: "sticky-sessions",
+            strategy: lbStrategy,
             icon: `${ICON_BASE_URL}RoundRobin.svg`,
             proxies: validNames,
         },

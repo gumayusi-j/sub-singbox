@@ -79,9 +79,12 @@ export const TARGETS = [
         id: "surfboard",
         label: "Surfboard",
         exportable: true,
-        // Surfboard is a Surge-compatible dialect on Android. Aligned with Tower,
-        // reuse the mature Surge generator instead of a restrictive secondary producer.
-        produce: "surge",
+        // Surfboard is a Surge-compatible dialect on Android but it does NOT support
+        // Surge 5+ ws-headers quoting (`ws-headers="Host:\"v\""`) — it expects the
+        // old unquoted form (`ws-headers=Host:"v"`). Use the dedicated surfboard
+        // producer which already handles all required protocols (ss, vmess, trojan,
+        // snell, tuic, hysteria2, anytls, wireguard-surge, socks5, http).
+        produce: "surfboard",
         contentType: "text/plain; charset=utf-8",
         ua: /surfboard/i,
     },
