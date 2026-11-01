@@ -1,0 +1,504 @@
+# ==============================================================================
+# MyEgern 个人定制配置 (Clash 风格策略组 · 动静解耦纯净版)
+#
+# 架构特点：
+# 1. 结构与 General 继承自主流 Egern 现代网络栈与 DNS 配置最佳实践；
+# 2. 策略组风格、层级与业务分类完全对齐个人常用的 Clash (mihomoScript) 经典方案；
+# 3. 动静分离：本配置文件内不包含任何具体节点，自动通过外部订阅 + filter 动态筛选；
+#    在 Egern 中添加任何机场订阅后，本配置的所有地区组与业务组均会自动匹配并生效；
+# 4. CI 联动：修改本文件 push 到仓库后，GitHub Actions 自动将其同步推送到 GitHub Gist；
+# 5. 参考1: https://raw.githubusercontent.com/ClashConnectRules/Egern/main/egern.yaml
+# 6. 参考2: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Egern.yaml
+# 7. 策略图标优化：台湾地区采用 🧋 珍珠奶茶，全面支持繁体「台灣」识别
+# ==============================================================================
+
+http_port: 6152
+socks_port: 6153
+vif_only: true
+hide_vpn_icon: false
+hijack_dns:
+  - '*:53'
+geoip_db_url: https://raw.githubusercontent.com/Loyalsoldier/geoip/release/Country-without-asn.mmdb
+asn_db_url: https://raw.githubusercontent.com/Loyalsoldier/geoip/release/GeoLite2-ASN.mmdb
+proxy_latency_test_url: http://www.google.com/generate_204
+direct_latency_test_url: http://wifi.vivo.com.cn/generate_204
+
+dns:
+  bootstrap:
+    - 223.5.5.5
+    - 119.29.29.29
+  upstreams:
+    Domestic:
+      - 223.5.5.5
+      - 119.29.29.29
+      - https://dns.alidns.com/dns-query
+      - https://doh.pub/dns-query
+    Global:
+      - https://1.1.1.1/dns-query
+      - https://8.8.8.8/dns-query
+      - https://dns.google/dns-query
+      - https://cloudflare-dns.com/dns-query
+
+real_ip_domains:
+  - '*.apple.com'
+  - '*.icloud.com'
+  - dns.msftncsi.com
+  - '*.srv.nintendo.net'
+  - '*.xboxlive.com'
+
+# ------------------------------------------------------------------------------
+# 策略组设计（100% 保持个人最喜爱的 Clash / mihomoScript 风格）
+# ------------------------------------------------------------------------------
+policy_groups:
+  # === 外部机场订阅引入（保持纯净，支持在客户端直接替换或添加订阅） ===
+  - external:
+      name: 全部节点
+      type: select
+      urls:
+        - https://your-subscription-url
+      filter: '^(?!.*(?:流量|时间|到期|官网|群|网址|重置|套餐|Traffic|Expire|GB|剩余|版本|通知)).*$'
+      update_interval: 86400
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Rocket.png
+      hidden: false
+
+  # === 基础顶级策略组 ===
+  - select:
+      name: 节点选择
+      policies:
+        - 自动选择
+        - 负载均衡
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 新加坡自动
+        - 台湾自动
+        - 韩国自动
+        - 全部节点
+        - DIRECT
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Proxy.png
+
+  - auto_test:
+      name: 自动选择
+      policies:
+        - 全部节点
+      flatten: true
+      interval: 300
+      tolerance: 50
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Auto.png
+
+  - load_balance:
+      name: 负载均衡
+      policies:
+        - 全部节点
+      flatten: true
+      interval: 300
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Available.png
+
+  # === 地区策略组（精简自动测速，节点选择与分流直接挂载） ===
+  - auto_test:
+      name: 香港自动
+      policies:
+        - 全部节点
+      flatten: true
+      filter: '(?i)(🇭🇰|香港|HK|HKG|Hong\s*Kong)'
+      interval: 300
+      tolerance: 50
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Hong_Kong.png
+
+  - auto_test:
+      name: 日本自动
+      policies:
+        - 全部节点
+      flatten: true
+      filter: '(?i)(🇯🇵|日本|JP|JPN|Japan|Tokyo|Osaka|东京|大阪)'
+      interval: 300
+      tolerance: 50
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Japan.png
+
+  - auto_test:
+      name: 美国自动
+      policies:
+        - 全部节点
+      flatten: true
+      filter: '(?i)(🇺🇸|美国|US|USA|America|United\s*States|洛杉矶|硅谷|西雅图|芝加哥)'
+      interval: 300
+      tolerance: 50
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/United_States.png
+
+  - auto_test:
+      name: 新加坡自动
+      policies:
+        - 全部节点
+      flatten: true
+      filter: '(?i)(🇸🇬|新加坡|SG|SGP|Singapore|狮城)'
+      interval: 300
+      tolerance: 50
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Singapore.png
+
+  - auto_test:
+      name: 台湾自动
+      policies:
+        - 全部节点
+      flatten: true
+      filter: '(?i)(🇹🇼|🧋|台湾|台灣|TW|TWN|Taiwan|Taipei|新北|高雄|台中|台南)'
+      interval: 300
+      tolerance: 50
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/TW.png
+
+  - auto_test:
+      name: 韩国自动
+      policies:
+        - 全部节点
+      flatten: true
+      filter: '(?i)(🇰🇷|韩国|韓|KR|KOR|Korea|首尔|釜山)'
+      interval: 300
+      tolerance: 50
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Korea.png
+
+  # === 特殊节点筛选（倍率与家宽） ===
+  - select:
+      name: 低倍率节点
+      policies:
+        - 全部节点
+        - 节点选择
+      flatten: true
+      filter: '(?i)(0\.[0-5]|低倍|0x|0X|free|免费)'
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Lab.png
+
+  - select:
+      name: 高倍率节点
+      policies:
+        - 全部节点
+        - 节点选择
+      flatten: true
+      filter: '(?i)([2-9]x|[2-9]X|[2-9]倍|[1-9]\d+x|[1-9]\d+倍)'
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Speedtest.png
+
+  - select:
+      name: 家宽节点
+      policies:
+        - 全部节点
+        - 节点选择
+      flatten: true
+      filter: '(?i)(家宽|住宅|原生|家庭宽带|ISP|RES|residential)'
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Home.png
+
+  # === 核心分流策略组（对应 Clash 常用分流配置） ===
+  - select:
+      name: AI
+      policies:
+        - 节点选择
+        - 美国自动
+        - 日本自动
+        - 新加坡自动
+        - 香港自动
+        - 台湾自动
+        - 韩国自动
+        - 自动选择
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Bot.png
+
+  - select:
+      name: YouTube
+      policies:
+        - 节点选择
+        - 自动选择
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 新加坡自动
+        - 台湾自动
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/YouTube.png
+
+  - select:
+      name: Google
+      policies:
+        - 节点选择
+        - 自动选择
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 新加坡自动
+        - 台湾自动
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Google_Search.png
+
+  - select:
+      name: Telegram
+      policies:
+        - 节点选择
+        - 新加坡自动
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 自动选择
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Telegram.png
+
+  - select:
+      name: Twitter
+      policies:
+        - 节点选择
+        - 自动选择
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 新加坡自动
+        - 台湾自动
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Twitter.png
+
+  - select:
+      name: TikTok
+      policies:
+        - 节点选择
+        - 日本自动
+        - 美国自动
+        - 新加坡自动
+        - 台湾自动
+        - 韩国自动
+        - 自动选择
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/TikTok.png
+
+  - select:
+      name: Netflix
+      policies:
+        - 节点选择
+        - 新加坡自动
+        - 香港自动
+        - 日本自动
+        - 台湾自动
+        - 韩国自动
+        - 美国自动
+        - 自动选择
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Netflix.png
+
+  - select:
+      name: Spotify
+      policies:
+        - 节点选择
+        - 自动选择
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 新加坡自动
+        - 台湾自动
+        - 韩国自动
+        - DIRECT
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Spotify.png
+
+  - select:
+      name: GitHub
+      policies:
+        - 节点选择
+        - 自动选择
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 新加坡自动
+        - 台湾自动
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/GitHub.png
+
+  - select:
+      name: Microsoft
+      policies:
+        - DIRECT
+        - 节点选择
+        - 自动选择
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 新加坡自动
+        - 台湾自动
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Microsoft.png
+
+  - select:
+      name: Apple
+      policies:
+        - DIRECT
+        - 节点选择
+        - 自动选择
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 新加坡自动
+        - 台湾自动
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Apple.png
+
+  - select:
+      name: Line
+      policies:
+        - 节点选择
+        - 台湾自动
+        - 日本自动
+        - 新加坡自动
+        - 自动选择
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Line.png
+
+  - select:
+      name: PayPal
+      policies:
+        - 节点选择
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 新加坡自动
+        - 自动选择
+        - DIRECT
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/PayPal.png
+
+  - select:
+      name: EHentai
+      policies:
+        - 节点选择
+        - 自动选择
+        - 香港自动
+        - 日本自动
+        - 美国自动
+        - 韩国自动
+        - 台湾自动
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Exhentai.png
+
+  - select:
+      name: FCM
+      policies:
+        - DIRECT
+        - 节点选择
+        - 自动选择
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Google.png
+
+  - select:
+      name: AdBlock
+      policies:
+        - REJECT
+        - DIRECT
+        - 节点选择
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/AdBlock.png
+
+  - select:
+      name: 漏网之鱼
+      policies:
+        - 节点选择
+        - 自动选择
+        - DIRECT
+      icon: https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Final.png
+
+# ------------------------------------------------------------------------------
+# 分流规则集（精简高效，精准匹配各业务策略组）
+# ------------------------------------------------------------------------------
+rules:
+  # 局域网与内网保留地址直连
+  - ip_cidr:
+      match: 192.168.0.0/16
+      policy: DIRECT
+      no_resolve: true
+  - ip_cidr:
+      match: 10.0.0.0/8
+      policy: DIRECT
+      no_resolve: true
+  - ip_cidr:
+      match: 172.16.0.0/12
+      policy: DIRECT
+      no_resolve: true
+  - ip_cidr:
+      match: 127.0.0.0/8
+      policy: DIRECT
+      no_resolve: true
+  - ip_cidr:
+      match: 100.64.0.0/10
+      policy: DIRECT
+      no_resolve: true
+
+  # 广告拦截白名单与规则集
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Direct.yaml
+      policy: DIRECT
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Reject.yaml
+      policy: AdBlock
+
+  # 常用特定规则补充
+  - domain_suffix:
+      match: raw.githubusercontent.com
+      policy: 节点选择
+  - domain:
+      match: trae-api-sg.mchost.guru
+      policy: AI
+  - domain:
+      match: trae-api-us.mchost.guru
+      policy: AI
+  - domain:
+      match: gemini.google.com
+      policy: AI
+  - domain:
+      match: aistudio.google.com
+      policy: AI
+  - domain:
+      match: copilot.microsoft.com
+      policy: AI
+
+  # AI 专属服务
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/AI.yaml
+      policy: AI
+
+  # 常用流媒体与社交服务
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/YouTube.yaml
+      policy: YouTube
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Netflix.yaml
+      policy: Netflix
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Spotify.yaml
+      policy: Spotify
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/TikTok.yaml
+      policy: TikTok
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Telegram.yaml
+      policy: Telegram
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Twitter.yaml
+      policy: Twitter
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Facebook.yaml
+      policy: 节点选择
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Instagram.yaml
+      policy: 节点选择
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Line.yaml
+      policy: Line
+
+  # 平台与工具
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Google.yaml
+      policy: Google
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Github.yaml
+      policy: GitHub
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Microsoft.yaml
+      policy: Microsoft
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Apple.yaml
+      policy: Apple
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Steam.yaml
+      policy: 节点选择
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/PayPal.yaml
+      policy: PayPal
+
+  # 国内直连与内网域名
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Lan.yaml
+      policy: DIRECT
+  - rule_set:
+      match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/ChinaDomain.yaml
+      policy: DIRECT
+
+  # 中国大陆 IP 直连与最终兜底
+  - geoip:
+      match: CN
+      policy: DIRECT
+      no_resolve: true
+  - default:
+      policy: 漏网之鱼
