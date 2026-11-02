@@ -3402,6 +3402,9 @@ var app = Vue.createApp({
           if (pendingSave.value) persistAll();
         }
         await loadLanInfo();
+        if (gistId.value) {
+          refreshGistFiles().catch(function(){});
+        }
       } catch(e) {
         console.error('[loadSubs] error:', e);
         throw e; // re-throw so caller can handle
@@ -3878,6 +3881,107 @@ var app = Vue.createApp({
       'anywhere': 'anywhere-nodes.txt'
     };
 
+    function inferProfileFromFileName(fileName, sourceList) {
+      if (!fileName || typeof fileName !== 'string') return null;
+
+      var sourceId = '';
+      var baseFileName = fileName;
+
+      var list = Array.isArray(sourceList) ? sourceList : [];
+      var sortedSources = list.slice().sort(function(a, b){ return (b.name || '').length - (a.name || '').length; });
+
+      for (var i = 0; i < sortedSources.length; i++) {
+        var src = sortedSources[i];
+        if (!src) continue;
+        var rawName = src.name || '';
+        var sanitized = rawName.replace(/[^\w\u4e00-\u9fff-]+/g, '-').replace(/^-|-$/g, '');
+        var candidates = [sanitized, rawName, src.id].filter(Boolean);
+
+        for (var j = 0; j < candidates.length; j++) {
+          var prefix = candidates[j] + '-';
+          if (fileName.indexOf(prefix) === 0) {
+            sourceId = src.id;
+            baseFileName = fileName.slice(prefix.length);
+            break;
+          }
+        }
+        if (sourceId) break;
+      }
+
+      if (fileName.indexOf('合并-') === 0) {
+        sourceId = '';
+        var dashIdx = fileName.indexOf('-', 3);
+        if (dashIdx > 0) {
+          baseFileName = fileName.slice(dashIdx + 1);
+        }
+      }
+
+      var target = null;
+      var TARGET_MAP = [
+        { key: 'sing-box', regex: /sing-?box/i },
+        { key: 'clash', regex: /clash/i },
+        { key: 'surfboard', regex: /surfboard/i },
+        { key: 'surge', regex: /surge/i },
+        { key: 'stash', regex: /stash/i },
+        { key: 'loon', regex: /loon/i },
+        { key: 'quantumultx', regex: /quantumult|qx/i },
+        { key: 'shadowrocket', regex: /shadowrocket/i },
+        { key: 'egern', regex: /egern/i },
+        { key: 'v2ray', regex: /v2ray/i },
+        { key: 'hiddify', regex: /hiddify/i },
+        { key: 'karing', regex: /karing/i },
+        { key: 'uri', regex: /uri/i },
+        { key: 'anywhere', regex: /anywhere/i }
+      ];
+
+      for (var k = 0; k < TARGET_MAP.length; k++) {
+        if (TARGET_MAP[k].regex.test(baseFileName)) {
+          target = TARGET_MAP[k].key;
+          break;
+        }
+      }
+
+      if (!target) {
+        for (var k = 0; k < TARGET_MAP.length; k++) {
+          if (TARGET_MAP[k].regex.test(fileName)) {
+            target = TARGET_MAP[k].key;
+            break;
+          }
+        }
+      }
+
+      if (!target) return null;
+
+      var out = 'config';
+      if (['anywhere', 'uri', 'loon', 'quantumultx'].indexOf(target) >= 0) {
+        out = 'outbounds';
+      } else if (target === 'surfboard') {
+        out = 'config';
+      } else if (/nodes|outbounds|provider|list/i.test(baseFileName)) {
+        out = 'outbounds';
+      } else {
+        out = 'config';
+      }
+
+      return {
+        fileName: fileName,
+        target: target,
+        out: out,
+        sourceId: sourceId,
+        aclPreset: '',
+        nodeFilter: '',
+        remoteDns: '',
+        localDns: '',
+        ipv6Enabled: true,
+        nodePipeline: {
+          cleanNotice: true,
+          injectFlags: true,
+          dedupeAddress: false,
+          quickSettings: { udp: false, skipCertVerify: false }
+        }
+      };
+    }
+
     async function syncToGist() {
       if (!gistId.value || !githubToken.value) {
         gistStatus.value = '请先填写 Gist ID 和 GitHub Token。';
@@ -4070,6 +4174,33 @@ var app = Vue.createApp({
         }
         gistFiles.value = files;
         lsSave('sbx:gistFiles', files);
+
+        // 自动将 Gist 中的所有文件对齐到自动更新配置方案中 (syncProfiles)
+        try {
+          var currentProfiles = lsLoad('sbx:gistSyncProfiles', []);
+          var profilesChanged = false;
+          files.forEach(function(f) {
+            if (!currentProfiles.some(function(p){ return p.fileName === f.name; })) {
+              var inferred = inferProfileFromFileName(f.name, sources.value);
+              if (inferred) {
+                currentProfiles.push(inferred);
+                profilesChanged = true;
+              }
+            }
+          });
+          if (profilesChanged) {
+            syncProfiles.value = currentProfiles;
+            lsSave('sbx:gistSyncProfiles', currentProfiles);
+            api('PUT', '/api/settings', {
+              gist: {
+                id: (gistId.value || '').trim(),
+                token: (githubToken.value || '').trim(),
+                syncProfiles: currentProfiles
+              }
+            }).catch(function(e){ console.warn('Failed to save reconciled syncProfiles:', e); });
+          }
+        } catch(_e) {}
+
         gistStatus.value = '已刷新 Gist 文件列表，共 ' + files.length + ' 个文件。';
         gistStatusType.value = 'ok';
       } catch (e) {
@@ -4279,7 +4410,7 @@ var app = Vue.createApp({
     }
     function isTargetInherentlyNodeOnly(targetId) {
       var id = targetId || 'sing-box';
-      return ['egern', 'surge', 'loon', 'quantumultx', 'surfboard', 'v2ray', 'uri', 'anywhere'].indexOf(id) >= 0;
+      return ['loon', 'quantumultx', 'uri', 'anywhere'].indexOf(id) >= 0;
     }
     var currentTargetLabel = Vue.computed(function() {
       if (!exportTarget.value) return '自动识别';

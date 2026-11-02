@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { createStore } from "../subscription/store";
 import { createCoordinator } from "../subscription/coordinator";
-import { createScheduler } from "../subscription/scheduler";
+import { createScheduler, inferProfileFromFileName } from "../subscription/scheduler";
 import { createMockFetch } from "./helpers/mock-fetch";
 import fs from "fs";
 import os from "os";
@@ -321,4 +321,128 @@ describe("Subscription Scheduler & Automation", function () {
         expect(store.getSettings().scheduler.intervalMinutes).to.equal(720);
     });
 
+    it("correctly infers profile parameters from Gist filenames for multiple sources", function () {
+        const sources = [
+            { id: "src-bbxy", name: "bbxy" },
+            { id: "src-naiyun", name: "naiyun" },
+        ];
+
+        const p1 = inferProfileFromFileName("bbxy-anywhere-nodes.txt", sources);
+        expect(p1.sourceId).to.equal("src-bbxy");
+        expect(p1.target).to.equal("anywhere");
+        expect(p1.out).to.equal("outbounds");
+
+        const p2 = inferProfileFromFileName("bbxy-egern-nodes.yaml", sources);
+        expect(p2.sourceId).to.equal("src-bbxy");
+        expect(p2.target).to.equal("egern");
+        expect(p2.out).to.equal("outbounds");
+
+        const p3 = inferProfileFromFileName("bbxy-loon-nodes.conf", sources);
+        expect(p3.sourceId).to.equal("src-bbxy");
+        expect(p3.target).to.equal("loon");
+        expect(p3.out).to.equal("outbounds");
+
+        const p4 = inferProfileFromFileName("bbxy-singbox-config.json", sources);
+        expect(p4.sourceId).to.equal("src-bbxy");
+        expect(p4.target).to.equal("sing-box");
+        expect(p4.out).to.equal("config");
+
+        const p5 = inferProfileFromFileName("bbxy-stash-config.yaml", sources);
+        expect(p5.sourceId).to.equal("src-bbxy");
+        expect(p5.target).to.equal("stash");
+        expect(p5.out).to.equal("config");
+
+        const p6 = inferProfileFromFileName("bbxy-surfboard-nodes.conf", sources);
+        expect(p6.sourceId).to.equal("src-bbxy");
+        expect(p6.target).to.equal("surfboard");
+        expect(p6.out).to.equal("config");
+
+        const p7 = inferProfileFromFileName("naiyun-anywhere-nodes.txt", sources);
+        expect(p7.sourceId).to.equal("src-naiyun");
+        expect(p7.target).to.equal("anywhere");
+        expect(p7.out).to.equal("outbounds");
+
+        const p8 = inferProfileFromFileName("naiyun-singbox-config.json", sources);
+        expect(p8.sourceId).to.equal("src-naiyun");
+        expect(p8.target).to.equal("sing-box");
+        expect(p8.out).to.equal("config");
+    });
+
+    it("auto-reconciles all Gist files into syncProfiles and syncs all 8 files", async function () {
+        const srcBbxy = store.addSource({
+            name: "bbxy",
+            kind: "text",
+            content: nodesJson(["香港-01", "日本-02"]),
+        });
+        const srcNaiyun = store.addSource({
+            name: "naiyun",
+            kind: "text",
+            content: nodesJson(["美国-01", "新加坡-02"]),
+        });
+
+        const gistFilesMap = {
+            "bbxy-anywhere-nodes.txt": { content: "old" },
+            "bbxy-egern-nodes.yaml": { content: "old" },
+            "bbxy-loon-nodes.conf": { content: "old" },
+            "bbxy-singbox-config.json": { content: "old" },
+            "bbxy-stash-config.yaml": { content: "old" },
+            "bbxy-surfboard-nodes.conf": { content: "old" },
+            "naiyun-anywhere-nodes.txt": { content: "old" },
+            "naiyun-singbox-config.json": { content: "old" },
+        };
+
+        let syncedGistFiles = null;
+        const mockFetch = createMockFetch({
+            "https://api.github.com/gists/test-gist-id": (req) => {
+                if (req && req.method === "GET") {
+                    return {
+                        status: 200,
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ id: "test-gist-id", files: gistFilesMap }),
+                    };
+                }
+                if (req && req.method === "PATCH") {
+                    const parsed = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+                    syncedGistFiles = Object.keys(parsed.files);
+                    return {
+                        status: 200,
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ ok: true }),
+                    };
+                }
+                return { status: 404, body: "Not found" };
+            },
+        });
+
+        // Initially syncProfiles only has 4 items
+        store.setSettings({
+            gist: {
+                id: "test-gist-id",
+                token: "ghp_secretToken123",
+                syncProfiles: [
+                    { fileName: "naiyun-singbox-config.json", target: "sing-box", out: "config", sourceId: srcNaiyun.id },
+                    { fileName: "naiyun-anywhere-nodes.txt", target: "anywhere", out: "outbounds", sourceId: srcNaiyun.id },
+                    { fileName: "bbxy-loon-nodes.conf", target: "loon", out: "outbounds", sourceId: srcBbxy.id },
+                    { fileName: "bbxy-anywhere-nodes.txt", target: "anywhere", out: "outbounds", sourceId: srcBbxy.id },
+                ],
+            },
+        });
+
+        const scheduler = createScheduler({
+            store,
+            coordinator,
+            fetchImpl: mockFetch,
+        });
+
+        const result = await scheduler.runJob({ forceSyncGist: true });
+        expect(result.ok).to.be.true;
+
+        // Verify that all 8 files were discovered, reconciled and synced
+        expect(syncedGistFiles).to.have.lengthOf(8);
+        expect(syncedGistFiles).to.include.members(Object.keys(gistFilesMap));
+
+        // Verify that store settings now contains all 8 syncProfiles
+        const updatedProfiles = store.getSettings().gist.syncProfiles;
+        expect(updatedProfiles).to.have.lengthOf(8);
+    });
 });

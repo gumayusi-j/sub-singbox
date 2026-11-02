@@ -403,6 +403,8 @@ sanitizeTaiwanFlag(nodes);
                     body = assembleClash(raw, normalized.aclScheme, Object.assign({}, normalized, { targetId: target.id }));
                 } else if (SURGE_IDS.has(target.id) && !isNodesOnly) {
                     body = assembleSurge(raw, normalized.aclScheme, Object.assign({}, normalized, { targetId: target.id }));
+                } else if (target.id === "surfboard" && isNodesOnly) {
+                    body = "[Proxy]\n" + raw.trim() + "\n";
                 } else {
                     body = raw;
                 }

@@ -12,6 +12,111 @@ import { resolveTarget } from "./targets";
 
 export const DEFAULT_SCHEDULER_INTERVAL_MINUTES = 360; // 6 小时默认维护周期
 
+/**
+ * 自动根据 Gist 上的文件名推断其所属订阅源、导出目标与输出形态
+ */
+export function inferProfileFromFileName(fileName, sources) {
+    if (!fileName || typeof fileName !== "string") return null;
+
+    let sourceId = "";
+    let baseFileName = fileName;
+
+    const sourceList = Array.isArray(sources) ? sources : [];
+    // 优先匹配名称更长的源，避免前缀被短名称误拦截
+    const sortedSources = sourceList.slice().sort((a, b) => (b.name || "").length - (a.name || "").length);
+
+    for (const src of sortedSources) {
+        if (!src) continue;
+        const rawName = src.name || "";
+        const sanitized = rawName.replace(/[^\w\u4e00-\u9fff-]+/g, "-").replace(/^-|-$/g, "");
+        const candidates = [sanitized, rawName, src.id].filter(Boolean);
+
+        for (const cand of candidates) {
+            const prefix = cand + "-";
+            if (fileName.startsWith(prefix)) {
+                sourceId = src.id;
+                baseFileName = fileName.slice(prefix.length);
+                break;
+            }
+        }
+        if (sourceId) break;
+    }
+
+    if (fileName.startsWith("合并-")) {
+        sourceId = "";
+        const dashIdx = fileName.indexOf("-", 3);
+        if (dashIdx > 0) {
+            baseFileName = fileName.slice(dashIdx + 1);
+        }
+    }
+
+    let target = null;
+    const TARGET_MAP = [
+        { key: "sing-box", regex: /sing-?box/i },
+        { key: "clash", regex: /clash/i },
+        { key: "surfboard", regex: /surfboard/i },
+        { key: "surge", regex: /surge/i },
+        { key: "stash", regex: /stash/i },
+        { key: "loon", regex: /loon/i },
+        { key: "quantumultx", regex: /quantumult|qx/i },
+        { key: "shadowrocket", regex: /shadowrocket/i },
+        { key: "egern", regex: /egern/i },
+        { key: "v2ray", regex: /v2ray/i },
+        { key: "hiddify", regex: /hiddify/i },
+        { key: "karing", regex: /karing/i },
+        { key: "uri", regex: /uri/i },
+        { key: "anywhere", regex: /anywhere/i },
+    ];
+
+    for (const item of TARGET_MAP) {
+        if (item.regex.test(baseFileName)) {
+            target = item.key;
+            break;
+        }
+    }
+
+    if (!target) {
+        for (const item of TARGET_MAP) {
+            if (item.regex.test(fileName)) {
+                target = item.key;
+                break;
+            }
+        }
+    }
+
+    if (!target) return null;
+
+    let out = "config";
+    if (["anywhere", "uri", "loon", "quantumultx"].includes(target)) {
+        out = "outbounds";
+    } else if (target === "surfboard") {
+        // Surfboard 客户端作为 profile 导入，必须带有 [Proxy] 区块，采用 config 完整配置组装
+        out = "config";
+    } else if (/nodes|outbounds|provider|list/i.test(baseFileName)) {
+        out = "outbounds";
+    } else {
+        out = "config";
+    }
+
+    return {
+        fileName,
+        target,
+        out,
+        sourceId,
+        aclPreset: "",
+        nodeFilter: "",
+        remoteDns: "",
+        localDns: "",
+        ipv6Enabled: true,
+        nodePipeline: {
+            cleanNotice: true,
+            injectFlags: true,
+            dedupeAddress: false,
+            quickSettings: { udp: false, skipCertVerify: false },
+        },
+    };
+}
+
 export function createScheduler(options = {}) {
     const store = options.store;
     const coordinator = options.coordinator;
@@ -40,6 +145,26 @@ export function createScheduler(options = {}) {
     let nextRunAt = null;
     let lastResult = null;
     let lastGistSync = null;
+
+    async function fetchGistFileNames(gistConfig) {
+        if (!gistConfig || !gistConfig.id || !gistConfig.token) return [];
+        try {
+            const url = `https://api.github.com/gists/${gistConfig.id}`;
+            const res = await fetchImpl(url, {
+                method: "GET",
+                headers: {
+                    Accept: "application/vnd.github+json",
+                    Authorization: `Bearer ${gistConfig.token}`,
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+            });
+            if (!res.ok) return [];
+            const data = await res.json();
+            return data && data.files ? Object.keys(data.files) : [];
+        } catch (_e) {
+            return [];
+        }
+    }
 
     async function syncToGist(gistConfig, filesMap) {
         if (!gistConfig || !gistConfig.id || !gistConfig.token) return null;
@@ -105,7 +230,36 @@ export function createScheduler(options = {}) {
                 const shouldSyncGist = forceSyncGist || changedAny || !lastGistSync || (lastGistSync && !lastGistSync.ok);
                 if (shouldSyncGist) {
                     const filesToSync = {};
-                    const syncProfiles = Array.isArray(gist.syncProfiles) ? gist.syncProfiles : [];
+                    let syncProfiles = Array.isArray(gist.syncProfiles) ? gist.syncProfiles.slice() : [];
+                    const hasProfiles = syncProfiles.length > 0;
+                    const hasAutoSync = gist.autoSync === true;
+
+                    // 自动从 GitHub Gist 发现已存在的配置文件并自动补齐 syncProfiles
+                    if (hasProfiles || hasAutoSync || forceSyncGist) {
+                        try {
+                            const existingGistFiles = await fetchGistFileNames(gist);
+                            if (Array.isArray(existingGistFiles) && existingGistFiles.length > 0) {
+                                const sources = store && typeof store.list === "function" ? store.list() : [];
+                                let profilesUpdated = false;
+                                for (const fn of existingGistFiles) {
+                                    if (!syncProfiles.some((p) => p && p.fileName === fn)) {
+                                        const inferred = inferProfileFromFileName(fn, sources);
+                                        if (inferred) {
+                                            syncProfiles.push(inferred);
+                                            profilesUpdated = true;
+                                        }
+                                    }
+                                }
+                                if (profilesUpdated && store && typeof store.setSettings === "function") {
+                                    store.setSettings({
+                                        gist: Object.assign({}, gist, { syncProfiles }),
+                                    });
+                                }
+                            }
+                        } catch (reconcileErr) {
+                            logger("[singbox-kit scheduler] error reconciling Gist files:", reconcileErr);
+                        }
+                    }
 
                     if (syncProfiles.length > 0) {
                         for (const profile of syncProfiles) {
