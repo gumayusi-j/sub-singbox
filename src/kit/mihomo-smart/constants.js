@@ -230,7 +230,12 @@ export const SERVICE_CONFIGS = [
                 path: "./ruleset/ai.mrs",
             },
         },
-        rules: ["RULE-SET,ai,AI"],
+        rules: [
+            "RULE-SET,ai,AI",
+            "DOMAIN,cdn.usefathom.com,AI",
+            "DOMAIN-SUFFIX,intercom.io,AI",
+            "DOMAIN-SUFFIX,intercomcdn.com,AI",
+        ],
     },
     {
         name: "YouTube",

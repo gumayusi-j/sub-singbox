@@ -418,6 +418,15 @@ rules:
       match: raw.githubusercontent.com
       policy: 节点选择
   - domain:
+      match: cdn.usefathom.com
+      policy: AI
+  - domain_suffix:
+      match: intercom.io
+      policy: AI
+  - domain_suffix:
+      match: intercomcdn.com
+      policy: AI
+  - domain:
       match: trae-api-sg.mchost.guru
       policy: AI
   - domain:
