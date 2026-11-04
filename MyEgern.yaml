@@ -25,10 +25,12 @@ direct_latency_test_url: http://wifi.vivo.com.cn/generate_204
 
 dns:
   bootstrap:
+    - system
     - 223.5.5.5
     - 119.29.29.29
   upstreams:
     Domestic:
+      - system
       - 223.5.5.5
       - 119.29.29.29
       - https://dns.alidns.com/dns-query
@@ -38,6 +40,23 @@ dns:
       - https://8.8.8.8/dns-query
       - https://dns.google/dns-query
       - https://cloudflare-dns.com/dns-query
+  forward:
+    - domain_suffix:
+        match: cn
+        value: Domestic
+    - proxy_rule_set:
+        match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/ChinaDomain.yaml
+        value: Domestic
+    - proxy_rule_set:
+        match: https://raw.githubusercontent.com/Repcz/Tool/X/Egern/Rules/Lan.yaml
+        value: Domestic
+    - domain_wildcard:
+        match: '*'
+        value: Global
+  proxy_nameservers:
+    - system
+    - 223.5.5.5
+    - 119.29.29.29
 
 real_ip_domains:
   - '*.apple.com'
