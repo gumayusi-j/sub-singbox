@@ -2041,7 +2041,7 @@ pre.code-block {
               <div v-if="syncProfiles && syncProfiles.length" style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                 <span style="font-weight:600;color:var(--text-2);">Gist 自动更新配置项 ({{ syncProfiles.length }} 个):</span>
                 <span v-for="p in syncProfiles" :key="p.fileName" class="chip chip-accent" style="font-size:11px;font-family:var(--font-mono)">
-                  {{ p.fileName }} ({{ p.target }})
+                  {{ p.fileName }} <span style="opacity:0.85">[{{ p.sourceId ? '单源' : '全量合并' }} · {{ p.target }}{{ p.aclPreset ? ' · ' + p.aclPreset : '' }}]</span>
                 </span>
               </div>
 
@@ -3908,7 +3908,7 @@ var app = Vue.createApp({
         if (sourceId) break;
       }
 
-      if (fileName.indexOf('合并-') === 0) {
+      if (fileName.indexOf('合并-') === 0 || fileName.indexOf('全量-') === 0) {
         sourceId = '';
         var dashIdx = fileName.indexOf('-', 3);
         if (dashIdx > 0) {
@@ -3963,21 +3963,25 @@ var app = Vue.createApp({
         out = 'config';
       }
 
+      var defaultAcl = (aclPreset && aclPreset.value) || (acl && acl.value !== 'none' ? acl.value : '') || '';
       return {
         fileName: fileName,
         target: target,
         out: out,
         sourceId: sourceId,
-        aclPreset: '',
-        nodeFilter: '',
-        remoteDns: '',
-        localDns: '',
-        ipv6Enabled: true,
+        aclPreset: defaultAcl,
+        nodeFilter: (nodeFilter && nodeFilter.value) || '',
+        remoteDns: (remoteDns && remoteDns.value) || '',
+        localDns: (localDns && localDns.value) || '',
+        ipv6Enabled: ipv6Enabled && ipv6Enabled.value !== undefined ? ipv6Enabled.value : true,
         nodePipeline: {
-          cleanNotice: true,
-          injectFlags: true,
-          dedupeAddress: false,
-          quickSettings: { udp: false, skipCertVerify: false }
+          cleanNotice: pipelineCleanNotice && pipelineCleanNotice.value !== undefined ? pipelineCleanNotice.value : true,
+          injectFlags: pipelineInjectFlags && pipelineInjectFlags.value !== undefined ? pipelineInjectFlags.value : true,
+          dedupeAddress: pipelineDedupe && pipelineDedupe.value !== undefined ? pipelineDedupe.value : false,
+          quickSettings: {
+            udp: pipelineUdp && pipelineUdp.value !== undefined ? pipelineUdp.value : false,
+            skipCertVerify: pipelineSkipCert && pipelineSkipCert.value !== undefined ? pipelineSkipCert.value : false
+          }
         }
       };
     }
@@ -4013,9 +4017,7 @@ var app = Vue.createApp({
       if (exportSourceId.value) {
         var src = sources.value.find(function(s){ return s.id === exportSourceId.value; });
         sourceName = src ? src.name : exportSourceId.value;
-      } else if (enabledSubs.value.length === 1) {
-        sourceName = enabledSubs.value[0].name;
-      } else if (enabledSubs.value.length > 1) {
+      } else if (enabledSubs.value.length > 0) {
         sourceName = '合并-' + enabledSubs.value.length + '源';
       }
       // Sanitize: keep Chinese, letters, digits, dash, underscore; replace others with dash.

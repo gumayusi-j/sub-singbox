@@ -15,7 +15,7 @@ export const DEFAULT_SCHEDULER_INTERVAL_MINUTES = 360; // 6 小时默认维护�
 /**
  * 自动根据 Gist 上的文件名推断其所属订阅源、导出目标与输出形态
  */
-export function inferProfileFromFileName(fileName, sources) {
+export function inferProfileFromFileName(fileName, sources, defaultOptions = {}) {
     if (!fileName || typeof fileName !== "string") return null;
 
     let sourceId = "";
@@ -42,7 +42,7 @@ export function inferProfileFromFileName(fileName, sources) {
         if (sourceId) break;
     }
 
-    if (fileName.startsWith("合并-")) {
+    if (fileName.startsWith("合并-") || fileName.startsWith("全量-")) {
         sourceId = "";
         const dashIdx = fileName.indexOf("-", 3);
         if (dashIdx > 0) {
@@ -98,22 +98,28 @@ export function inferProfileFromFileName(fileName, sources) {
         out = "config";
     }
 
+    const defaultAcl = (defaultOptions && defaultOptions.aclPreset) || "";
+    const defaultPipeline = (defaultOptions && defaultOptions.nodePipeline) || {};
+
     return {
         fileName,
         target,
         out,
         sourceId,
-        aclPreset: "",
-        nodeFilter: "",
-        remoteDns: "",
-        localDns: "",
-        ipv6Enabled: true,
-        nodePipeline: {
-            cleanNotice: true,
-            injectFlags: true,
-            dedupeAddress: false,
-            quickSettings: { udp: false, skipCertVerify: false },
-        },
+        aclPreset: defaultAcl,
+        nodeFilter: (defaultOptions && defaultOptions.nodeFilter) || "",
+        remoteDns: (defaultOptions && defaultOptions.remoteDns) || "",
+        localDns: (defaultOptions && defaultOptions.localDns) || "",
+        ipv6Enabled: defaultOptions && defaultOptions.ipv6Enabled !== undefined ? defaultOptions.ipv6Enabled : true,
+        nodePipeline: Object.assign(
+            {
+                cleanNotice: true,
+                injectFlags: true,
+                dedupeAddress: false,
+                quickSettings: { udp: false, skipCertVerify: false },
+            },
+            defaultPipeline
+        ),
     };
 }
 
@@ -243,7 +249,7 @@ export function createScheduler(options = {}) {
                                 let profilesUpdated = false;
                                 for (const fn of existingGistFiles) {
                                     if (!syncProfiles.some((p) => p && p.fileName === fn)) {
-                                        const inferred = inferProfileFromFileName(fn, sources);
+                                        const inferred = inferProfileFromFileName(fn, sources, settings.defaultOptions);
                                         if (inferred) {
                                             syncProfiles.push(inferred);
                                             profilesUpdated = true;
@@ -262,6 +268,7 @@ export function createScheduler(options = {}) {
                     }
 
                     if (syncProfiles.length > 0) {
+                        const defaultOpts = settings.defaultOptions || {};
                         for (const profile of syncProfiles) {
                             try {
                                 const resolvedTarget = resolveTarget({ queryTarget: profile.target || "sing-box" });
@@ -272,19 +279,29 @@ export function createScheduler(options = {}) {
                                     ? { kind: "source", source: sourceObj, id: profile.sourceId }
                                     : { kind: "global" };
 
+                                // 保证规则方案优先级：显式配置 > 系统默认配置，避免空字符串 "" 覆盖系统默认分流规则
+                                const effectiveAcl = profile.aclPreset || defaultOpts.aclPreset || "";
+                                const defaultPipeline = defaultOpts.nodePipeline || {
+                                    cleanNotice: true,
+                                    injectFlags: true,
+                                    dedupeAddress: false,
+                                    quickSettings: { udp: false, skipCertVerify: false },
+                                };
+                                const effectivePipeline = Object.assign({}, defaultPipeline, profile.nodePipeline || {});
+
                                 const renderOptions = Object.assign(
                                     {},
-                                    settings.defaultOptions || {},
+                                    defaultOpts,
                                     profile.options || {},
                                     {
                                         target: resolvedTarget.target,
                                         out: profile.out || "config",
-                                        nodePipeline: profile.nodePipeline,
-                                        aclPreset: profile.aclPreset,
-                                        nodeFilter: profile.nodeFilter,
-                                        remoteDns: profile.remoteDns,
-                                        localDns: profile.localDns,
-                                        ipv6Enabled: profile.ipv6Enabled,
+                                        nodePipeline: effectivePipeline,
+                                        aclPreset: effectiveAcl,
+                                        nodeFilter: profile.nodeFilter !== undefined && profile.nodeFilter !== "" ? profile.nodeFilter : defaultOpts.nodeFilter,
+                                        remoteDns: profile.remoteDns || defaultOpts.remoteDns,
+                                        localDns: profile.localDns || defaultOpts.localDns,
+                                        ipv6Enabled: profile.ipv6Enabled !== undefined ? profile.ipv6Enabled : defaultOpts.ipv6Enabled,
                                         sourceIds: profile.sourceIds,
                                     }
                                 );
@@ -306,14 +323,15 @@ export function createScheduler(options = {}) {
                             ? gist.autoSyncTargets
                             : ["clash", "sing-box"];
 
+                        const defaultOpts = settings.defaultOptions || {};
                         try {
                             if (targetsToSync.includes("clash")) {
                                 const clashTarget = resolveTarget({ queryTarget: "clash" });
                                 if (clashTarget) {
-                                    const clashRender = renderSubscription(store, { kind: "global" }, {
+                                    const clashRender = renderSubscription(store, { kind: "global" }, Object.assign({}, defaultOpts, {
                                         target: clashTarget.target,
                                         out: "config",
-                                    });
+                                    }));
                                     if (clashRender && clashRender.status === 200) {
                                         filesToSync["clash-config.yaml"] = clashRender.body;
                                     }
@@ -323,10 +341,10 @@ export function createScheduler(options = {}) {
                             if (targetsToSync.includes("sing-box")) {
                                 const singboxTarget = resolveTarget({ queryTarget: "sing-box" });
                                 if (singboxTarget) {
-                                    const sbRender = renderSubscription(store, { kind: "global" }, {
+                                    const sbRender = renderSubscription(store, { kind: "global" }, Object.assign({}, defaultOpts, {
                                         target: singboxTarget.target,
                                         out: "config",
-                                    });
+                                    }));
                                     if (sbRender && sbRender.status === 200) {
                                         filesToSync["singbox-config.json"] =
                                             typeof sbRender.body === "string"

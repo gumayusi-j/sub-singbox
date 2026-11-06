@@ -445,4 +445,94 @@ describe("Subscription Scheduler & Automation", function () {
         const updatedProfiles = store.getSettings().gist.syncProfiles;
         expect(updatedProfiles).to.have.lengthOf(8);
     });
+
+    it("generates sing-box config with inherited aclPreset and rules in automated scheduler run", async function () {
+        let syncedSingboxConfig = null;
+        const mockFetch = createMockFetch({
+            "https://example.com/sub1": {
+                status: 200,
+                headers: {},
+                body: nodesJson(["香港 01", "日本 02"]),
+            },
+            "https://example.com/sub2": {
+                status: 200,
+                headers: {},
+                body: nodesJson(["美国 01", "新加坡 02"]),
+            },
+            "https://api.github.com/gists/test-gist-id": (req) => {
+                if (req && req.body) {
+                    try {
+                        const parsed = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+                        if (parsed.files && parsed.files["合并-singbox-config.json"]) {
+                            syncedSingboxConfig = JSON.parse(parsed.files["合并-singbox-config.json"].content);
+                        }
+                    } catch (e) {}
+                }
+                return { status: 200, body: JSON.stringify({ ok: true }) };
+            },
+        });
+
+        // Set global default aclPreset to acl4ssr-mini via setDefaultOptions
+        store.setDefaultOptions({ aclPreset: "acl4ssr-mini" });
+        store.setSettings({
+            gist: {
+                id: "test-gist-id",
+                token: "ghp_secretToken123",
+                syncProfiles: [
+                    {
+                        fileName: "合并-singbox-config.json",
+                        target: "sing-box",
+                        out: "config",
+                        sourceId: "", // 全量合并
+                        aclPreset: "", // 未单独指定，应继承全局 acl4ssr-mini
+                    },
+                ],
+            },
+        });
+
+        store.addSource({
+            name: "Sub1",
+            kind: "url",
+            url: "https://example.com/sub1",
+            enabled: true,
+        });
+        store.addSource({
+            name: "Sub2",
+            kind: "url",
+            url: "https://example.com/sub2",
+            enabled: true,
+        });
+
+        const scheduler = createScheduler({
+            store,
+            coordinator,
+            fetchImpl: mockFetch,
+        });
+
+        const result = await scheduler.runJob();
+        expect(result.ok).to.be.true;
+        expect(syncedSingboxConfig).to.not.be.null;
+
+        // Verify that sing-box configuration includes nodes from BOTH sources (full merge)
+        const outboundTags = (syncedSingboxConfig.outbounds || []).map((o) => o.tag);
+        expect(outboundTags.some((t) => t.includes("香港 01"))).to.be.true;
+        expect(outboundTags.some((t) => t.includes("美国 01"))).to.be.true;
+
+        // Verify that aclPreset was NOT overwritten by empty string, but generated ACL rule groups
+        expect(outboundTags).to.include("🚀 节点选择");
+        expect(outboundTags).to.include("🐟 漏网之鱼");
+        expect(syncedSingboxConfig.route).to.exist;
+        expect(syncedSingboxConfig.route.rules).to.be.an("array").that.is.not.empty;
+    });
+
+    it("correctly identifies 合并- and 全量- prefixes as global merged configuration", function () {
+        const sources = [{ id: "src-1", name: "机场A" }];
+        const p1 = inferProfileFromFileName("合并-2源-singbox-config.json", sources);
+        expect(p1.sourceId).to.equal("");
+        expect(p1.target).to.equal("sing-box");
+
+        const p2 = inferProfileFromFileName("全量-singbox-config.json", sources);
+        expect(p2.sourceId).to.equal("");
+        expect(p2.target).to.equal("sing-box");
+    });
 });
