@@ -102,9 +102,6 @@ export function inferProfileFromFileName(fileName, sources, defaultOptions = {})
     let out = "config";
     if (["anywhere", "uri", "loon", "quantumultx"].includes(target)) {
         out = "outbounds";
-    } else if (target === "surfboard") {
-        // Surfboard 客户端作为 profile 导入，必须带有 [Proxy] 区块，采用 config 完整配置组装
-        out = "config";
     } else if (/nodes|outbounds|provider|list/i.test(baseFileName)) {
         out = "outbounds";
     } else {

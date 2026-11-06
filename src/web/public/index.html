@@ -3862,12 +3862,12 @@ var app = Vue.createApp({
     var GIST_FILE_MAP = {
       'sing-box': 'singbox-config.json',
       'clash': 'clash-config.yaml',
-      'surge': 'surge-config.sgmodule',
+      'surge': 'surge-config.conf',
       'loon': 'loon-nodes.conf',
       'quantumultx': 'qx-nodes.conf',
       'shadowrocket': 'shadowrocket-config.conf',
       'stash': 'stash-config.yaml',
-      'surfboard': 'surfboard-nodes.conf',
+      'surfboard': 'surfboard-config.conf',
       'v2ray': 'v2ray-config.json',
       'egern': 'egern-config.yaml',
       'hiddify': 'hiddify-config.json',
@@ -3972,8 +3972,6 @@ var app = Vue.createApp({
       var out = 'config';
       if (['anywhere', 'uri', 'loon', 'quantumultx'].indexOf(target) >= 0) {
         out = 'outbounds';
-      } else if (target === 'surfboard') {
-        out = 'config';
       } else if (/nodes|outbounds|provider|list/i.test(baseFileName)) {
         out = 'outbounds';
       } else {
@@ -4362,9 +4360,7 @@ var app = Vue.createApp({
       if (exportSourceId.value) {
         var src = sources.value.find(function(s){ return s.id === exportSourceId.value; });
         sourceName = src ? src.name : exportSourceId.value;
-      } else if (enabledSubs.value.length === 1) {
-        sourceName = enabledSubs.value[0].name;
-      } else if (enabledSubs.value.length > 1) {
+      } else if (enabledSubs.value.length > 0) {
         sourceName = '合并-' + enabledSubs.value.length + '源';
       }
       var prefix = sourceName ? sourceName.replace(/[^\w\u4e00-\u9fff-]+/g, '-').replace(/^-|-$/g, '') + '-' : '';

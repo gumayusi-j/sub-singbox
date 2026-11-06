@@ -352,10 +352,20 @@ describe("Subscription Scheduler & Automation", function () {
         expect(p5.target).to.equal("stash");
         expect(p5.out).to.equal("config");
 
-        const p6 = inferProfileFromFileName("bbxy-surfboard-nodes.conf", sources);
-        expect(p6.sourceId).to.equal("src-bbxy");
-        expect(p6.target).to.equal("surfboard");
-        expect(p6.out).to.equal("config");
+        const p6Config = inferProfileFromFileName("bbxy-surfboard-config.conf", sources);
+        expect(p6Config.sourceId).to.equal("src-bbxy");
+        expect(p6Config.target).to.equal("surfboard");
+        expect(p6Config.out).to.equal("config");
+
+        const p6Nodes = inferProfileFromFileName("bbxy-surfboard-nodes.conf", sources);
+        expect(p6Nodes.sourceId).to.equal("src-bbxy");
+        expect(p6Nodes.target).to.equal("surfboard");
+        expect(p6Nodes.out).to.equal("outbounds");
+
+        const pSurgeConfig = inferProfileFromFileName("bbxy-surge-config.conf", sources);
+        expect(pSurgeConfig.sourceId).to.equal("src-bbxy");
+        expect(pSurgeConfig.target).to.equal("surge");
+        expect(pSurgeConfig.out).to.equal("config");
 
         const p7 = inferProfileFromFileName("naiyun-anywhere-nodes.txt", sources);
         expect(p7.sourceId).to.equal("src-naiyun");
