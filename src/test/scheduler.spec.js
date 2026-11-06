@@ -535,4 +535,82 @@ describe("Subscription Scheduler & Automation", function () {
         expect(p2.sourceId).to.equal("");
         expect(p2.target).to.equal("sing-box");
     });
+
+    it("ignores standalone client configs like MyEgern.yaml and MyLoon.conf and removes them from syncProfiles", async function () {
+        const sources = [{ id: "src-1", name: "MySub" }];
+        expect(inferProfileFromFileName("MyEgern.yaml", sources)).to.be.null;
+        expect(inferProfileFromFileName("MyLoon.conf", sources)).to.be.null;
+        expect(inferProfileFromFileName("README.md", sources)).to.be.null;
+
+        let patchedFiles = [];
+        const mockFetch = createMockFetch({
+            "https://example.com/sub": {
+                status: 200,
+                headers: {},
+                body: nodesJson(["香港 01"]),
+            },
+            "https://api.github.com/gists/test-gist-id": (req) => {
+                if (req && req.method === "GET") {
+                    return {
+                        status: 200,
+                        body: JSON.stringify({
+                            files: {
+                                "MyEgern.yaml": { content: "# static egern config" },
+                                "MyLoon.conf": { content: "# static loon config" },
+                                "singbox-config.json": { content: "{}" },
+                            },
+                        }),
+                    };
+                }
+                if (req && req.method === "PATCH") {
+                    const parsed = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+                    if (parsed && parsed.files) {
+                        patchedFiles = Object.keys(parsed.files);
+                    }
+                    return { status: 200, body: JSON.stringify({ ok: true }) };
+                }
+                return { status: 200, body: JSON.stringify({ ok: true }) };
+            },
+        });
+
+        // Pre-populate store with corrupted syncProfiles containing MyEgern.yaml and MyLoon.conf
+        store.setSettings({
+            gist: {
+                id: "test-gist-id",
+                token: "ghp_secretToken123",
+                syncProfiles: [
+                    { fileName: "MyEgern.yaml", target: "egern", out: "config" },
+                    { fileName: "MyLoon.conf", target: "loon", out: "outbounds" },
+                    { fileName: "singbox-config.json", target: "sing-box", out: "config" },
+                ],
+            },
+        });
+
+        store.addSource({
+            name: "MySub",
+            kind: "url",
+            url: "https://example.com/sub",
+            enabled: true,
+        });
+
+        const scheduler = createScheduler({
+            store,
+            coordinator,
+            fetchImpl: mockFetch,
+        });
+
+        const result = await scheduler.runJob({ forceSyncGist: true });
+        expect(result.ok).to.be.true;
+
+        // MyEgern.yaml and MyLoon.conf should be sanitized and NEVER touched/overwritten by automated scheduler
+        expect(patchedFiles).to.not.include("MyEgern.yaml");
+        expect(patchedFiles).to.not.include("MyLoon.conf");
+        expect(patchedFiles).to.include("singbox-config.json");
+
+        // The store settings syncProfiles must also have cleaned them out
+        const savedProfiles = (store.getSettings().gist.syncProfiles || []).map((p) => p.fileName);
+        expect(savedProfiles).to.not.include("MyEgern.yaml");
+        expect(savedProfiles).to.not.include("MyLoon.conf");
+        expect(savedProfiles).to.include("singbox-config.json");
+    });
 });

@@ -2040,8 +2040,10 @@ pre.code-block {
 
               <div v-if="syncProfiles && syncProfiles.length" style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                 <span style="font-weight:600;color:var(--text-2);">Gist 自动更新配置项 ({{ syncProfiles.length }} 个):</span>
-                <span v-for="p in syncProfiles" :key="p.fileName" class="chip chip-accent" style="font-size:11px;font-family:var(--font-mono)">
-                  {{ p.fileName }} <span style="opacity:0.85">[{{ p.sourceId ? '单源' : '全量合并' }} · {{ p.target }}{{ p.aclPreset ? ' · ' + p.aclPreset : '' }}]</span>
+                <span v-for="p in syncProfiles" :key="p.fileName" class="chip chip-accent" style="font-size:11px;font-family:var(--font-mono);display:inline-flex;align-items:center;gap:5px;">
+                  <span>{{ p.fileName }}</span>
+                  <span style="opacity:0.85">[{{ p.sourceId ? '单源' : '全量合并' }} · {{ p.target }}{{ p.aclPreset ? ' · ' + p.aclPreset : '' }}]</span>
+                  <span title="从自动运维列表中移除" style="cursor:pointer;opacity:0.6;font-size:12px;margin-left:2px;font-weight:bold;line-height:1;" @click.stop="removeSyncProfile(p.fileName)">✕</span>
                 </span>
               </div>
 
@@ -3380,8 +3382,18 @@ var app = Vue.createApp({
           lsSave('sbx:gistId', gistId.value);
           lsSave('sbx:githubToken', githubToken.value);
           if (Array.isArray(data.gist.syncProfiles)) {
-            syncProfiles.value = data.gist.syncProfiles;
-            lsSave('sbx:gistSyncProfiles', data.gist.syncProfiles);
+            var validProfiles = data.gist.syncProfiles.filter(function(p){ return p && p.fileName && !isIgnoredGistFile(p.fileName); });
+            syncProfiles.value = validProfiles;
+            lsSave('sbx:gistSyncProfiles', validProfiles);
+            if (validProfiles.length !== data.gist.syncProfiles.length) {
+              api('PUT', '/api/settings', {
+                gist: {
+                  id: (gistId.value || '').trim(),
+                  token: (githubToken.value || '').trim(),
+                  syncProfiles: validProfiles
+                }
+              }).catch(function(e){ console.warn('Cleaned ignored profiles on load:', e); });
+            }
           }
         } else if (gistId.value || githubToken.value) {
           saveGistConfig();
@@ -3881,8 +3893,13 @@ var app = Vue.createApp({
       'anywhere': 'anywhere-nodes.txt'
     };
 
+    function isIgnoredGistFile(fn) {
+      if (!fn || typeof fn !== 'string') return true;
+      return /^MyEgern\.(yaml|yml)$/i.test(fn) || /^MyLoon\.conf$/i.test(fn) || /^README(\.md)?$/i.test(fn) || /^LICENSE$/i.test(fn);
+    }
+
     function inferProfileFromFileName(fileName, sourceList) {
-      if (!fileName || typeof fileName !== 'string') return null;
+      if (!fileName || typeof fileName !== 'string' || isIgnoredGistFile(fileName)) return null;
 
       var sourceId = '';
       var baseFileName = fileName;
@@ -4179,9 +4196,11 @@ var app = Vue.createApp({
 
         // 自动将 Gist 中的所有文件对齐到自动更新配置方案中 (syncProfiles)
         try {
-          var currentProfiles = lsLoad('sbx:gistSyncProfiles', []);
-          var profilesChanged = false;
+          var rawProfiles = lsLoad('sbx:gistSyncProfiles', []);
+          var currentProfiles = rawProfiles.filter(function(p){ return p && p.fileName && !isIgnoredGistFile(p.fileName); });
+          var profilesChanged = currentProfiles.length !== rawProfiles.length;
           files.forEach(function(f) {
+            if (isIgnoredGistFile(f.name)) return;
             if (!currentProfiles.some(function(p){ return p.fileName === f.name; })) {
               var inferred = inferProfileFromFileName(f.name, sources.value);
               if (inferred) {
@@ -4292,6 +4311,23 @@ var app = Vue.createApp({
       } finally {
         gistSyncing.value = false;
       }
+    }
+
+    function removeSyncProfile(fileName) {
+      var currentProfiles = (syncProfiles.value || []).filter(function(p){ return p.fileName !== fileName; });
+      syncProfiles.value = currentProfiles;
+      lsSave('sbx:gistSyncProfiles', currentProfiles);
+      api('PUT', '/api/settings', {
+        gist: {
+          id: (gistId.value || '').trim(),
+          token: (githubToken.value || '').trim(),
+          syncProfiles: currentProfiles
+        }
+      }).then(function() {
+        ElementPlus.ElMessage.success('已从自动运维列表中移除 ' + fileName);
+      }).catch(function(e){
+        console.warn('Failed to save syncProfiles after remove:', e);
+      });
     }
 
     // Persist Gist config to localStorage and server file
@@ -4791,7 +4827,7 @@ var app = Vue.createApp({
     return {
       pipelineCleanNotice, pipelineInjectFlags, pipelineDedupe, pipelineUdp, pipelineSkipCert,
       collections, showCollectionModal, colForm, openAddCollectionModal, saveCollection, removeCollection,
-      schedulerInfo, schedulerRunning, triggerSchedulerRun, schedulerIntervalInput, schedulerIntervalSaving, saveSchedulerInterval, syncProfiles,
+      schedulerInfo, schedulerRunning, triggerSchedulerRun, schedulerIntervalInput, schedulerIntervalSaving, saveSchedulerInterval, syncProfiles, removeSyncProfile,
       activeTab, sources, targets, globalSubUrl, publicUrl, dataPath, settings, acl,
       theme, isDark, toggleTheme,
       showAddForm, editingId, savingSource, srcFormHint, srcForm,

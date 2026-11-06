@@ -12,11 +12,24 @@ import { resolveTarget } from "./targets";
 
 export const DEFAULT_SCHEDULER_INTERVAL_MINUTES = 360; // 6 小时默认维护周期
 
+// 仓库自带的静态独立客户端主配置文件或非订阅文件黑名单（避免被误推断并被后台全量运维覆盖）
+export const IGNORED_GIST_FILES = [
+    /^MyEgern\.(yaml|yml)$/i,
+    /^MyLoon\.conf$/i,
+    /^README(\.md)?$/i,
+    /^LICENSE$/i,
+];
+
+export function isIgnoredGistFile(fileName) {
+    if (!fileName || typeof fileName !== "string") return true;
+    return IGNORED_GIST_FILES.some((pattern) => pattern.test(fileName));
+}
+
 /**
  * 自动根据 Gist 上的文件名推断其所属订阅源、导出目标与输出形态
  */
 export function inferProfileFromFileName(fileName, sources, defaultOptions = {}) {
-    if (!fileName || typeof fileName !== "string") return null;
+    if (!fileName || typeof fileName !== "string" || isIgnoredGistFile(fileName)) return null;
 
     let sourceId = "";
     let baseFileName = fileName;
@@ -236,7 +249,9 @@ export function createScheduler(options = {}) {
                 const shouldSyncGist = forceSyncGist || changedAny || !lastGistSync || (lastGistSync && !lastGistSync.ok);
                 if (shouldSyncGist) {
                     const filesToSync = {};
-                    let syncProfiles = Array.isArray(gist.syncProfiles) ? gist.syncProfiles.slice() : [];
+                    const rawProfiles = Array.isArray(gist.syncProfiles) ? gist.syncProfiles : [];
+                    let syncProfiles = rawProfiles.filter((p) => p && p.fileName && !isIgnoredGistFile(p.fileName));
+                    let profilesUpdated = syncProfiles.length !== rawProfiles.length;
                     const hasProfiles = syncProfiles.length > 0;
                     const hasAutoSync = gist.autoSync === true;
 
@@ -246,8 +261,8 @@ export function createScheduler(options = {}) {
                             const existingGistFiles = await fetchGistFileNames(gist);
                             if (Array.isArray(existingGistFiles) && existingGistFiles.length > 0) {
                                 const sources = store && typeof store.list === "function" ? store.list() : [];
-                                let profilesUpdated = false;
                                 for (const fn of existingGistFiles) {
+                                    if (isIgnoredGistFile(fn)) continue;
                                     if (!syncProfiles.some((p) => p && p.fileName === fn)) {
                                         const inferred = inferProfileFromFileName(fn, sources, settings.defaultOptions);
                                         if (inferred) {
@@ -256,15 +271,16 @@ export function createScheduler(options = {}) {
                                         }
                                     }
                                 }
-                                if (profilesUpdated && store && typeof store.setSettings === "function") {
-                                    store.setSettings({
-                                        gist: Object.assign({}, gist, { syncProfiles }),
-                                    });
-                                }
                             }
                         } catch (reconcileErr) {
                             logger("[singbox-kit scheduler] error reconciling Gist files:", reconcileErr);
                         }
+                    }
+
+                    if (profilesUpdated && store && typeof store.setSettings === "function") {
+                        store.setSettings({
+                            gist: Object.assign({}, gist, { syncProfiles }),
+                        });
                     }
 
                     if (syncProfiles.length > 0) {
