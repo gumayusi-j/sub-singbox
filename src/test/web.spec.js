@@ -443,4 +443,61 @@ describe("singbox-kit web API", function () {
             else delete process.env.GITHUB_TOKEN;
         }
     });
+
+    // 内联脚本不经构建、没有模块系统：一个未声明的标识符只在运行时抛
+    // ReferenceError，而调用点的 catch 会把它吞掉，页面照常显示"已刷新"。
+    // 字符串存在性断言查不出这类故障，所以把函数抽出来真跑一遍。
+    function extractFunction(html, name) {
+        const start = html.indexOf("function " + name + "(");
+        expect(start, "missing frontend function " + name).to.be.at.least(0);
+        let depth = 0;
+        for (let j = html.indexOf("{", start); j < html.length; j++) {
+            if (html[j] === "{") depth++;
+            else if (html[j] === "}" && --depth === 0) return html.slice(start, j + 1);
+        }
+        throw new Error("unbalanced braces in " + name);
+    }
+
+    it("runs the page's Gist filename inference without undeclared identifiers", async function () {
+        const html = await (await fetch(base + "/")).text();
+        const src = ["isIgnoredGistFile", "profileRenderDefaults", "inferProfileFromFileName"]
+            .map((name) => extractFunction(html, name))
+            .join("\n");
+        const settings = {
+            value: {
+                aclPreset: "acl4ssr-mini",
+                ipv6Enabled: false,
+                nodeFilter: { pattern: "HK", caseInsensitive: true },
+            },
+        };
+        const refs = {
+            pipelineCleanNotice: { value: true },
+            pipelineInjectFlags: { value: true },
+            pipelineDedupe: { value: false },
+            pipelineUdp: { value: true },
+            pipelineSkipCert: { value: false },
+        };
+        const factory = new Function(
+            "settings",
+            ...Object.keys(refs),
+            src + "\nreturn inferProfileFromFileName;",
+        );
+        const infer = factory(settings, ...Object.values(refs));
+
+        const profile = infer("合并-2源-singbox-config.json", []);
+        expect(profile.target).to.equal("sing-box");
+        expect(profile.out).to.equal("config");
+        expect(profile.sourceId).to.equal("");
+        // 与后端同源：读服务端已持久化的 defaultOptions，而不是当前表单。
+        expect(profile.aclPreset).to.equal("acl4ssr-mini");
+        expect(profile.nodeFilter).to.deep.equal({ pattern: "HK", caseInsensitive: true });
+        expect(profile.ipv6Enabled).to.equal(false);
+        expect(profile.nodePipeline.quickSettings).to.deep.equal({ udp: true, skipCertVerify: false });
+
+        expect(infer("MyEgern.yaml", [])).to.be.null;
+        expect(infer("MyLoon.conf", [])).to.be.null;
+        // Surfboard 两种文件名分别对应纯节点与完整配置，不能一律当成 config。
+        expect(infer("surfboard-nodes.conf", []).out).to.equal("outbounds");
+        expect(infer("surfboard-config.conf", []).out).to.equal("config");
+    });
 });

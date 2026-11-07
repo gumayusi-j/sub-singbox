@@ -623,4 +623,201 @@ describe("Subscription Scheduler & Automation", function () {
         expect(savedProfiles).to.not.include("MyLoon.conf");
         expect(savedProfiles).to.include("singbox-config.json");
     });
+
+    it("does not re-discover a Gist file the user removed from syncProfiles", async function () {
+        store.addSource({
+            name: "MySub",
+            kind: "text",
+            content: nodesJson(["香港 01"]),
+            enabled: true,
+        });
+
+        let patchedFiles = [];
+        const mockFetch = createMockFetch({
+            "https://api.github.com/gists/test-gist-id": (req) => {
+                if (req && req.method === "GET") {
+                    return {
+                        status: 200,
+                        body: JSON.stringify({
+                            files: {
+                                "singbox-config.json": { content: "{}" },
+                                "clash-config.yaml": { content: "old" },
+                            },
+                        }),
+                    };
+                }
+                if (req && req.method === "PATCH") {
+                    const parsed = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+                    patchedFiles = Object.keys((parsed && parsed.files) || {});
+                    return { status: 200, body: JSON.stringify({ ok: true }) };
+                }
+                return { status: 200, body: JSON.stringify({ ok: true }) };
+            },
+        });
+
+        // 用户点 ✕ 移除了 clash-config.yaml：文件仍在 Gist 上，只是不再自动运维。
+        store.setSettings({
+            gist: {
+                id: "test-gist-id",
+                token: "ghp_secretToken123",
+                syncProfiles: [{ fileName: "singbox-config.json", target: "sing-box", out: "config" }],
+                removedFiles: ["clash-config.yaml"],
+            },
+        });
+
+        const scheduler = createScheduler({ store, coordinator, fetchImpl: mockFetch });
+        const result = await scheduler.runJob({ forceSyncGist: true });
+        expect(result.ok).to.be.true;
+
+        const names = (store.getSettings().gist.syncProfiles || []).map((p) => p.fileName);
+        expect(names).to.deep.equal(["singbox-config.json"]);
+        expect(patchedFiles).to.not.include("clash-config.yaml");
+        // 标记本身必须活过这一轮，否则下一次运维又会把文件发现回来。
+        expect(store.getSettings().gist.removedFiles).to.deep.equal(["clash-config.yaml"]);
+    });
+
+    it("prunes stale tombstoned files from removedFiles when they no longer exist on Gist", async function () {
+        store.addSource({
+            name: "MySub",
+            kind: "text",
+            content: nodesJson(["香港 01"]),
+            enabled: true,
+        });
+
+        const mockFetch = createMockFetch({
+            "https://api.github.com/gists/test-gist-id": (req) => {
+                if (req && req.method === "GET") {
+                    return {
+                        status: 200,
+                        body: JSON.stringify({
+                            files: {
+                                "singbox-config.json": { content: "{}" },
+                                "clash-config.yaml": { content: "old" },
+                                // deleted-online.yaml 已经不在 Gist 上了
+                            },
+                        }),
+                    };
+                }
+                return { status: 200, body: JSON.stringify({ ok: true }) };
+            },
+        });
+
+        store.setSettings({
+            gist: {
+                id: "test-gist-id",
+                token: "ghp_secretToken123",
+                syncProfiles: [{ fileName: "singbox-config.json", target: "sing-box", out: "config" }],
+                removedFiles: ["clash-config.yaml", "deleted-online.yaml"],
+            },
+        });
+
+        const scheduler = createScheduler({ store, coordinator, fetchImpl: mockFetch });
+        const result = await scheduler.runJob({ forceSyncGist: true });
+        expect(result.ok).to.be.true;
+
+        // deleted-online.yaml 已经在远程不存在，墓碑被 prune 清理，而 clash-config.yaml 仍在 Gist 上因此墓碑保留
+        expect(store.getSettings().gist.removedFiles).to.deep.equal(["clash-config.yaml"]);
+    });
+
+    it("does not prune removedFiles if Gist fetch fails", async function () {
+        store.addSource({
+            name: "MySub",
+            kind: "text",
+            content: nodesJson(["香港 01"]),
+            enabled: true,
+        });
+
+        const mockFetch = createMockFetch({
+            "https://api.github.com/gists/test-gist-id": () => {
+                return { status: 500, body: "Internal Server Error" };
+            },
+        });
+
+        store.setSettings({
+            gist: {
+                id: "test-gist-id",
+                token: "ghp_secretToken123",
+                syncProfiles: [{ fileName: "singbox-config.json", target: "sing-box", out: "config" }],
+                removedFiles: ["clash-config.yaml", "deleted-online.yaml"],
+            },
+        });
+
+        const scheduler = createScheduler({ store, coordinator, fetchImpl: mockFetch });
+        await scheduler.runJob({ forceSyncGist: true });
+
+        // 网络失败时绝不能清空墓碑
+        expect(store.getSettings().gist.removedFiles).to.deep.equal(["clash-config.yaml", "deleted-online.yaml"]);
+    });
+
+    it("merges quickSettings per key when inferring a profile from saved defaults", function () {
+        const profile = inferProfileFromFileName(
+            "MySub-singbox-config.json",
+            [{ id: "s1", name: "MySub" }],
+            {
+                aclPreset: "acl4ssr-mini",
+                nodeFilter: { pattern: "HK", caseInsensitive: true },
+                nodePipeline: { quickSettings: { skipCertVerify: true } },
+            },
+        );
+        expect(profile.aclPreset).to.equal("acl4ssr-mini");
+        // nodeFilter 的真实形状是对象，不是字符串。
+        expect(profile.nodeFilter).to.deep.equal({ pattern: "HK", caseInsensitive: true });
+        expect(profile.nodePipeline.quickSettings).to.deep.equal({ udp: false, skipCertVerify: true });
+        expect(profile.nodePipeline.cleanNotice).to.be.true;
+        expect(profile.nodePipeline.injectFlags).to.be.true;
+    });
+
+    it("keeps global quickSettings when a profile overrides only one of them", async function () {
+        store.addSource({
+            name: "MySub",
+            kind: "text",
+            content: JSON.stringify([
+                { name: "HK-01", type: "trojan", server: "a.example.com", port: 443, password: "pw", sni: "a.example.com" },
+            ]),
+            enabled: true,
+        });
+
+        let clashBody = null;
+        const mockFetch = createMockFetch({
+            "https://api.github.com/gists/test-gist-id": (req) => {
+                if (req && req.method === "GET") {
+                    return {
+                        status: 200,
+                        body: JSON.stringify({ files: { "clash-provider.yaml": { content: "old" } } }),
+                    };
+                }
+                if (req && req.method === "PATCH") {
+                    const parsed = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+                    const file = parsed && parsed.files && parsed.files["clash-provider.yaml"];
+                    if (file) clashBody = file.content;
+                    return { status: 200, body: JSON.stringify({ ok: true }) };
+                }
+                return { status: 200, body: JSON.stringify({ ok: true }) };
+            },
+        });
+
+        store.setDefaultOptions({ nodePipeline: { quickSettings: { skipCertVerify: true } } });
+        store.setSettings({
+            gist: {
+                id: "test-gist-id",
+                token: "ghp_secretToken123",
+                syncProfiles: [
+                    {
+                        fileName: "clash-provider.yaml",
+                        target: "clash",
+                        out: "outbounds",
+                        nodePipeline: { quickSettings: { udp: true } },
+                    },
+                ],
+            },
+        });
+
+        const scheduler = createScheduler({ store, coordinator, fetchImpl: mockFetch });
+        const result = await scheduler.runJob({ forceSyncGist: true });
+        expect(result.ok).to.be.true;
+        expect(clashBody).to.be.a("string");
+        // 浅合并会让 profile 的 {udp:true} 整体替换 quickSettings，丢掉 skipCertVerify。
+        expect(clashBody).to.include("udp: true");
+        expect(clashBody).to.include("skip-cert-verify: true");
+    });
 });

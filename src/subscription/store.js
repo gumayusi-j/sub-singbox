@@ -95,6 +95,11 @@ function normalizeModel(raw) {
             if (Array.isArray(raw.settings.gist.autoSyncTargets)) {
                 model.settings.gist.autoSyncTargets = deepClone(raw.settings.gist.autoSyncTargets);
             }
+            if (Array.isArray(raw.settings.gist.removedFiles)) {
+                model.settings.gist.removedFiles = raw.settings.gist.removedFiles.filter(
+                    (name) => typeof name === "string" && name !== "",
+                );
+            }
             for (const [gk, gv] of Object.entries(raw.settings.gist)) {
                 if (!Object.prototype.hasOwnProperty.call(model.settings.gist, gk)) {
                     model.settings.gist[gk] = deepClone(gv);

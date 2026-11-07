@@ -2889,6 +2889,9 @@ var app = Vue.createApp({
     var schedulerIntervalInput = Vue.ref(360);
     var schedulerIntervalSaving = Vue.ref(false);
     var syncProfiles = Vue.ref(lsLoad('sbx:gistSyncProfiles', []));
+    // 用户点 ✕ 移除过的文件名。Gist 上的文件仍在，若不记住这份名单，
+    // 下一轮运维的自动发现会按文件名把它重新推断回来。
+    var gistRemovedFiles = Vue.ref(lsLoad('sbx:gistRemovedFiles', []));
 
     Vue.watch([pipelineCleanNotice, pipelineInjectFlags, pipelineDedupe, pipelineUdp, pipelineSkipCert], function() {
       lsSave('sbx:pipeCleanNotice', pipelineCleanNotice.value);
@@ -3381,18 +3384,17 @@ var app = Vue.createApp({
           githubToken.value = data.gist.token || '';
           lsSave('sbx:gistId', gistId.value);
           lsSave('sbx:githubToken', githubToken.value);
+          if (Array.isArray(data.gist.removedFiles)) {
+            gistRemovedFiles.value = data.gist.removedFiles;
+            lsSave('sbx:gistRemovedFiles', gistRemovedFiles.value);
+          }
           if (Array.isArray(data.gist.syncProfiles)) {
             var validProfiles = data.gist.syncProfiles.filter(function(p){ return p && p.fileName && !isIgnoredGistFile(p.fileName); });
             syncProfiles.value = validProfiles;
             lsSave('sbx:gistSyncProfiles', validProfiles);
             if (validProfiles.length !== data.gist.syncProfiles.length) {
-              api('PUT', '/api/settings', {
-                gist: {
-                  id: (gistId.value || '').trim(),
-                  token: (githubToken.value || '').trim(),
-                  syncProfiles: validProfiles
-                }
-              }).catch(function(e){ console.warn('Cleaned ignored profiles on load:', e); });
+              persistGistProfiles(validProfiles, gistRemovedFiles.value || [])
+                .catch(function(e){ console.warn('Cleaned ignored profiles on load:', e); });
             }
           }
         } else if (gistId.value || githubToken.value) {
@@ -3898,6 +3900,27 @@ var app = Vue.createApp({
       return /^MyEgern\.(yaml|yml)$/i.test(fn) || /^MyLoon\.conf$/i.test(fn) || /^README(\.md)?$/i.test(fn) || /^LICENSE$/i.test(fn);
     }
 
+    // aclPreset/nodeFilter/ipv6Enabled 取服务端已持久化的 defaultOptions，与后端
+    // inferProfileFromFileName 同源；nodePipeline 取当前 UI 选择，随 profile 落库后
+    // 由后台运维复用。导出时渲染用的正是这两处来源，记录下来才能复现同一份配置。
+    function profileRenderDefaults() {
+      var opts = settings.value || {};
+      return {
+        aclPreset: opts.aclPreset || '',
+        nodeFilter: opts.nodeFilter || null,
+        ipv6Enabled: opts.ipv6Enabled !== undefined ? opts.ipv6Enabled : true,
+        nodePipeline: {
+          cleanNotice: pipelineCleanNotice.value,
+          injectFlags: pipelineInjectFlags.value,
+          dedupeAddress: pipelineDedupe.value,
+          quickSettings: {
+            udp: pipelineUdp.value,
+            skipCertVerify: pipelineSkipCert.value
+          }
+        }
+      };
+    }
+
     function inferProfileFromFileName(fileName, sourceList) {
       if (!fileName || typeof fileName !== 'string' || isIgnoredGistFile(fileName)) return null;
 
@@ -3978,27 +4001,12 @@ var app = Vue.createApp({
         out = 'config';
       }
 
-      var defaultAcl = (aclPreset && aclPreset.value) || (acl && acl.value !== 'none' ? acl.value : '') || '';
-      return {
+      return Object.assign({
         fileName: fileName,
         target: target,
         out: out,
-        sourceId: sourceId,
-        aclPreset: defaultAcl,
-        nodeFilter: (nodeFilter && nodeFilter.value) || '',
-        remoteDns: (remoteDns && remoteDns.value) || '',
-        localDns: (localDns && localDns.value) || '',
-        ipv6Enabled: ipv6Enabled && ipv6Enabled.value !== undefined ? ipv6Enabled.value : true,
-        nodePipeline: {
-          cleanNotice: pipelineCleanNotice && pipelineCleanNotice.value !== undefined ? pipelineCleanNotice.value : true,
-          injectFlags: pipelineInjectFlags && pipelineInjectFlags.value !== undefined ? pipelineInjectFlags.value : true,
-          dedupeAddress: pipelineDedupe && pipelineDedupe.value !== undefined ? pipelineDedupe.value : false,
-          quickSettings: {
-            udp: pipelineUdp && pipelineUdp.value !== undefined ? pipelineUdp.value : false,
-            skipCertVerify: pipelineSkipCert && pipelineSkipCert.value !== undefined ? pipelineSkipCert.value : false
-          }
-        }
-      };
+        sourceId: sourceId
+      }, profileRenderDefaults());
     }
 
     async function syncToGist() {
@@ -4108,38 +4116,18 @@ var app = Vue.createApp({
 
         // Record this sync profile so background subscription refresh auto-updates this configuration
         try {
-          var currentProfiles = lsLoad('sbx:gistSyncProfiles', []);
-          currentProfiles = currentProfiles.filter(function(p){ return p.fileName !== fileName; });
-          currentProfiles.push({
+          var currentProfiles = (syncProfiles.value || []).filter(function(p){ return p && p.fileName !== fileName; });
+          currentProfiles.push(Object.assign({
             fileName: fileName,
             target: targetKey,
-            out: exportOut.value || 'config',
-            sourceId: exportSourceId.value || '',
-            aclPreset: aclPreset.value || '',
-            nodeFilter: nodeFilter.value || '',
-            remoteDns: remoteDns.value || '',
-            localDns: localDns.value || '',
-            ipv6Enabled: ipv6Enabled.value,
-            nodePipeline: {
-              cleanNotice: pipelineCleanNotice.value,
-              injectFlags: pipelineInjectFlags.value,
-              dedupeAddress: pipelineDedupe.value,
-              quickSettings: {
-                udp: pipelineUdp.value,
-                skipCertVerify: pipelineSkipCert.value
-              }
-            }
-          });
-          syncProfiles.value = currentProfiles;
-          lsSave('sbx:gistSyncProfiles', currentProfiles);
-          api('PUT', '/api/settings', {
-            gist: {
-              id: (gistId.value || '').trim(),
-              token: (githubToken.value || '').trim(),
-              syncProfiles: currentProfiles
-            }
-          }).catch(function(e){ console.warn('Failed to save syncProfiles:', e); });
-        } catch(_e) {}
+            out: isOutbounds ? 'outbounds' : 'config',
+            sourceId: exportSourceId.value || ''
+          }, profileRenderDefaults()));
+          // 主动重新上传即撤销之前的移除标记
+          var removed = (gistRemovedFiles.value || []).filter(function(n){ return n !== fileName; });
+          persistGistProfiles(currentProfiles, removed)
+            .catch(function(e){ console.warn('Failed to save syncProfiles:', e); });
+        } catch(e) { console.warn('Failed to record sync profile:', e); }
         gistStatus.value = '已同步 ' + fileName + ' (' + (isOutbounds ? '纯节点' : '完整配置') + ') 到 Gist。';
         gistStatusType.value = 'ok';
       } catch (e) {
@@ -4197,8 +4185,14 @@ var app = Vue.createApp({
           var rawProfiles = lsLoad('sbx:gistSyncProfiles', []);
           var currentProfiles = rawProfiles.filter(function(p){ return p && p.fileName && !isIgnoredGistFile(p.fileName); });
           var profilesChanged = currentProfiles.length !== rawProfiles.length;
+          var removed = gistRemovedFiles.value || [];
+          var existingFileNames = files.map(function(f){ return f.name; });
+          // 清理远程 Gist 上已不存在的文件对应的墓碑（例如用户在 GitHub 网页端手动删除了文件）
+          var nextRemoved = removed.filter(function(fn){ return existingFileNames.indexOf(fn) >= 0; });
+          var removedChanged = nextRemoved.length !== removed.length;
+
           files.forEach(function(f) {
-            if (isIgnoredGistFile(f.name)) return;
+            if (isIgnoredGistFile(f.name) || nextRemoved.indexOf(f.name) >= 0) return;
             if (!currentProfiles.some(function(p){ return p.fileName === f.name; })) {
               var inferred = inferProfileFromFileName(f.name, sources.value);
               if (inferred) {
@@ -4207,18 +4201,11 @@ var app = Vue.createApp({
               }
             }
           });
-          if (profilesChanged) {
-            syncProfiles.value = currentProfiles;
-            lsSave('sbx:gistSyncProfiles', currentProfiles);
-            api('PUT', '/api/settings', {
-              gist: {
-                id: (gistId.value || '').trim(),
-                token: (githubToken.value || '').trim(),
-                syncProfiles: currentProfiles
-              }
-            }).catch(function(e){ console.warn('Failed to save reconciled syncProfiles:', e); });
+          if (profilesChanged || removedChanged) {
+            persistGistProfiles(currentProfiles, nextRemoved)
+              .catch(function(e){ console.warn('Failed to save reconciled syncProfiles:', e); });
           }
-        } catch(_e) {}
+        } catch(e) { console.warn('Failed to reconcile Gist profiles:', e); }
 
         gistStatus.value = '已刷新 Gist 文件列表，共 ' + files.length + ' 个文件。';
         gistStatusType.value = 'ok';
@@ -4289,18 +4276,12 @@ var app = Vue.createApp({
         gistFiles.value = files;
         lsSave('sbx:gistFiles', files);
         try {
-          var currentProfiles = lsLoad('sbx:gistSyncProfiles', []);
-          currentProfiles = currentProfiles.filter(function(p){ return p.fileName !== fileName; });
-          syncProfiles.value = currentProfiles;
-          lsSave('sbx:gistSyncProfiles', currentProfiles);
-          api('PUT', '/api/settings', {
-            gist: {
-              id: (gistId.value || '').trim(),
-              token: (githubToken.value || '').trim(),
-              syncProfiles: currentProfiles
-            }
-          }).catch(function(e){ console.warn('Failed to update syncProfiles on delete:', e); });
-        } catch(_e) {}
+          var currentProfiles = (syncProfiles.value || []).filter(function(p){ return p && p.fileName !== fileName; });
+          // 文件已从 Gist 删除，移除标记也不再需要
+          var removed = (gistRemovedFiles.value || []).filter(function(n){ return n !== fileName; });
+          persistGistProfiles(currentProfiles, removed)
+            .catch(function(e){ console.warn('Failed to update syncProfiles on delete:', e); });
+        } catch(e) { console.warn('Failed to update syncProfiles on delete:', e); }
         gistStatus.value = '已成功从 Gist 删除 ' + fileName;
         gistStatusType.value = 'ok';
       } catch (e) {
@@ -4311,17 +4292,28 @@ var app = Vue.createApp({
       }
     }
 
-    function removeSyncProfile(fileName) {
-      var currentProfiles = (syncProfiles.value || []).filter(function(p){ return p.fileName !== fileName; });
-      syncProfiles.value = currentProfiles;
-      lsSave('sbx:gistSyncProfiles', currentProfiles);
-      api('PUT', '/api/settings', {
+    // syncProfiles 与 removedFiles 一起提交：这两份状态描述同一件事的两面，
+    // 分开写会让本地缓存与服务端记录对不上。
+    function persistGistProfiles(profiles, removed) {
+      syncProfiles.value = profiles;
+      gistRemovedFiles.value = removed;
+      lsSave('sbx:gistSyncProfiles', profiles);
+      lsSave('sbx:gistRemovedFiles', removed);
+      return api('PUT', '/api/settings', {
         gist: {
           id: (gistId.value || '').trim(),
           token: (githubToken.value || '').trim(),
-          syncProfiles: currentProfiles
+          syncProfiles: profiles,
+          removedFiles: removed
         }
-      }).then(function() {
+      });
+    }
+
+    function removeSyncProfile(fileName) {
+      var profiles = (syncProfiles.value || []).filter(function(p){ return p && p.fileName !== fileName; });
+      var removed = (gistRemovedFiles.value || []).slice();
+      if (removed.indexOf(fileName) < 0) removed.push(fileName);
+      persistGistProfiles(profiles, removed).then(function() {
         ElementPlus.ElMessage.success('已从自动运维列表中移除 ' + fileName);
       }).catch(function(e){
         console.warn('Failed to save syncProfiles after remove:', e);
@@ -4332,16 +4324,10 @@ var app = Vue.createApp({
     function saveGistConfig() {
       lsSave('sbx:gistId', gistId.value);
       lsSave('sbx:githubToken', githubToken.value);
-      var currentProfiles = lsLoad('sbx:gistSyncProfiles', []);
-      api('PUT', '/api/settings', {
-        gist: {
-          id: (gistId.value || '').trim(),
-          token: (githubToken.value || '').trim(),
-          syncProfiles: currentProfiles
-        }
-      }).catch(function(e) {
-        console.warn('[saveGistConfig] failed to save to server:', e);
-      });
+      persistGistProfiles(syncProfiles.value || [], gistRemovedFiles.value || [])
+        .catch(function(e) {
+          console.warn('[saveGistConfig] failed to save to server:', e);
+        });
     }
 
     function copyConfig() {

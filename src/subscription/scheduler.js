@@ -25,6 +25,30 @@ export function isIgnoredGistFile(fileName) {
     return IGNORED_GIST_FILES.some((pattern) => pattern.test(fileName));
 }
 
+const DEFAULT_NODE_PIPELINE = {
+    cleanNotice: true,
+    injectFlags: true,
+    dedupeAddress: false,
+    quickSettings: { udp: false, skipCertVerify: false },
+};
+
+// quickSettings 是子对象：浅合并会让只设了 udp 的 profile 整体替换掉它，
+// 从而静默丢掉另一层配置的 skipCertVerify。逐层合并该子对象，其余键照常覆盖。
+function mergeNodePipeline(...layers) {
+    const merged = Object.assign({}, DEFAULT_NODE_PIPELINE);
+    merged.quickSettings = Object.assign({}, DEFAULT_NODE_PIPELINE.quickSettings);
+    for (const layer of layers) {
+        if (!layer || typeof layer !== "object") continue;
+        for (const key of Object.keys(layer)) {
+            if (key !== "quickSettings") merged[key] = layer[key];
+        }
+        if (layer.quickSettings && typeof layer.quickSettings === "object") {
+            Object.assign(merged.quickSettings, layer.quickSettings);
+        }
+    }
+    return merged;
+}
+
 /**
  * 自动根据 Gist 上的文件名推断其所属订阅源、导出目标与输出形态
  */
@@ -108,28 +132,17 @@ export function inferProfileFromFileName(fileName, sources, defaultOptions = {})
         out = "config";
     }
 
-    const defaultAcl = (defaultOptions && defaultOptions.aclPreset) || "";
-    const defaultPipeline = (defaultOptions && defaultOptions.nodePipeline) || {};
+    const defaults = defaultOptions || {};
 
     return {
         fileName,
         target,
         out,
         sourceId,
-        aclPreset: defaultAcl,
-        nodeFilter: (defaultOptions && defaultOptions.nodeFilter) || "",
-        remoteDns: (defaultOptions && defaultOptions.remoteDns) || "",
-        localDns: (defaultOptions && defaultOptions.localDns) || "",
-        ipv6Enabled: defaultOptions && defaultOptions.ipv6Enabled !== undefined ? defaultOptions.ipv6Enabled : true,
-        nodePipeline: Object.assign(
-            {
-                cleanNotice: true,
-                injectFlags: true,
-                dedupeAddress: false,
-                quickSettings: { udp: false, skipCertVerify: false },
-            },
-            defaultPipeline
-        ),
+        aclPreset: defaults.aclPreset || "",
+        nodeFilter: defaults.nodeFilter || null,
+        ipv6Enabled: defaults.ipv6Enabled !== undefined ? defaults.ipv6Enabled : true,
+        nodePipeline: mergeNodePipeline(defaults.nodePipeline),
     };
 }
 
@@ -163,7 +176,7 @@ export function createScheduler(options = {}) {
     let lastGistSync = null;
 
     async function fetchGistFileNames(gistConfig) {
-        if (!gistConfig || !gistConfig.id || !gistConfig.token) return [];
+        if (!gistConfig || !gistConfig.id || !gistConfig.token) return null;
         try {
             const url = `https://api.github.com/gists/${gistConfig.id}`;
             const res = await fetchImpl(url, {
@@ -174,11 +187,11 @@ export function createScheduler(options = {}) {
                     "X-GitHub-Api-Version": "2022-11-28",
                 },
             });
-            if (!res.ok) return [];
+            if (!res.ok) return null;
             const data = await res.json();
             return data && data.files ? Object.keys(data.files) : [];
         } catch (_e) {
-            return [];
+            return null;
         }
     }
 
@@ -249,6 +262,9 @@ export function createScheduler(options = {}) {
                     const rawProfiles = Array.isArray(gist.syncProfiles) ? gist.syncProfiles : [];
                     let syncProfiles = rawProfiles.filter((p) => p && p.fileName && !isIgnoredGistFile(p.fileName));
                     let profilesUpdated = syncProfiles.length !== rawProfiles.length;
+                    // 用户手动移除过的文件名：只阻止自动发现，不影响显式配置的 profile。
+                    let removedFiles = Array.isArray(gist.removedFiles) ? gist.removedFiles : [];
+                    let removedFilesUpdated = false;
                     const hasProfiles = syncProfiles.length > 0;
                     const hasAutoSync = gist.autoSync === true;
 
@@ -256,10 +272,16 @@ export function createScheduler(options = {}) {
                     if (hasProfiles || hasAutoSync || forceSyncGist) {
                         try {
                             const existingGistFiles = await fetchGistFileNames(gist);
-                            if (Array.isArray(existingGistFiles) && existingGistFiles.length > 0) {
+                            if (Array.isArray(existingGistFiles)) {
                                 const sources = store && typeof store.list === "function" ? store.list() : [];
+                                // 清理已在远程 Gist 上不存在的墓碑（例如在 GitHub 网页端手动删除了文件）
+                                const prunedRemovedFiles = removedFiles.filter((fn) => existingGistFiles.includes(fn));
+                                if (prunedRemovedFiles.length !== removedFiles.length) {
+                                    removedFiles = prunedRemovedFiles;
+                                    removedFilesUpdated = true;
+                                }
                                 for (const fn of existingGistFiles) {
-                                    if (isIgnoredGistFile(fn)) continue;
+                                    if (isIgnoredGistFile(fn) || removedFiles.includes(fn)) continue;
                                     if (!syncProfiles.some((p) => p && p.fileName === fn)) {
                                         const inferred = inferProfileFromFileName(fn, sources, settings.defaultOptions);
                                         if (inferred) {
@@ -274,9 +296,12 @@ export function createScheduler(options = {}) {
                         }
                     }
 
-                    if (profilesUpdated && store && typeof store.setSettings === "function") {
+                    if ((profilesUpdated || removedFilesUpdated) && store && typeof store.setSettings === "function") {
                         store.setSettings({
-                            gist: Object.assign({}, gist, { syncProfiles }),
+                            gist: Object.assign({}, gist, {
+                                syncProfiles,
+                                removedFiles,
+                            }),
                         });
                     }
 
@@ -294,13 +319,7 @@ export function createScheduler(options = {}) {
 
                                 // 保证规则方案优先级：显式配置 > 系统默认配置，避免空字符串 "" 覆盖系统默认分流规则
                                 const effectiveAcl = profile.aclPreset || defaultOpts.aclPreset || "";
-                                const defaultPipeline = defaultOpts.nodePipeline || {
-                                    cleanNotice: true,
-                                    injectFlags: true,
-                                    dedupeAddress: false,
-                                    quickSettings: { udp: false, skipCertVerify: false },
-                                };
-                                const effectivePipeline = Object.assign({}, defaultPipeline, profile.nodePipeline || {});
+                                const effectivePipeline = mergeNodePipeline(defaultOpts.nodePipeline, profile.nodePipeline);
 
                                 const renderOptions = Object.assign(
                                     {},

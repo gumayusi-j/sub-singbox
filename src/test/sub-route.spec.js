@@ -816,6 +816,52 @@ describe("settings — one saved config, two readers", function () {
         expect(overview.data.gist.syncProfiles).to.deep.equal(profiles);
     });
 
+    it("keeps gist fields a partial update did not send", async function () {
+        ctx = await serve();
+        const put = (gist) =>
+            ctx.request("/api/settings", {
+                method: "PUT",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ gist }),
+            });
+
+        await put({
+            id: "gist-merge",
+            token: "ghp_mergeToken",
+            autoSync: true,
+            autoSyncTargets: ["clash", "surge"],
+            syncProfiles: [{ fileName: "custom-nodes.yaml", target: "clash", out: "outbounds" }],
+        });
+
+        // 前端移除一项时只提交 id/token/syncProfiles/removedFiles。整键替换会
+        // 把 autoSync 与 autoSyncTargets 一并抹掉，用户的自动同步就静默停了。
+        const res = await put({
+            id: "gist-merge",
+            token: "ghp_mergeToken",
+            syncProfiles: [],
+            removedFiles: ["custom-nodes.yaml"],
+        });
+        expect(res.status).to.equal(200);
+
+        const gist = ctx.store.getSettings().gist;
+        expect(gist.autoSync).to.equal(true);
+        expect(gist.autoSyncTargets).to.deep.equal(["clash", "surge"]);
+        expect(gist.syncProfiles).to.deep.equal([]);
+        expect(gist.removedFiles).to.deep.equal(["custom-nodes.yaml"]);
+
+        // 移除标记要能回到前端，否则刷新页面后 ✕ 的效果就丢了。
+        const overview = (await ctx.request("/api/subscriptions")).json;
+        expect(overview.data.gist.removedFiles).to.deep.equal(["custom-nodes.yaml"]);
+
+        const flip = await put({ autoSync: false });
+        expect(flip.status).to.equal(200);
+        const after = ctx.store.getSettings().gist;
+        expect(after.id).to.equal("gist-merge");
+        expect(after.token).to.equal("ghp_mergeToken");
+        expect(after.autoSync).to.equal(false);
+        expect(after.removedFiles).to.deep.equal(["custom-nodes.yaml"]);
+    });
+
     it("offers the exportable clients, narrowed by allowedTargets", async function () {
         ctx = await serve();
         let ids = (await ctx.request("/api/subscriptions")).json.data.targets.map((t) => t.id);

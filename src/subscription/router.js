@@ -164,7 +164,7 @@ export function sanitizePublicUrl(value) {
 // Settings that are not render options. Returns null when the body carries
 // none, false when the value is unusable, and a patch otherwise - the caller
 // answers 400 for false rather than storing nothing and looking like it worked.
-function sanitizeTopLevelSettings(body) {
+function sanitizeTopLevelSettings(body, existingGist) {
     const raw = body && typeof body === "object" ? body : {};
     const patch = {};
 
@@ -194,19 +194,30 @@ function sanitizeTopLevelSettings(body) {
         if (raw.gist === null) {
             patch.gist = null;
         } else if (typeof raw.gist === "object") {
-            patch.gist = {
-                id: typeof raw.gist.id === "string" ? raw.gist.id.trim() : "",
-                token: typeof raw.gist.token === "string" ? raw.gist.token.trim() : "",
-            };
+            // store.setSettings 是整键替换，而前端多处只提交 syncProfiles。
+            // 以现存值为底、只覆盖本次提交的字段，否则 autoSync/autoSyncTargets
+            // 会被一次无关的保存静默清空。
+            const stored = existingGist && typeof existingGist === "object" ? existingGist : {};
+            const gist = Object.assign({}, stored);
+            if (raw.gist.id !== undefined) {
+                gist.id = typeof raw.gist.id === "string" ? raw.gist.id.trim() : "";
+            }
+            if (raw.gist.token !== undefined) {
+                gist.token = typeof raw.gist.token === "string" ? raw.gist.token.trim() : "";
+            }
             if (Array.isArray(raw.gist.syncProfiles)) {
-                patch.gist.syncProfiles = raw.gist.syncProfiles;
+                gist.syncProfiles = raw.gist.syncProfiles;
             }
             if (raw.gist.autoSync !== undefined) {
-                patch.gist.autoSync = Boolean(raw.gist.autoSync);
+                gist.autoSync = Boolean(raw.gist.autoSync);
             }
             if (Array.isArray(raw.gist.autoSyncTargets)) {
-                patch.gist.autoSyncTargets = raw.gist.autoSyncTargets;
+                gist.autoSyncTargets = raw.gist.autoSyncTargets;
             }
+            if (Array.isArray(raw.gist.removedFiles)) {
+                gist.removedFiles = raw.gist.removedFiles.filter((name) => typeof name === "string" && name !== "");
+            }
+            patch.gist = gist;
         }
     }
 
@@ -302,6 +313,9 @@ export function createSubscriptionRouter(options) {
         }
         if (stored.autoSync !== undefined || fromConfig.autoSync !== undefined) {
             out.autoSync = stored.autoSync !== undefined ? stored.autoSync : fromConfig.autoSync;
+        }
+        if (Array.isArray(stored.removedFiles)) {
+            out.removedFiles = stored.removedFiles;
         }
         return out;
     }
@@ -817,7 +831,7 @@ export function createSubscriptionRouter(options) {
 
         if (pathname === "/api/settings" && (method === "PUT" || method === "POST")) {
             const body = (await readJsonBody()) || {};
-            const top = sanitizeTopLevelSettings(body);
+            const top = sanitizeTopLevelSettings(body, (store.getSettings() || {}).gist);
             if (top === false) {
                 sendJson(res, 400, {
                     ok: false,
