@@ -82,10 +82,10 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
             expect(configYaml).to.include("strategy: sticky-sessions");
 
             // 3. SVG icons are present
-            expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/Static.svg"');
-            expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/RoundRobin.svg"');
-            expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/HongKong.svg"');
-            expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/OpenAI.svg"');
+            expect(configYaml).to.include('icon: "https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/Static.svg"');
+            expect(configYaml).to.include('icon: "https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/RoundRobin.svg"');
+            expect(configYaml).to.include('icon: "https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/HongKong.svg"');
+            expect(configYaml).to.include('icon: "https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/OpenAI.svg"');
 
             // 4. Single-layer flat region groups with flag emojis
             expect(configYaml).to.include('- name: "🇭🇰 香港"');
@@ -114,11 +114,17 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
             expect(configYaml).to.include("rule-providers:");
             expect(configYaml).to.include("ai:");
             expect(configYaml).to.include("youtube:");
-            expect(configYaml).to.include("rules:");
+            expect(configYaml).to.include("rules:\n  - RULE-SET,category-ads,AdBlock\n  - RULE-SET,private,DIRECT");
+            expect(configYaml).to.include("- RULE-SET,synology,DIRECT");
+            expect(configYaml).to.include("- DOMAIN-SUFFIX,ctaiot.com,DIRECT");
+            expect(configYaml).to.not.include("cn_additional");
+            expect(configYaml).to.not.include("epicgames");
             expect(configYaml).to.include("- RULE-SET,ai,AI");
-            expect(configYaml).to.include("- RULE-SET,category-ads,AdBlock");
+            expect(configYaml).to.include("- RULE-SET,telegram_ip,Telegram\n  - MATCH,🐟 漏网之鱼");
             expect(configYaml).to.include("- MATCH,🐟 漏网之鱼");
             expect(configYaml).to.include("AND,((NETWORK,UDP),(DST-PORT,443)");
+            expect(configYaml).to.include('- "rule-set:cn"');
+            expect(configYaml).to.include("180.184.1.1#DIRECT");
         });
 
         it("works when triggered via options.aclPreset", function () {
@@ -126,7 +132,7 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
                 aclPreset: "mihomo-smart",
             });
             expect(configYaml).to.include('- name: "⚖️ 负载均衡"');
-            expect(configYaml).to.include('icon: "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/OpenAI.svg"');
+            expect(configYaml).to.include('icon: "https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/OpenAI.svg"');
         });
     });
 

@@ -294,7 +294,9 @@ export function buildMihomoSmartClash(proxyYaml, options) {
 
     // 3. Functional Core Service Groups (AI, YouTube, Netflix, Telegram, AdBlock)
     const functionalGroups = [];
+    const priorityRules = [];
     const functionalRules = [];
+    const functionalIpRules = [];
     const activeRuleProviders = { ...BASE_RULE_PROVIDERS };
 
     for (const svc of SERVICE_CONFIGS) {
@@ -302,7 +304,10 @@ export function buildMihomoSmartClash(proxyYaml, options) {
             Object.assign(activeRuleProviders, svc.providers);
         }
         if (svc.rules) {
-            functionalRules.push(...svc.rules);
+            (svc.priority ? priorityRules : functionalRules).push(...svc.rules);
+        }
+        if (svc.ipRules) {
+            functionalIpRules.push(...svc.ipRules);
         }
 
         let groupProxies = [];
@@ -347,12 +352,17 @@ export function buildMihomoSmartClash(proxyYaml, options) {
 
     const proxyGroupsYaml = allGroups.map(formatClashProxyGroup).join("\n\n");
 
-    // Aggregate rules
+    // Aggregate rules: priorityRules -> prefixRules -> QUIC block -> functionalRules -> geo!cn -> cn_ip/private_ip -> functionalIpRules -> MATCH
     const allRules = [
+        ...priorityRules,
         ...PREFIX_RULES,
         ...(opts.blockForeignQuic !== false ? BLOCK_FOREIGN_QUIC : []),
         ...functionalRules,
-        ...FALLBACK_RULES,
+        "RULE-SET,geolocation-!cn,🚀 节点选择",
+        "RULE-SET,cn_ip,DIRECT",
+        "RULE-SET,private_ip,DIRECT",
+        ...functionalIpRules,
+        "MATCH,🐟 漏网之鱼",
     ].map((r) => "  - " + r);
 
     const rulesYaml = "rules:\n" + allRules.join("\n");
@@ -460,7 +470,7 @@ export function header(options, dnsContext) {
         "  fake-ip-filter:",
         '    - "rule-set:private"',
         '    - "rule-set:fakeip_filter"',
-        '    - "rule-set:geolocation-cn"',
+        '    - "rule-set:cn"',
     ];
 
     for (const f of proxyFakeIpFilter) {
@@ -505,9 +515,11 @@ export function header(options, dnsContext) {
         "    'rule-set:private': system",
         "    'rule-set:douyin':",
         "      - system",
-        "      - 180.184.1.1",
-        "      - 180.184.2.2",
+        "      - 180.184.1.1#DIRECT",
+        "      - 180.184.2.2#DIRECT",
         "    'rule-set:geolocation-cn':",
+        ...localDnsList.map((d) => "      - " + d),
+        "    'rule-set:cn':",
         ...localDnsList.map((d) => "      - " + d),
     );
 
@@ -547,14 +559,14 @@ export const MIHOMO_SMART_PRESET = {
         {
             tag: "♻️ 自动选择",
             kind: "url-test",
-            memberTokens: [".*", "http://www.gstatic.com/generate_204", "300,,50"],
+            memberTokens: [".*", "https://www.apple.com/library/test/success.html", "300,,50"],
         },
         {
             tag: "🇭🇰 香港",
             kind: "url-test",
             memberTokens: [
                 "🇭🇰|香港|(?<![A-Za-z])HKG?(?![A-Za-z])|hong\\s*kong",
-                "http://www.gstatic.com/generate_204",
+                "https://www.apple.com/library/test/success.html",
                 "300,,50",
             ],
         },
@@ -563,7 +575,7 @@ export const MIHOMO_SMART_PRESET = {
             kind: "url-test",
             memberTokens: [
                 "🇯🇵|日本|东京|大阪|京都|(?<![A-Za-z])JPN?(?![A-Za-z])|japan",
-                "http://www.gstatic.com/generate_204",
+                "https://www.apple.com/library/test/success.html",
                 "300,,50",
             ],
         },
@@ -572,7 +584,7 @@ export const MIHOMO_SMART_PRESET = {
             kind: "url-test",
             memberTokens: [
                 "🇺🇸|美国|纽约|洛杉矶|旧金山|芝加哥|休斯顿|迈阿密|西雅图|波士顿|华盛顿|(?<![A-Za-z])USA?(?![A-Za-z])|america",
-                "http://www.gstatic.com/generate_204",
+                "https://www.apple.com/library/test/success.html",
                 "300,,50",
             ],
         },
@@ -581,7 +593,7 @@ export const MIHOMO_SMART_PRESET = {
             kind: "url-test",
             memberTokens: [
                 "🇸🇬|新加坡|狮城|(?<![A-Za-z])SGP?(?![A-Za-z])|singapore",
-                "http://www.gstatic.com/generate_204",
+                "https://www.apple.com/library/test/success.html",
                 "300,,50",
             ],
         },
@@ -590,7 +602,7 @@ export const MIHOMO_SMART_PRESET = {
             kind: "url-test",
             memberTokens: [
                 "🧋|🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan",
-                "http://www.gstatic.com/generate_204",
+                "https://www.apple.com/library/test/success.html",
                 "300,,50",
             ],
         },
@@ -599,7 +611,7 @@ export const MIHOMO_SMART_PRESET = {
             kind: "url-test",
             memberTokens: [
                 "🇰🇷|韩国|韓國|首尔|首爾|(?<![A-Za-z])(KOR?|KR)(?![A-Za-z])|korea",
-                "http://www.gstatic.com/generate_204",
+                "https://www.apple.com/library/test/success.html",
                 "300,,50",
             ],
         },
@@ -608,7 +620,7 @@ export const MIHOMO_SMART_PRESET = {
             kind: "url-test",
             memberTokens: [
                 "^(?!.*(?:🇭🇰|香港|(?<![A-Za-z])HKG?(?![A-Za-z])|hong\\s*kong|🇯🇵|日本|东京|大阪|京都|(?<![A-Za-z])JPN?(?![A-Za-z])|japan|🇺🇸|美国|纽约|洛杉矶|旧金山|芝加哥|休斯顿|迈阿密|西雅图|波士顿|华盛顿|(?<![A-Za-z])USA?(?![A-Za-z])|america|🇸🇬|新加坡|狮城|(?<![A-Za-z])SGP?(?![A-Za-z])|singapore|🧋|🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan|🇰🇷|韩国|韓國|首尔|首爾|(?<![A-Za-z])(KOR?|KR)(?![A-Za-z])|korea)).*$",
-                "http://www.gstatic.com/generate_204",
+                "https://www.apple.com/library/test/success.html",
                 "300,,50",
             ],
         },

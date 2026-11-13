@@ -1,8 +1,8 @@
 // Constants and configurations for Mihomo Smart Preset
 // 精简现代成熟设计：精美 SVG 图标、负载均衡、单层地区自动优选、高低倍率与核心服务精准分流
 
-export const ICON_BASE_URL = "https://cdn.jsdmirror.com/gh/AIsouler/MyClash@main/Icons/svg/";
-export const RULE_SET_BASE_URL = "https://cdn.jsdmirror.com/gh/appshubcc/bett-rules@meta/geo/";
+export const ICON_BASE_URL = "https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/";
+export const RULE_SET_BASE_URL = "https://fastly.jsdelivr.net/gh/appshubcc/bett-rules@meta/geo/";
 
 // Global exclude regex for filtering junk/notice/expired nodes
 export const EXCLUDE_FILTER =
@@ -45,7 +45,7 @@ export const REGION_DEFINITIONS = [
         name: "🇰🇷 韩国",
         flag: "🇰🇷",
         regex: /🇰🇷|韩国|韓國|首尔|首爾|(?<![A-Za-z])(KOR?|KR)(?![A-Za-z])|korea/i,
-        icon: "https://cdn.jsdmirror.com/gh/Koolson/Qure@master/IconSet/Color/Korea.png",
+        icon: "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Korea.png",
     },
 ];
 
@@ -114,10 +114,10 @@ export const BASE_RULE_PROVIDERS = {
         url: `${RULE_SET_BASE_URL}geosite/category-games@cn.mrs`,
         path: "./ruleset/category-games@cn.mrs",
     },
-    epicgames: {
+    synology: {
         ...ruleProviderCommonDomain,
-        url: `${RULE_SET_BASE_URL}geosite/epicgames.mrs`,
-        path: "./ruleset/epicgames.mrs",
+        url: `${RULE_SET_BASE_URL}geosite/synology.mrs`,
+        path: "./ruleset/synology.mrs",
     },
     nvidia_cn: {
         ...ruleProviderCommonDomain,
@@ -149,15 +149,15 @@ export const BASE_RULE_PROVIDERS = {
         url: `${RULE_SET_BASE_URL}geosite/geolocation-!cn.mrs`,
         path: "./ruleset/geolocation-!cn.mrs",
     },
-    cn_additional: {
-        ...ruleProviderCommonDomain,
-        url: "https://static-file-global.353355.xyz/rules/cn-additional-list.mrs",
-        path: "./ruleset/cn-additional-list.mrs",
-    },
     fakeip_filter: {
         ...ruleProviderCommonDomain,
         url: `${RULE_SET_BASE_URL}geosite/fakeip-filter.mrs`,
         path: "./ruleset/fakeip-filter.mrs",
+    },
+    cn: {
+        ...ruleProviderCommonDomain,
+        url: `${RULE_SET_BASE_URL}geosite/cn.mrs`,
+        path: "./ruleset/cn.mrs",
     },
     douyin: {
         ...ruleProviderCommonDomain,
@@ -172,17 +172,18 @@ export const PREFIX_RULES = [
     "RULE-SET,private_ip,DIRECT",
     "RULE-SET,geolocation-cn,DIRECT",
     "RULE-SET,games_cn,DIRECT",
-    "RULE-SET,epicgames,DIRECT",
+    "RULE-SET,synology,DIRECT",
     "RULE-SET,nvidia_cn,DIRECT",
     "RULE-SET,apple_cn,DIRECT",
     "RULE-SET,microsoft_cn,DIRECT",
     "DOMAIN,fsend.cn,DIRECT",
     "DOMAIN,international-gfe.download.nvidia.com,DIRECT",
+    "DOMAIN-SUFFIX,ctaiot.com,DIRECT",
 ];
 
 // Foreign QUIC blocking rule
 export const BLOCK_FOREIGN_QUIC = [
-    "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn_additional),(RULE-SET,cn_ip,no-resolve)))))),REJECT",
+    "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((RULE-SET,cn),(RULE-SET,cn_ip,no-resolve)))))),REJECT",
 ];
 
 // Fallback routing rules
@@ -196,8 +197,8 @@ export const FALLBACK_RULES = [
 // Common options for proxy groups
 export const GROUP_BASE_OPTION = {
     interval: 300,
-    timeout: 3000,
-    url: "http://www.gstatic.com/generate_204",
+    timeout: 5000,
+    url: "https://www.apple.com/library/test/success.html",
     lazy: true,
     "max-failed-times": 3,
 };
@@ -208,6 +209,7 @@ export const SERVICE_CONFIGS = [
         name: "AdBlock",
         type: "select",
         reject: true,
+        priority: true,
         icon: `${ICON_BASE_URL}AdBlock.svg`,
         providers: {
             "category-ads": {
@@ -266,7 +268,8 @@ export const SERVICE_CONFIGS = [
                 path: "./ruleset/netflix_ip.mrs",
             },
         },
-        rules: ["RULE-SET,netflix,Netflix", "RULE-SET,netflix_ip,Netflix,no-resolve"],
+        rules: ["RULE-SET,netflix,Netflix"],
+        ipRules: ["RULE-SET,netflix_ip,Netflix"],
     },
     {
         name: "Telegram",
@@ -284,6 +287,7 @@ export const SERVICE_CONFIGS = [
                 path: "./ruleset/telegram_ip.mrs",
             },
         },
-        rules: ["RULE-SET,telegram,Telegram", "RULE-SET,telegram_ip,Telegram,no-resolve"],
+        rules: ["RULE-SET,telegram,Telegram"],
+        ipRules: ["RULE-SET,telegram_ip,Telegram"],
     },
 ];
