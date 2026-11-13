@@ -187,4 +187,51 @@ describe("subscription targets — table integrity", function () {
         expect(rendered.body).to.include("[Proxy Group]");
         expect(rendered.body).to.include("[Rule]");
     });
+
+    it("renders Egern profile with ShadowsocksR (SSR) support", function () {
+        const ssrNode = {
+            name: "SSR-Node",
+            type: "ssr",
+            server: "1.2.3.4",
+            port: 8388,
+            cipher: "aes-128-cfb",
+            password: "secret",
+            protocol: "auth_aes128_md5",
+            obfs: "tls1.2_ticket_auth",
+        };
+        const store = makeStore([ssrNode]);
+        const target = findTarget("egern");
+        const rendered = renderSubscription(store, { kind: "global" }, { target });
+
+        expect(rendered.status).to.equal(200);
+        expect(rendered.body).to.include('"shadowsocksr"');
+        expect(rendered.body).to.include("SSR-Node");
+        expect(rendered.body).to.include("aes-128-cfb");
+        expect(rendered.body).to.include("auth_aes128_md5");
+        expect(rendered.body).to.include("tls1.2_ticket_auth");
+    });
+
+    it("renders Loon profile with normalized Reality tls-profile safari-ios18", function () {
+        const realityNode = {
+            name: "VLESS-Reality",
+            type: "vless",
+            server: "5.6.7.8",
+            port: 443,
+            uuid: "11111111-2222-3333-4444-555555555555",
+            network: "tcp",
+            tls: true,
+            "reality-opts": {
+                "public-key": "fakekey",
+                "short-id": "abcd",
+            },
+            "client-fingerprint": "ios",
+        };
+        const store = makeStore([realityNode]);
+        const target = findTarget("loon");
+        const rendered = renderSubscription(store, { kind: "global" }, { target });
+
+        expect(rendered.status).to.equal(200);
+        expect(rendered.body).to.include("tls-profile=safari-ios18");
+        expect(rendered.body).to.not.include("tls-profile=ios26");
+    });
 });

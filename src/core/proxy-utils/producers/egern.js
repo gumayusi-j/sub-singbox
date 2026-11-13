@@ -6,6 +6,33 @@ import {
 } from './utils';
 import { normalizeVmessSecurity } from '../vmess-security';
 
+const EGERN_SSR_METHODS = new Set([
+    'none', 'dummy', 'rc4-md5', 'aes-128-cfb', 'aes-192-cfb', 'aes-256-cfb',
+    'aes-128-ctr', 'aes-192-ctr', 'aes-256-ctr', 'chacha20', 'chacha20-ietf', 'xchacha20'
+]);
+const EGERN_SSR_PROTOCOLS = new Set([
+    'origin', 'auth_sha1_v4', 'auth_aes128_md5', 'auth_aes128_sha1', 'auth_chain_a', 'auth_chain_b'
+]);
+const EGERN_SSR_OBFS = new Set([
+    'plain', 'http_simple', 'http_post', 'random_head', 'tls1.2_ticket_auth', 'tls1.2_ticket_fastauth'
+]);
+
+function normalizeEgernSSRMethod(cipher) {
+    if (!cipher) return null;
+    const c = String(cipher).trim().toLowerCase();
+    const method = c === 'plain' ? 'none' : c;
+    return EGERN_SSR_METHODS.has(method) ? method : null;
+}
+
+function isEgernSSR(proxy) {
+    if (!normalizeEgernSSRMethod(proxy.cipher)) return false;
+    const proto = String(proxy.protocol || 'origin').trim().toLowerCase();
+    if (proto && !EGERN_SSR_PROTOCOLS.has(proto)) return false;
+    const obfs = String(proxy.obfs || 'plain').trim().toLowerCase();
+    if (obfs && !EGERN_SSR_OBFS.has(obfs)) return false;
+    return true;
+}
+
 export default function Egern_Producer() {
     const type = 'ALL';
     const produce = (proxies, type, opts = {}) => {
@@ -18,6 +45,7 @@ export default function Egern_Producer() {
                         'https',
                         'socks5',
                         'ss',
+                        'ssr',
                         'trojan',
                         'hysteria2',
                         'vless',
@@ -28,6 +56,7 @@ export default function Egern_Producer() {
                         'ssh',
                         'snell',
                     ].includes(proxy.type) ||
+                    (proxy.type === 'ssr' && !isEgernSSR(proxy)) ||
                     (proxy.type === 'ss' &&
                         ((proxy.plugin === 'obfs' &&
                             !['http', 'tls'].includes(
@@ -205,6 +234,23 @@ export default function Egern_Producer() {
                                 );
                             }
                         }
+                    } else if (proxy.type === 'ssr') {
+                        proxy = {
+                            type: 'shadowsocksr',
+                            name: proxy.name,
+                            method: normalizeEgernSSRMethod(proxy.cipher) || 'none',
+                            server: proxy.server,
+                            port: proxy.port,
+                            password: proxy.password || '',
+                            protocol: (proxy.protocol || 'origin').toLowerCase(),
+                            obfs: (proxy.obfs || 'plain').toLowerCase(),
+                            tfo: getTfo(proxy),
+                            udp_relay: getUdpRelay(proxy),
+                        };
+                        const protoParam = original['protocol-param'] || original.protocol_param || original.protocolparam;
+                        if (protoParam) proxy.protocol_param = protoParam;
+                        const obfsParam = original['obfs-param'] || original.obfs_param || original.obfsparam;
+                        if (obfsParam) proxy.obfs_param = obfsParam;
                     } else if (proxy.type === 'hysteria2') {
                         proxy = {
                             type: 'hysteria2',
@@ -548,6 +594,7 @@ export default function Egern_Producer() {
                             'anytls',
                             'ssh',
                             'snell',
+                            'ssr',
                         ].includes(original.type)
                     ) {
                         if (
@@ -596,6 +643,7 @@ export default function Egern_Producer() {
                             'anytls',
                             'ssh',
                             'snell',
+                            'ssr',
                         ].includes(original.type)
                     ) {
                         if (

@@ -151,16 +151,19 @@ function getLoonAlpn(proxy) {
 }
 
 function getLoonTlsProfile(proxy) {
-    const tlsProfile = `${proxy._loon_tls_profile || ''}`.trim();
-    if (['default', 'chrome', 'ios18', 'ios26'].includes(tlsProfile)) {
+    const tlsProfile = `${proxy._loon_tls_profile || ''}`.trim().toLowerCase();
+    if (['global', 'default', 'safari-ios18', 'safari-ios-26', 'chrome', 'chrome147'].includes(tlsProfile)) {
         return tlsProfile;
     }
 
-    switch (`${proxy['client-fingerprint'] || ''}`.trim()) {
+    switch (`${proxy['client-fingerprint'] || ''}`.trim().toLowerCase()) {
         case 'chrome':
             return 'chrome';
+        case 'safari':
         case 'ios':
-            return 'ios26';
+            return 'safari-ios18';
+        default:
+            return undefined;
     }
 }
 

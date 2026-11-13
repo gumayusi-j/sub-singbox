@@ -155,6 +155,27 @@ function addRule(result, line, defaultOutbound, options) {
 // addresses. Anything the parser already understands is passed through with
 // its type aliased into this kit's vocabulary - and with any policy column
 // dropped, since the RULE-SET that referenced the resource supplies it.
+export function isBareResourceLines(lines) {
+    if (!Array.isArray(lines) || lines.length === 0) return false;
+    return lines.every((raw) => {
+        const line = removingComment(String(raw)).trim();
+        if (line === "") return true;
+        const parsed = parseRuleLine(line);
+        return parsed === null || parsed.condition === null;
+    });
+}
+
+export function correctedProviderBehavior(declaredBehavior, lines) {
+    if (!declaredBehavior || typeof declaredBehavior !== "string") return declaredBehavior;
+    const b = declaredBehavior.toLowerCase();
+    if (["domain", "ipcidr", "domain-text", "ipcidr-text"].includes(b)) {
+        if (Array.isArray(lines) && lines.length > 0 && !isBareResourceLines(lines)) {
+            return "classical";
+        }
+    }
+    return declaredBehavior;
+}
+
 export function normalizeResourceLines(lines, behavior) {
     const out = [];
     for (const raw of lines || []) {
@@ -219,14 +240,17 @@ function readProviders(doc) {
     for (const name of Object.keys(raw)) {
         const entry = raw[name];
         if (!isPlainObject(entry)) continue;
+        const payload = Array.isArray(entry.payload) ? entry.payload : [];
+        const declaredBehavior = typeof entry.behavior === "string" ? entry.behavior : undefined;
+        const behavior = correctedProviderBehavior(declaredBehavior, payload);
         providers.set(name, {
             name,
             type: typeof entry.type === "string" ? entry.type : "http",
-            behavior: typeof entry.behavior === "string" ? entry.behavior : undefined,
+            behavior,
             format: typeof entry.format === "string" ? entry.format : undefined,
             interval: Number.isInteger(entry.interval) ? entry.interval : undefined,
             url: typeof entry.url === "string" ? entry.url : undefined,
-            payload: Array.isArray(entry.payload) ? entry.payload : [],
+            payload,
         });
     }
     return providers;
@@ -475,7 +499,9 @@ function importRuleSet(result, parsed, providers, defaultOutbound, options) {
         if (downloadedContent && downloadedContent.has(name)) {
             const content = downloadedContent.get(name);
             const lines = content.split(/\r?\n/).map((l) => removingComment(l.trim())).filter(Boolean);
-            const normalized = normalizeResourceLines(lines, provider.behavior);
+            const effectiveBehavior = correctedProviderBehavior(provider.behavior, lines);
+            provider.behavior = effectiveBehavior;
+            const normalized = normalizeResourceLines(lines, effectiveBehavior);
             const policy = parsed.policy === null ? defaultOutbound : parsed.policy;
             for (const line of normalized) {
                 addRule(result, inheritOptions(line, parsed.options), policy, options);

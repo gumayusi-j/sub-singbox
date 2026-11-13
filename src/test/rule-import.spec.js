@@ -418,5 +418,23 @@ describe("rules/import", function () {
             // The sub-rule entry should appear as an AND rule (domain conditions are supported)
             expect(result.rules.some((r) => r.type === "AND" && Array.isArray(r.children))).to.equal(true);
         });
+
+        it("auto-corrects declared domain/ipcidr behavior to classical when payload contains typed rules (Tower #50 parity)", function () {
+            const yaml = [
+                "rule-providers:",
+                "  custom-ai:",
+                "    type: http",
+                "    behavior: domain",
+                "    payload:",
+                "      - DOMAIN-SUFFIX,chatgpt.com",
+                "      - DOMAIN,openai.com",
+                "rules:",
+                "  - RULE-SET,custom-ai,AI",
+                "  - MATCH,DIRECT",
+            ].join("\n");
+            const result = importRules(yaml);
+            expect(result.providers).to.have.length(1);
+            expect(result.providers[0].behavior).to.equal("classical");
+        });
     });
 });
