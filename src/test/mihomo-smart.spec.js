@@ -80,6 +80,8 @@ describe("Mihomo Smart Preset (AIsouler/MyClash reference - streamlined)", funct
             expect(configYaml).to.include('- name: "⚖️ 负载均衡"');
             expect(configYaml).to.include("type: load-balance");
             expect(configYaml).to.include("strategy: sticky-sessions");
+            expect(configYaml).to.include('empty-fallback: "REJECT"');
+            expect(configYaml).to.include("interval: 600");
 
             // 3. SVG icons are present
             expect(configYaml).to.include('icon: "https://fastly.jsdelivr.net/gh/AIsouler/MyClash@main/Icons/svg/Static.svg"');

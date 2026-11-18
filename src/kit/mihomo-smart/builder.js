@@ -559,7 +559,7 @@ export const MIHOMO_SMART_PRESET = {
         {
             tag: "♻️ 自动选择",
             kind: "url-test",
-            memberTokens: [".*", "https://www.apple.com/library/test/success.html", "300,,50"],
+            memberTokens: [".*", "https://www.apple.com/library/test/success.html", "600,,50"],
         },
         {
             tag: "🇭🇰 香港",
@@ -567,7 +567,7 @@ export const MIHOMO_SMART_PRESET = {
             memberTokens: [
                 "🇭🇰|香港|(?<![A-Za-z])HKG?(?![A-Za-z])|hong\\s*kong",
                 "https://www.apple.com/library/test/success.html",
-                "300,,50",
+                "600,,50",
             ],
         },
         {
@@ -576,7 +576,7 @@ export const MIHOMO_SMART_PRESET = {
             memberTokens: [
                 "🇯🇵|日本|东京|大阪|京都|(?<![A-Za-z])JPN?(?![A-Za-z])|japan",
                 "https://www.apple.com/library/test/success.html",
-                "300,,50",
+                "600,,50",
             ],
         },
         {
@@ -585,7 +585,7 @@ export const MIHOMO_SMART_PRESET = {
             memberTokens: [
                 "🇺🇸|美国|纽约|洛杉矶|旧金山|芝加哥|休斯顿|迈阿密|西雅图|波士顿|华盛顿|(?<![A-Za-z])USA?(?![A-Za-z])|america",
                 "https://www.apple.com/library/test/success.html",
-                "300,,50",
+                "600,,50",
             ],
         },
         {
@@ -594,7 +594,7 @@ export const MIHOMO_SMART_PRESET = {
             memberTokens: [
                 "🇸🇬|新加坡|狮城|(?<![A-Za-z])SGP?(?![A-Za-z])|singapore",
                 "https://www.apple.com/library/test/success.html",
-                "300,,50",
+                "600,,50",
             ],
         },
         {
@@ -603,7 +603,7 @@ export const MIHOMO_SMART_PRESET = {
             memberTokens: [
                 "🧋|🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan",
                 "https://www.apple.com/library/test/success.html",
-                "300,,50",
+                "600,,50",
             ],
         },
         {
@@ -612,7 +612,7 @@ export const MIHOMO_SMART_PRESET = {
             memberTokens: [
                 "🇰🇷|韩国|韓國|首尔|首爾|(?<![A-Za-z])(KOR?|KR)(?![A-Za-z])|korea",
                 "https://www.apple.com/library/test/success.html",
-                "300,,50",
+                "600,,50",
             ],
         },
         {
@@ -621,7 +621,7 @@ export const MIHOMO_SMART_PRESET = {
             memberTokens: [
                 "^(?!.*(?:🇭🇰|香港|(?<![A-Za-z])HKG?(?![A-Za-z])|hong\\s*kong|🇯🇵|日本|东京|大阪|京都|(?<![A-Za-z])JPN?(?![A-Za-z])|japan|🇺🇸|美国|纽约|洛杉矶|旧金山|芝加哥|休斯顿|迈阿密|西雅图|波士顿|华盛顿|(?<![A-Za-z])USA?(?![A-Za-z])|america|🇸🇬|新加坡|狮城|(?<![A-Za-z])SGP?(?![A-Za-z])|singapore|🧋|🇹🇼|台湾|台北|高雄|(?<![A-Za-z])TWN?(?![A-Za-z])|taiwan|🇰🇷|韩国|韓國|首尔|首爾|(?<![A-Za-z])(KOR?|KR)(?![A-Za-z])|korea)).*$",
                 "https://www.apple.com/library/test/success.html",
-                "300,,50",
+                "600,,50",
             ],
         },
         {

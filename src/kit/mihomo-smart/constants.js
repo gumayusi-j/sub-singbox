@@ -196,11 +196,12 @@ export const FALLBACK_RULES = [
 
 // Common options for proxy groups
 export const GROUP_BASE_OPTION = {
-    interval: 300,
+    interval: 600,
     timeout: 5000,
     url: "https://www.apple.com/library/test/success.html",
     lazy: true,
     "max-failed-times": 3,
+    "empty-fallback": "REJECT",
 };
 
 // Core high-value service routing configs (精炼成熟的 5 大业务)
